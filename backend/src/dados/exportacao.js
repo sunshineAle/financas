@@ -50,7 +50,7 @@ class ErroImportacao extends Error {}
 
 function validar(arquivo) {
   if (!arquivo || typeof arquivo !== 'object') throw new ErroImportacao('Arquivo de backup inválido.');
-  if (arquivo.formato !== FORMATO) throw new ErroImportacao('Este arquivo não é um backup do Sistema Financeiro.');
+  if (arquivo.formato !== FORMATO) throw new ErroImportacao('Este arquivo não é um backup do Dagda Capital.');
   if (!Number.isInteger(arquivo.versao_esquema)) throw new ErroImportacao('Arquivo de backup sem versão de esquema.');
   if (arquivo.versao_esquema > VERSAO_ESQUEMA) {
     throw new ErroImportacao('Este backup foi feito por uma versão mais nova do app. Atualize o app para restaurá-lo.');

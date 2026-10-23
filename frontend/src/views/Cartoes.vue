@@ -3,7 +3,7 @@
 // -> 'Análises' recolhida. Parcelamentos e visão geral viraram componentes (CartaoParcelamentos/CartaoVisaoGeral) p/ Relatórios.
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { FileText, Wallet, ShoppingBag, Ellipsis, Check, Undo2, Pencil, Trash2, List, ArrowUpRight, ArrowDownRight, ChevronDown, FileUp } from 'lucide-vue-next';
+import { FileText, Wallet, ShoppingBag, Ellipsis, Check, Undo2, Pencil, Trash2, List, ArrowUpRight, ArrowDownRight, ChevronDown, FileUp, Plus } from 'lucide-vue-next';
 import Modal from '../components/Modal.vue';
 import Carrossel from '../components/Carrossel.vue';
 import { aplicarOrdem, moverItem } from '../services/ordem.js';
@@ -277,7 +277,7 @@ onMounted(carregarCartoes);
     <CabecalhoPagina titulo="Cartões e Crédito" cor="var(--cor-saida-texto)">
      <template #corpo>
     <div v-deslizar-mes class="corpo">
-      <Carrossel :itens="cartoes" v-model:indice="sel" v-model:empilhado="pilha" :chave="(c) => c.id" temNovo rotuloNovo="Novo cartão" reordenavel @novo="abrirNovo" @reordenar="({ de, para }) => { cartoes = moverItem('cartoes', cartoes, de, para); }">
+      <Carrossel v-if="carregando || cartoes.length" :itens="cartoes" v-model:indice="sel" v-model:empilhado="pilha" :chave="(c) => c.id" temNovo rotuloNovo="Novo cartão" reordenavel @novo="abrirNovo" @reordenar="({ de, para }) => { cartoes = moverItem('cartoes', cartoes, de, para); }">
         <template #item="{ item }"><CartaoFace :cartao="item" :cor="corDe(item)" /></template>
         <template #total>
           <div class="total-pilha">
@@ -288,7 +288,10 @@ onMounted(carregarCartoes);
         </template>
       </Carrossel>
 
-      <p v-if="!carregando && cartoes.length === 0" class="nota">Nenhum cartão cadastrado ainda. Use o botão "+" para adicionar o primeiro.</p>
+      <button v-if="!carregando && cartoes.length === 0" type="button" class="cartao-fantasma" @click="abrirNovo">
+        <span class="mais" aria-hidden="true"><Plus :size="26" :stroke-width="2" /></span>
+        <span class="txt">Adicione seu primeiro cartão</span>
+      </button>
 
       <template v-if="cartao && !pilha">
         <transition name="troca" mode="out-in">
@@ -325,7 +328,7 @@ onMounted(carregarCartoes);
               <BarraAcoes compacto :colunas="4" rotulo="Ações do cartão">
                 <BotaoAcao compacto :icone="FileText" rotulo="Ver fatura" tema="saida" @click="verFatura" />
                 <BotaoAcao compacto :icone="Wallet" rotulo="Registrar pagamento" tema="saida" :disabled="!podePagar" :titulo="podePagar ? '' : manual ? 'Sem fatura a pagar neste período' : 'Em cartão conectado o pagamento vem do banco'" @click="abrirPagar(fat.chave, fat.total)" />
-                <BotaoAcao compacto :icone="ShoppingBag" rotulo="Lançar compra" tema="saida" :disabled="!manual" :titulo="manual ? '' : 'Compras chegam pelo Open Finance'" @click="lancarCompra" />
+                <BotaoAcao compacto :icone="ShoppingBag" rotulo="Lançar compra" tema="saida" :disabled="!manual" :titulo="manual ? '' : 'Compras deste cartão vêm do extrato'" @click="lancarCompra" />
                 <div class="acao-mais" @click.stop>
                   <BotaoAcao compacto :icone="Ellipsis" rotulo="Mais" tema="saida" :aria-expanded="menuMais" @click="menuMais = !menuMais" />
                   <div v-if="menuMais" class="menu-mais" role="menu">
@@ -424,7 +427,7 @@ onMounted(carregarCartoes);
 
     <!-- Cadastro / edição -->
     <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão'" tema="saida" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar cartão'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
-      <p class="nota">Cadastre à mão os cartões que não vêm do Open Finance e escolha qual conta paga a fatura. Os dias de fechamento e vencimento definem em qual fatura cai cada compra e cada parcela.</p>
+      <p class="nota">Informe a instituição e escolha qual conta paga a fatura. Os dias de fechamento e vencimento definem em qual fatura cai cada compra e cada parcela.</p>
       <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" rotulo="Instituição do cartão" placeholder="Ex: Nubank, Americanas, Magalu" padrao="💳" :erro="erros.nome" obrigatorio tema="saida" />
       <CampoSelecao v-model="formulario.contaId" rotulo="Conta que paga a fatura" :opcoes="[{ valor: '', rotulo: 'Nenhuma (sem vínculo)' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="saida" />
       <div class="duas-campos">
@@ -437,6 +440,9 @@ onMounted(carregarCartoes);
 </template>
 
 <style scoped>
+.cartao-fantasma { width: 100%; max-width: 380px; aspect-ratio: 1.586 / 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 20px; border: 2px dashed var(--cor-borda); background: var(--cor-card); color: var(--cor-texto-suave); font: 600 15px var(--fonte-texto); cursor: pointer; padding: 16px; text-align: center; }
+.cartao-fantasma:hover, .cartao-fantasma:focus-visible { border-color: var(--cor-saida); color: var(--cor-texto); outline: none; }
+.cartao-fantasma .mais { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-saida-fundo); color: var(--cor-saida); }
 .pagina { padding: 8px 40px 40px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 @media (max-width: 768px) { .pagina { padding: 16px 16px 24px; } }
 .corpo { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

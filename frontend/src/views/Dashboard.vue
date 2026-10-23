@@ -16,7 +16,7 @@ import DashRosca from '../components/DashRosca.vue';
 import Valor from '../components/Valor.vue';
 import { moedaTotal } from '../services/privacidade.js';
 import { periodo, anoInteiro, rotuloPeriodo } from '../services/mes.js';
-import { corReceita } from '../utils/coresReceita.js';
+import { corReceita, PALETA_RECEITA } from '../utils/coresReceita.js';
 import { corDespesa } from '../utils/coresDespesa.js';
 
 const router = useRouter();
@@ -58,20 +58,21 @@ const partesOrbe = computed(() => [
   { nome: 'Saídas', valor: despesasDoMes.value, cor: 'var(--cor-saida)' },
 ]);
 
-// --- Patrimônio: saldo nas contas + Reserva de Liberdade − dívidas ------------
+// --- Patrimônio: saldo nas contas + Reserva de Liberdade − faturas abertas − dívidas ------------
 const reserva = computed(() => dados.value?.reservaResumo || null);
 const valorReserva = computed(() => reserva.value?.total || 0);
 const saldoContas = computed(() => dados.value?.totalContas || 0);
 const totalDividas = computed(() => dados.value?.totalDividas || 0);
-// Patrimônio líquido = saldo nas contas + Reserva de Liberdade − dívidas (mesma conta do backend: routes/dashboard.js)
-const patrimonio = computed(() => Math.round((saldoContas.value + valorReserva.value - totalDividas.value) * 100) / 100);
+const totalFaturasAbertas = computed(() => dados.value?.totalFaturasAbertas || 0);
+// Patrimônio líquido = contas + Reserva de Liberdade − faturas abertas − dívidas (mesma conta do backend: routes/dashboard.js)
+const patrimonio = computed(() => Math.round((saldoContas.value + valorReserva.value - totalFaturasAbertas.value - totalDividas.value) * 100) / 100);
 
 // --- Categorias -------------------------------------------------------------
 const categorias = computed(() => dados.value?.categoriasMes || []);
 const segDespesas = computed(() => categorias.value
   .map((c, i) => ({ nome: `${c.nome}`, valor: c.gasto_atual, cor: corDespesa(c, i) }))
   .filter((c) => c.valor > 0));
-const segEntradas = computed(() => (dados.value?.entradasPorCategoria || []).map((e) => ({ nome: e.nome, valor: e.valor, cor: corReceita(e.nome, e.cor) })));
+const segEntradas = computed(() => (dados.value?.entradasPorCategoria || []).map((e, i) => ({ nome: e.nome, valor: e.valor, cor: PALETA_RECEITA.includes(e.cor) ? e.cor : PALETA_RECEITA[i % PALETA_RECEITA.length] })));
 const segmentosRosca = computed(() => (abaRosca.value === 'saidas' ? segDespesas.value : segEntradas.value));
 
 // Orçamento por categoria: categorias com teto, as de maior uso (no ano, o teto vale por 12 meses)
@@ -210,7 +211,7 @@ onMounted(async () => {
         <!-- 1. Saldo + ações rápidas ----------------------------------------- -->
         <div class="coluna">
           <TopoValor tema="entrada" :variante="1" rotulo="Patrimônio líquido" :valor="patrimonio"
-            :linhas="[{ rotulo: 'Saldo nas contas', valor: saldoContas }, { rotulo: '+ Reserva de Liberdade', valor: valorReserva }, { rotulo: '− Dívidas', valor: totalDividas }]">
+            :linhas="[{ rotulo: 'Saldo nas contas', valor: saldoContas }, { rotulo: '+ Reserva de Liberdade', valor: valorReserva }, { rotulo: '− Faturas abertas', valor: totalFaturasAbertas }, { rotulo: '− Dívidas', valor: totalDividas }]">
             <template #acoes>
               <BarraAcoes compacto :colunas="4">
                 <BotaoAcao compacto :icone="Plus" rotulo="Adicionar" tema="entrada" destaque :aria-expanded="menuAdd" @click="menuAdd = !menuAdd" />
@@ -284,7 +285,7 @@ onMounted(async () => {
         <section class="cartao">
           <div class="cabeca">
             <h2>{{ abaRosca === 'saidas' ? 'Gastos por categoria' : 'Entradas por categoria' }}</h2>
-            <div class="abas" role="tablist">
+            <div :class="['abas', abaRosca === 'saidas' ? 'tema-saida' : 'tema-entrada']" role="tablist">
               <button type="button" role="tab" :aria-selected="abaRosca === 'saidas'" :class="{ ativa: abaRosca === 'saidas' }" @click="abaRosca = 'saidas'">Saídas</button>
               <button type="button" role="tab" :aria-selected="abaRosca === 'entradas'" :class="{ ativa: abaRosca === 'entradas' }" @click="abaRosca = 'entradas'">Entradas</button>
             </div>
@@ -457,7 +458,7 @@ onMounted(async () => {
 /* Abas Saídas | Entradas: botão ativo em degradê */
 .abas { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); }
 .abas button { min-height: 36px; padding: 0 14px; border: none; border-radius: 9px; background: none; color: var(--cor-texto-suave); font-family: var(--fonte-texto); font-size: 13px; font-weight: 600; cursor: pointer; transition: background var(--anim-padrao) ease, color var(--anim-padrao) ease; }
-.abas button.ativa { background: linear-gradient(135deg, var(--entrada-cobalto-medio), var(--entrada-ceu-medio)); color: var(--cor-sobre-cor); }
+.abas button.ativa { background: var(--tema-degrade); color: var(--cor-sobre-cor); }
 
 /* Reserva de Liberdade (na cor das metas) */
 .cartao.reserva { cursor: pointer; border-color: color-mix(in srgb, var(--cor-meta) 45%, var(--cor-borda)); background: linear-gradient(160deg, var(--cor-meta-fundo), var(--cor-card) 70%); }

@@ -2,11 +2,11 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#141413" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Sist. Financeiro" />
-    <title>Sistema Financeiro</title>
+    <meta name="apple-mobile-web-app-title" content="Dagda Capital" />
+    <title>Dagda Capital</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/png" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
@@ -14,18 +14,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
     <script>
+      // Guarda o convite de instalação (disparado cedo) para o botão "Instalar o app" da tela de boas-vindas.
+      window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__sfInstalar = e; window.dispatchEvent(new Event('sf:instalar-pronto')); });
+      window.addEventListener('appinstalled', function () { window.__sfInstalar = null; window.dispatchEvent(new Event('sf:instalar-pronto')); });
+    </script>
+    <script>
       try {
         var m = localStorage.getItem('sf:tema') || 'auto';
         var claro = m === 'claro' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
         document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
       } catch (e) {}
     </script>
-    <script type="module" crossorigin src="/financas/assets/index-CPBpnpUo.js"></script>
+    <script type="module" crossorigin src="/financas/assets/index-BUrhcJJl.js"></script>
     <link rel="modulepreload" crossorigin href="/financas/assets/preload-helper-B1tnf050.js">
     <link rel="modulepreload" crossorigin href="/financas/assets/_commonjsHelpers-IkB594pC.js">
     <link rel="modulepreload" crossorigin href="/financas/assets/idb-zQqwjNMK.js">
   </head>
   <body>
     <div id="app"></div>
+    <script src="./config.js"></script>
   </body>
 </html>

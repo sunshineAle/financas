@@ -55,7 +55,7 @@ router.beforeEach((to) => {
 
 router.afterEach((to) => {
   const t = to.meta && to.meta.titulo;
-  document.title = t ? `${t} · Sistema Financeiro` : 'Sistema Financeiro Pessoal';
+  document.title = t ? `${t} · Dagda Capital` : 'Dagda Capital';
 });
 
 // Página de onde o extrato do cartão (pop-up) foi aberto, para o "fechar" voltar a ela.

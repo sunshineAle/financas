@@ -1,6 +1,10 @@
 // Ponto de entrada do PWA: banco local -> tela de acesso -> app.
 import '../sqlinit.js';
 import { prepararPersistencia } from './persistencia.js';
+import { tratarRetornoOAuth } from '../../src/services/nuvem/retorno.js';
+
+// Janela de login da Microsoft voltando para o app: repassa o código à janela principal e para por aqui.
+if (tratarRetornoOAuth()) await new Promise(() => {});
 
 await prepararPersistencia();
 

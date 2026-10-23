@@ -186,7 +186,7 @@ body {
   --degrade-entrada: linear-gradient(135deg, #4CC27A, #22A55A, #167A42);
   --degrade-entrada-ativo: linear-gradient(135deg, #198045, #167A42, #146B3A);
   --degrade-saida: linear-gradient(135deg, #CE2239, #E15F0E, #DFA511);
-  --degrade-saida-ativo: linear-gradient(135deg, #CE2239, #A91C2F);
+  --degrade-saida-ativo: linear-gradient(135deg, #BE1E34, #CF4B10, #C2680A); /* carmim -> âmbar (texto branco legível) */
   --degrade-zero: linear-gradient(135deg, #E6F9F1, #B9EBD6, #9FE3C8);
   --cor-grave: var(--cor-alerta);
   --cor-grave-clara: var(--saida-vermelho-claro);

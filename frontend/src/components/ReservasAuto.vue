@@ -39,7 +39,7 @@ async function decidir(p, acao) {
 </script>
 
 <template>
-  <CardPadrao v-if="pendentes.length" tema="meta" class="auto" titulo="Vincular a uma meta?" subtitulo="Encontramos no extrato movimentos que parecem reserva guardada, não gasto.">
+  <CardPadrao v-if="pendentes.length" tema="meta" class="auto tema-meta" titulo="Vincular a uma meta?" subtitulo="Encontramos no extrato movimentos que parecem reserva guardada, não gasto.">
     <ul class="lista">
       <li v-for="p in pendentes" :key="p.transacao.id">
         <span class="icone" aria-hidden="true"><PiggyBank :size="20" /></span>
@@ -51,8 +51,10 @@ async function decidir(p, acao) {
             <select v-model="escolha[p.transacao.id]" class="sf-entrada" :aria-label="'Meta para ' + p.transacao.descricao">
               <option v-for="o in opcoes" :key="o.id" :value="o.id">{{ o.rotulo }}</option>
             </select>
+            <div class="par-botoes">
             <button type="button" class="sf-botao primario" :disabled="ocupado || !escolha[p.transacao.id]" @click="decidir(p, 'vincular')">Vincular</button>
             <button type="button" class="sf-botao secundario" :disabled="ocupado" @click="decidir(p, 'recusar')">Não vincular</button>
+            </div>
           </div>
         </div>
       </li>
@@ -72,5 +74,6 @@ async function decidir(p, acao) {
 .pergunta { margin: 6px 0 4px; font-size: 13px; }
 .acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .acoes select { flex: 1 1 140px; min-width: 0; min-height: 44px; }
-.acoes .sf-botao { min-height: 44px; }
+.acoes .sf-botao { min-height: 44px; width: 100%; padding: 0 10px; }
+.par-botoes { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 </style>

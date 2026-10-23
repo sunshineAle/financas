@@ -451,7 +451,7 @@ onMounted(() => {
         <BarraAcoes compacto :colunas="4" rotulo="Ações de dívidas">
           <BotaoAcao compacto :icone="Plus" rotulo="Nova dívida" tema="saida" destaque @click="mostrarFormulario = true; erro = ''" />
           <BotaoAcao compacto :icone="Handshake" rotulo="Adicionar acordo" tema="saida" @click="abrirAcordo()" />
-          <BotaoAcao compacto :icone="ListOrdered" rotulo="Plano para todas as dívidas" tema="saida" @click="planoAberto = true" />
+          <BotaoAcao compacto :icone="ListOrdered" rotulo="Plano geral" titulo="Plano para todas as dívidas" tema="saida" @click="planoAberto = true" />
           <BotaoAcao compacto :icone="Archive" :rotulo="`Arquivadas (${arquivadas.length})`" tema="saida" @click="mostrarArquivadas = true; confirmandoRemocao = null; carregarArquivadas()" />
         </BarraAcoes>
       </template>

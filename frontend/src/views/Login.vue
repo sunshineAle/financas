@@ -57,7 +57,7 @@ async function entrar() {
       <div class="orbe-entrada" aria-hidden="true">
         <Orbe :partes="partesOrbe" :tamanho="340" :arcos="false" girar />
       </div>
-      <span class="titulo-hero">Sistema Financeiro Pessoal</span>
+      <span class="titulo-hero">Dagda Capital</span>
       <p class="frase-hero">Organização e controle das suas finanças, num só lugar.</p>
     </section>
 

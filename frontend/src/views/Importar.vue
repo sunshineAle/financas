@@ -1,12 +1,13 @@
 <script setup>
 // Importar extrato ou fatura. Central em 2 etapas (tipo -> conta/cartão) ou contextual (?tipo=&id= vindo do menu do card).
 // Fluxo: arquivo -> pré-visualização obrigatória (corrigir/descartar linhas) -> confirmar -> histórico com desfazer.
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Landmark, CreditCard, FileUp, Undo2, TriangleAlert, Check, ChevronLeft, Pencil, X, Link2 } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
 import Modal from '../components/Modal.vue';
 import IconeBanco from '../components/IconeBanco.vue';
+import NovoDestinoModal from '../components/NovoDestinoModal.vue';
 import { lerArquivo, FORMATOS } from '../services/leitorArquivo.js';
 import { avisar } from '../services/avisos.js';
 
@@ -63,6 +64,17 @@ onMounted(async () => {
     if (destinoSel.value) { contextual.value = true; etapa.value = 2; } else { tipo.value = ''; destinoId.value = ''; }
   }
 });
+
+// "+ Novo banco/conta" e "+ Novo cartão": cadastro numa janela, sem sair da importação; o destino novo fica selecionado.
+const NOVO = '__novo';
+const modalNovo = ref(false);
+watch(destinoId, (v) => { if (v === NOVO) { destinoId.value = ''; modalNovo.value = true; } });
+async function destinoCriado(reg) {
+  modalNovo.value = false;
+  try { await carregarBase(); } catch { /* a lista é recarregada na próxima abertura */ }
+  destinoId.value = String(reg.id);
+  avisar(tipo.value === 'conta' ? 'Conta criada e selecionada.' : 'Cartão criado e selecionado.');
+}
 
 function escolherTipo(t) { tipo.value = t; destinoId.value = ''; etapa.value = 2; sugestao.value = null; }
 function voltar() {
@@ -205,9 +217,10 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
     <template v-else-if="etapa === 2">
       <CardPadrao :titulo="contextual ? `Importando para: ${rotuloDestino}` : tipo === 'conta' ? 'Qual conta?' : 'Qual cartão?'" :subtitulo="contextual ? '' : 'Etapa 2 de 2'">
         <label v-if="!contextual" class="campo"><span>{{ tipo === 'conta' ? 'Conta de destino' : 'Cartão de destino' }}</span>
-          <span style="display:flex;align-items:center;gap:10px"><IconeBanco v-if="destinoSel" :icone="destinoSel.icone" :nome="destinoSel.nome" :padrao="tipo === 'conta' ? '🏦' : '💳'" :tamanho="32" /><select v-model="destinoId" style="flex:1"><option value="" disabled>Escolha…</option><option v-for="d in destinos" :key="d.id" :value="d.id">{{ d.nome }}</option></select></span>
+          <span style="display:flex;align-items:center;gap:10px"><IconeBanco v-if="destinoSel" :icone="destinoSel.icone" :nome="destinoSel.nome" :padrao="tipo === 'conta' ? '🏦' : '💳'" :tamanho="32" /><select v-model="destinoId" style="flex:1"><option value="" disabled>Escolha…</option><option v-for="d in destinos" :key="d.id" :value="d.id">{{ d.nome }}</option><option value="__novo">{{ tipo === 'conta' ? '+ Novo banco/conta' : '+ Novo cartão' }}</option></select></span>
         </label>
-        <p v-if="!destinos.length" class="dica">{{ tipo === 'conta' ? 'Cadastre uma conta primeiro.' : 'Cadastre um cartão (à mão) primeiro.' }}</p>
+        <p v-if="!destinos.length" class="dica">{{ tipo === 'conta' ? 'Nenhuma conta ainda.' : 'Nenhum cartão ainda.' }} Use <b>{{ tipo === 'conta' ? '+ Novo banco/conta' : '+ Novo cartão' }}</b> na lista acima para cadastrar sem sair daqui.</p>
+        <NovoDestinoModal :aberto="modalNovo" :tipo="tipo" :nome-sugerido="sugestao && sugestao.banco ? sugestao.banco : ''" :contas="contas" @criado="destinoCriado" @fechar="modalNovo = false" />
         <label class="arquivo" :class="{ ocupado: carregando }"><FileUp :size="22" /><span>{{ nomeArq || 'Escolher arquivo (OFX, CSV, XLSX, XLS ou PDF)' }}</span>
           <input type="file" :accept="FORMATOS" @change="escolherArquivo" />
         </label>

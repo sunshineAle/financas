@@ -1,4 +1,4 @@
-// Service worker do Sistema Financeiro (PWA): guarda o app para funcionar offline.
+// Service worker do Dagda Capital (PWA): guarda o app para funcionar offline.
 // A lista de arquivos e a versão (hash do conteúdo do build) são preenchidas no build (vite.pwa.config.js).
 // Caminhos relativos ao sw.js: funcionam na raiz e em subcaminhos (ex.: /financas/).
 const VERSAO = '__VERSAO__';

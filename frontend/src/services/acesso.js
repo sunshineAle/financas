@@ -29,6 +29,7 @@ export async function carregarAcesso() {
   if (!r) { try { r = JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch { r = null; } }
   registro = r && r.hash && r.sal ? r : null;
   sincronizarSessao();
+  await carregarBiometria();
   estadoAcesso.value = { ...estadoAcesso.value, carregado: true, configurada: !!registro };
   return !!registro;
 }
@@ -87,6 +88,7 @@ export async function criarSenha(senha, apelido) {
   await gravarRegistro({ v: 1, iter: ITERACOES, sal: b64(sal), hash: b64(hash), apelido: nome || undefined, criada_em: new Date().toISOString() });
   senhaMemoria = senha;
   estadoAcesso.value = { ...estadoAcesso.value, desbloqueado: true };
+  await reembrulharBiometria();
 }
 
 // Troca o apelido (sem mexer na senha). Só no PWA; fora dele não há registro de acesso.
@@ -153,10 +155,97 @@ export function iniciarAutoBloqueio() {
   if (autoLigado || !modoPWA) return;
   autoLigado = true;
   let saiu = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { saiu = Date.now(); return; }
+  const sair = () => { if (!saiu) saiu = Date.now(); };
+  const voltar = () => {
     const min = minutosAutoBloqueio();
-    if (min > 0 && saiu && Date.now() - saiu > min * 60000) bloquear();
-    saiu = 0;
-  });
+    const t = saiu; saiu = 0;
+    if (min > 0 && t && Date.now() - t > min * 60000) bloquear();
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sair(); else voltar(); });
+  window.addEventListener('pagehide', sair);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) voltar(); });
+}
+
+// ---- Desbloqueio por digital/rosto/PIN do celular (WebAuthn) ----
+// Desenho: a credencial de plataforma (userVerification: 'required') só AUTORIZA a tela de bloqueio. A chave de dados
+// continua derivada da senha do app (PBKDF2 + backup cifrado). Ao ativar (com o app já desbloqueado pela senha), geramos
+// uma chave AES-GCM aleatória NÃO-EXTRAÍVEL (CryptoKey no IndexedDB: o JS não consegue exportá-la) e guardamos a senha
+// cifrada por ela. Biometria aprovada -> decifra a senha -> passa pelo mesmo verificarSenha(). A senha continua valendo
+// sempre como alternativa, e trocar a senha re-embrulha (ou, se a biometria estiver sem a senha, desliga).
+const CHAVE_BIO = 'sf:bio';
+let registroBio = null;
+const aleatorio = (n) => crypto.getRandomValues(new Uint8Array(n));
+
+export async function biometriaSuportada() {
+  try {
+    if (!window.PublicKeyCredential || !navigator.credentials || !crypto.subtle) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch { return false; }
+}
+export async function carregarBiometria() {
+  try { registroBio = (await kvGet(CHAVE_BIO)) || null; } catch { registroBio = null; }
+  if (registroBio && !(registroBio.chave && registroBio.ct && registroBio.cred)) registroBio = null;
+  estadoAcesso.value = { ...estadoAcesso.value, biometria: !!registroBio };
+  return !!registroBio;
+}
+export const biometriaAtiva = () => !!registroBio || estadoAcesso.value.biometria === true;
+// Espelho síncrono (a tela de acesso decide o botão antes do IndexedDB responder).
+export const biometriaMarcada = () => { try { return localStorage.getItem(CHAVE_BIO) === '1'; } catch { return false; } };
+
+async function embrulhar(senha, chave, iv) {
+  return new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chave, enc.encode(senha)));
+}
+async function marcar(reg) {
+  registroBio = reg;
+  try { reg ? localStorage.setItem(CHAVE_BIO, '1') : localStorage.removeItem(CHAVE_BIO); } catch { /* ignora */ }
+  if (reg) await kvSet(CHAVE_BIO, reg); else await kvSet(CHAVE_BIO, null);
+  estadoAcesso.value = { ...estadoAcesso.value, biometria: !!reg };
+}
+async function reembrulharBiometria() {
+  if (!registroBio || senhaMemoria === null) return;
+  try {
+    const iv = aleatorio(12);
+    await marcar({ ...registroBio, iv, ct: await embrulhar(senhaMemoria, registroBio.chave, iv) });
+  } catch { await desativarBiometria(); }
+}
+
+export async function ativarBiometria() {
+  if (senhaMemoria === null) throw new Error('Desbloqueie o app com a senha antes de ativar.');
+  if (!(await biometriaSuportada())) throw new Error('Este aparelho não oferece desbloqueio por biometria.');
+  let cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: {
+      challenge: aleatorio(32),
+      rp: { name: 'Dagda Capital' },
+      user: { id: aleatorio(16), name: apelidoSalvo() || 'usuario', displayName: apelidoSalvo() || 'Usuário' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+      timeout: 60000, attestation: 'none',
+    } });
+  } catch (e) { throw new Error(e && e.name === 'NotAllowedError' ? 'Ativação cancelada.' : 'Não foi possível ativar a biometria neste aparelho.'); }
+  if (!cred) throw new Error('Não foi possível ativar a biometria.');
+  const chave = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const iv = aleatorio(12);
+  await marcar({ v: 1, cred: new Uint8Array(cred.rawId), chave, iv, ct: await embrulhar(senhaMemoria, chave, iv), criada_em: new Date().toISOString() });
+}
+
+export async function desativarBiometria() { await marcar(null); }
+
+export async function desbloquearComBiometria() {
+  if (!registroBio) await carregarBiometria();
+  if (!registroBio) throw new Error('A biometria não está ativada neste aparelho.');
+  try {
+    await navigator.credentials.get({ publicKey: {
+      challenge: aleatorio(32), timeout: 60000, userVerification: 'required',
+      allowCredentials: [{ type: 'public-key', id: registroBio.cred, transports: ['internal'] }],
+    } });
+  } catch (e) { throw new Error(e && e.name === 'NotAllowedError' ? 'Desbloqueio cancelado. Use a senha ou PIN.' : 'Não foi possível usar a biometria. Use a senha ou PIN.'); }
+  let senha;
+  try { senha = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: registroBio.iv }, registroBio.chave, registroBio.ct)); }
+  catch { await desativarBiometria(); throw new Error('A biometria precisa ser ativada de novo. Use a senha ou PIN.'); }
+  if (!(await conferirSenha(senha))) { await desativarBiometria(); throw new Error('A senha mudou. Use a senha ou PIN e ative a biometria de novo.'); }
+  zerarFalhas();
+  senhaMemoria = senha;
+  estadoAcesso.value = { ...estadoAcesso.value, desbloqueado: true };
+  return true;
 }

@@ -224,7 +224,7 @@ onMounted(() => { carregar(); carregarFixos(); });
     <div v-deslizar-mes class="conteudo-mes">
 
     <div class="linha-abas">
-      <AbasSeletor :model-value="aba" :abas="[{ id: 'mes', rotulo: 'Mês' }, { id: 'ano', rotulo: 'Ano' }]" tema="entrada" @update:model-value="escolherAba" />
+      <AbasSeletor :model-value="aba" :abas="[{ id: 'mes', rotulo: 'Mês' }, { id: 'ano', rotulo: 'Ano' }]" tema="neutro" @update:model-value="escolherAba" />
     </div>
 
     <p v-if="!carregando && semDados" class="nota-topo">

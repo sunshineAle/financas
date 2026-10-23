@@ -5,6 +5,7 @@ import { reactive, ref } from 'vue';
 import { kvGet, kvSet, kvDel } from './idb.js';
 import { senhaDaSessao, modoPWA } from './acesso.js';
 import { avisar } from './avisos.js';
+import { PROVEDORES, estadoNuvem, nuvemConectada, enviarParaNuvem, listarNuvem, baixarDaNuvem } from './nuvem/index.js';
 
 const CFG = 'sf:backup:cfg';
 const ITER = 250000;
@@ -28,7 +29,8 @@ salvarConfig();
 export const estadoPasta = reactive({ nome: null, permissao: null }); // permissao: 'granted' | 'prompt' | 'denied' | null
 export const suporte = {
   pasta: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
-  compartilhar: () => typeof navigator !== 'undefined' && !!navigator.canShare && !!navigator.share,
+  // Web Share com ARQUIVO (celular: "Salvar em" Drive, OneDrive, Dropbox, Proton, Mega, iCloud). Testa de verdade com um arquivo-amostra.
+  compartilhar: () => { try { return typeof navigator !== 'undefined' && !!navigator.canShare && !!navigator.share && navigator.canShare({ files: [new File(['x'], 'a.sfin', { type: 'application/octet-stream' })] }); } catch { return false; } },
   cripto: typeof crypto !== 'undefined' && !!crypto.subtle,
   gzip: typeof CompressionStream !== 'undefined',
 };
@@ -146,7 +148,7 @@ export async function compartilhar() {
   const { nome, blob } = await gerarArquivo();
   const arquivo = new File([blob], nome, { type: 'application/octet-stream' });
   if (!navigator.canShare || !navigator.canShare({ files: [arquivo] })) throw new Error('Este aparelho não compartilha arquivos. Use "Baixar arquivo".');
-  await navigator.share({ files: [arquivo], title: 'Backup Sistema Financeiro' });
+  await navigator.share({ files: [arquivo], title: 'Backup Dagda Capital' });
   marcarFeito('compartilhado');
   return nome;
 }
@@ -206,6 +208,22 @@ export async function listarDaPasta() {
   }
   return itens.sort((a, b) => b.nome.localeCompare(a.nome));
 }
+
+// ---- Nuvem (Google Drive / OneDrive via OAuth no navegador; ver services/nuvem/) -----------------
+// Envia o .sfin JÁ cifrado (o texto nunca sai em claro); mantém só os `manter` mais recentes na pasta do app.
+export async function enviarNuvem(id) {
+  const { nome, blob } = await gerarArquivo();
+  await enviarParaNuvem(id, nome, await blob.text(), { manter: configBackup.manter });
+  marcarFeito(id);
+  return nome;
+}
+export const listarBackupsNuvem = (id) => listarNuvem(id);
+// Baixa o item escolhido e entrega no mesmo formato de lerArquivo (env, cifrado...), para seguir o fluxo de prévia/restauração.
+export async function abrirBackupNuvem(id, item) {
+  const texto = await baixarDaNuvem(id, item);
+  return lerArquivo(new File([texto], item.nome, { type: 'application/octet-stream' }));
+}
+export { PROVEDORES, estadoNuvem, nuvemConectada };
 
 // ---- Restaurar ------------------------------------------------------------------------------
 export async function lerArquivo(file) {
@@ -280,6 +298,17 @@ export async function verificarLembrete() {
       if (estadoPasta.permissao === 'granted') {
         await salvarNaPasta({ pedirPermissao: false });
         avisar('Backup automático salvo na pasta.', { tipo: 'ok' });
+        return;
+      }
+    }
+    const nuv = nuvemConectada();
+    if (configBackup.automatico && nuv && configBackup.ultimoDestino === nuv) {
+      try {
+        await enviarNuvem(nuv);
+        avisar(`Backup automático enviado ao ${PROVEDORES[nuv].nome}.`, { tipo: 'ok' });
+        return;
+      } catch (e) {
+        avisar(`Não deu para enviar ao ${PROVEDORES[nuv].nome}: ${(e && e.message) || 'erro'} Toque para tentar.`, { rota: '/backup?fazer=1', tipo: 'alerta', duracao: 12000 });
         return;
       }
     }

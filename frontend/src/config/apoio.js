@@ -1,12 +1,9 @@
-// Dados da tela "Apoie o desenvolvedor". O desenvolvedor preenche a chave Pix e os links ANTES de publicar
-// (ou, sem recompilar, em public/config.js: window.__SF_CONFIG__ = { apoio: { pix: { chave: '...' }, kofi: '...' } }).
+// Dados da tela "Apoie o desenvolvedor". O desenvolvedor preenche o link ANTES de publicar
+// (ou, sem recompilar, em public/config.js: window.__SF_CONFIG__ = { apoio: { buyMeACoffee: 'https://...' } }).
 // Enquanto um valor estiver vazio, a tela mostra "a preencher pelo desenvolvedor". Nada aqui é secreto.
 const extra = (typeof window !== 'undefined' && window.__SF_CONFIG__ && window.__SF_CONFIG__.apoio) || {};
 
 export const APOIO = {
-  pix: { chave: '', tipo: '', nome: '', cidade: '', ...(extra.pix || {}) }, // ex.: { chave: 'email@exemplo.com', tipo: 'e-mail', nome: 'Nome do recebedor', cidade: 'Sao Paulo' }
-  apoiase: extra.apoiase || '', // ex.: 'https://apoia.se/seu-projeto'
-  kofi: extra.kofi || '', // ex.: 'https://ko-fi.com/seu-usuario'
   buyMeACoffee: extra.buyMeACoffee || '', // ex.: 'https://www.buymeacoffee.com/seu-usuario'
 };
 

@@ -462,7 +462,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <button type="button" class="botao-icone" @click="sugestaoRegra = null">Agora não</button>
       </p>
 
-      <AbasSeletor v-model="visao" :abas="[{ id: 'data', rotulo: 'Por data' }, { id: 'categoria', rotulo: 'Por categoria' }]" tema="entrada" bloco />
+      <AbasSeletor v-model="visao" :abas="[{ id: 'data', rotulo: 'Por data' }, { id: 'categoria', rotulo: 'Por categoria' }]" tema="neutro" bloco />
 
       <p v-if="filtroCategoria || filtroReceita" class="chip-filtro">
         Categoria: <strong>{{ nomeFiltroCategoria }}</strong>

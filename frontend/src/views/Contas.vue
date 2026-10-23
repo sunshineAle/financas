@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
 import { useRouter } from 'vue-router';
-import { RefreshCw, Plug, PencilLine } from 'lucide-vue-next';
+import { RefreshCw, Plus } from 'lucide-vue-next';
 import Modal from '../components/Modal.vue';
 import Carrossel from '../components/Carrossel.vue';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
@@ -49,7 +49,6 @@ const rotuloTipo = (t) => ({ corrente: 'Corrente', poupanca: 'Poupança', corret
 
 const formulario = ref({ nome: '', tipo: 'corrente', saldo: 0, icone: '🏦', cor: '' });
 const erros = reactive({ nome: '' });
-const escolhaNova = ref(false);
 const categorias = ref([]);
 const editandoId = ref(null);
 const modalAberto = ref(false);
@@ -126,9 +125,6 @@ function lancar() {
 function abrirEmTransacoes() {
   if (contaSel.value) router.push({ name: 'transacoes', query: { conta: contaSel.value.id } });
 }
-function escolherNova() { escolhaNova.value = true; }
-function novaManual() { escolhaNova.value = false; abrirNova(); }
-function novaOpenFinance() { escolhaNova.value = false; conectarNovoBanco(); }
 function abrirNova() {
   editandoId.value = null;
   erro.value = '';
@@ -258,10 +254,10 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
             <button v-if="modalConexao" type="button" class="botao-secundario" @click="modalConexao = null">Fechar</button>
           </div>
 
-          <CardPadrao v-if="!carregando && contas.length === 0" class="vazio-geral">
-            <p class="nota">Nenhuma conta cadastrada ainda. {{ temOpenFinance ? 'Conecte seu banco ou crie uma conta manual.' : 'Crie uma conta manual e depois importe seus extratos.' }}</p>
-            <div class="duas"><button v-if="temOpenFinance" type="button" class="sf-botao primario tema-entrada" @click="novaOpenFinance">Conectar via Open Finance</button><button type="button" :class="['sf-botao', temOpenFinance ? 'secundario' : 'primario tema-entrada']" @click="novaManual">Conta manual</button></div>
-          </CardPadrao>
+          <button v-if="!carregando && contas.length === 0" type="button" class="cartao-fantasma" @click="abrirNova">
+            <span class="mais" aria-hidden="true"><Plus :size="26" :stroke-width="2" /></span>
+            <span class="txt">Adicione sua primeira conta</span>
+          </button>
 
           <div v-else-if="contas.length" class="corpo" :class="{ pilha }">
             <div class="area-carr">
@@ -273,7 +269,7 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
                 :tem-novo="true"
                 rotulo-novo="Nova conta"
                 reordenavel
-                @novo="escolherNova"
+                @novo="abrirNova"
                 @reordenar="({ de, para }) => { contas = moverItem('contas', contas, de, para); }"
               >
                 <template #item="{ item }">
@@ -311,15 +307,7 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
       </template>
     </CabecalhoPagina>
 
-    <Modal :aberto="escolhaNova" titulo="Nova conta" tema="entrada" :largura="420" @fechar="escolhaNova = false">
-      <div class="escolhas">
-        <button v-if="temOpenFinance" type="button" class="escolha" :disabled="conectando" @click="novaOpenFinance"><Plug :size="22" /><span><b>Conectar via Open Finance</b><small>Traz saldo e transações do banco automaticamente</small></span></button>
-        <div v-else class="escolha" style="opacity:.6;cursor:default" role="note"><Plug :size="22" /><span><b>Conectar via Open Finance <em style="font-style:normal;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor;margin-left:4px">Opcional · futuro</em></b><small>O app funciona sem isso: lance à mão ou importe extratos.</small></span></div>
-        <button type="button" class="escolha" @click="novaManual"><PencilLine :size="22" /><span><b>Conta manual</b><small>Dinheiro em espécie, benefícios ou contas sem conexão</small></span></button>
-      </div>
-    </Modal>
-
-    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar conta' : 'Nova conta manual'" tema="entrada" :carregando="salvando" :erro="erro" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar conta'" @salvar="salvar" @fechar="cancelarEdicao">
+    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar conta' : 'Nova conta'" tema="entrada" :carregando="salvando" :erro="erro" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar conta'" @salvar="salvar" @fechar="cancelarEdicao">
       <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" rotulo="Instituição" :erro="erros.nome" obrigatorio tema="entrada" />
       <CampoSelecao v-model="formulario.tipo" rotulo="Tipo" :opcoes="tipos" />
       <CampoValor v-model="formulario.saldo" rotulo="Saldo atual" tema="entrada" permite-negativo />
@@ -335,7 +323,9 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
 .nota { font-size: 13px; color: var(--cor-texto-suave); margin: 0; }
 .icone-topo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: var(--cor-card); border: 1px solid var(--cor-card-borda); color: var(--cor-texto-suave); cursor: pointer; }
 .icone-topo:disabled { opacity: 0.6; }
-.vazio-geral .duas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.cartao-fantasma { width: 100%; max-width: 380px; aspect-ratio: 1.586 / 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 20px; border: 2px dashed var(--cor-borda); background: var(--cor-card); color: var(--cor-texto-suave); font: 600 15px var(--fonte-texto); cursor: pointer; padding: 16px; text-align: center; }
+.cartao-fantasma:hover, .cartao-fantasma:focus-visible { border-color: var(--cor-entrada); color: var(--cor-texto); outline: none; }
+.cartao-fantasma .mais { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-entrada-fundo); color: var(--cor-entrada); }
 .corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .conteudo-mes { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .area-carr, .area-resumo { min-width: 0; }

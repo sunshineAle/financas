@@ -54,12 +54,12 @@ onMounted(async () => {
   <div class="casca" :class="{ 'casca-celular': ehCelular }" v-if="usuario">
     <aside v-if="!ehCelular" class="sidebar">
       <div class="topo-sidebar">
-        <div class="marca" title="Sistema Financeiro Pessoal">
-          <svg viewBox="0 0 32 32" class="logo-marca" aria-label="Sistema Financeiro Pessoal">
+        <div class="marca" title="Dagda Capital">
+          <svg viewBox="0 0 32 32" class="logo-marca" aria-label="Dagda Capital">
             <defs>
               <linearGradient id="gradLogo" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="var(--cor-primaria)" />
-                <stop offset="1" stop-color="var(--cor-violeta)" />
+                <stop offset="0" stop-color="#5E18D8" />
+                <stop offset="1" stop-color="#1597A8" />
               </linearGradient>
             </defs>
             <rect width="32" height="32" rx="9" fill="url(#gradLogo)" />

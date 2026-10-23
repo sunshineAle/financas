@@ -36,7 +36,12 @@ router.get('/', exigirAutenticacao, (req, res) => {
   let reserva = db.prepare('SELECT * FROM reserva_liberdade WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId);
   const reservaLiberdade = reserva ? reserva.valor_atual : 0;
 
-  const patrimonioLiquido = totalContas + reservaLiberdade - totalDividas;
+  // Patrimônio líquido (decisão de 23/10/2026) = contas + Reserva/investimentos − faturas abertas − dívidas.
+  // Compra no cartão entra uma vez, como fatura aberta (a fatura paga sai daqui e a saída já está na conta).
+  // Mesma base do "Total devido" da tela Dívidas: fatura aberta de cada cartão + saldo das dívidas.
+  const faturasAbertasLista = cartoesRouter.faturasAPagar(usuarioId).filter((f) => f.aberta);
+  const totalFaturasAbertas = Math.round(faturasAbertasLista.reduce((s, f) => s + f.total, 0) * 100) / 100;
+  const patrimonioLiquido = Math.round((totalContas + reservaLiberdade - totalFaturasAbertas - totalDividas) * 100) / 100;
 
   // Top 3 dívidas por urgência (risco de negativação primeiro) e, dentro
   // da mesma urgência, maior taxa de juros primeiro (avalanche) — mesma
@@ -245,6 +250,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     patrimonioLiquido,
     totalContas,
     totalDividas,
+    totalFaturasAbertas,
     reservaLiberdade,
     dividasPrioritarias,
     fluxoCaixa,

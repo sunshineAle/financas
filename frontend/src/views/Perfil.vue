@@ -15,7 +15,9 @@ import CampoTexto from '../components/CampoTexto.vue';
 import PerfilAvatar from '../components/PerfilAvatar.vue';
 import PerfilAbas from '../components/PerfilAbas.vue';
 import AlterarSenhaAcesso from '../components/AlterarSenhaAcesso.vue';
+import DesbloqueioBiometrico from '../components/DesbloqueioBiometrico.vue';
 import ResetDemoModal from '../components/ResetDemoModal.vue';
+import PlanoReserva from '../components/PlanoReserva.vue';
 import Backup from './Backup.vue';
 import { destino } from '../config/destino.js';
 import { perfil, nomeExibido, inicialDe, trocarSenha } from '../services/perfil.js';
@@ -243,6 +245,7 @@ async function sair() {
           </button>
         </div>
       </CardPadrao>
+      <PlanoReserva />
     </section>
 
     <!-- 3. Dados e backup -->
@@ -272,6 +275,7 @@ async function sair() {
             <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
           </button>
           <template v-if="ehPwa">
+            <DesbloqueioBiometrico />
             <label class="linha">
               <span class="quadro"><Lock :size="20" :stroke-width="1.8" /></span>
               <span class="texto"><b>Bloquear sozinho</b><small>depois de ficar fora do app</small></span>

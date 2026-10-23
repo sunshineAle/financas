@@ -3,10 +3,12 @@
 // e "Esqueci a senha" -> restaurar um backup (e criar uma senha nova). Tudo no aparelho, sem servidor.
 import { ref, computed, onMounted } from 'vue';
 import Orbe from '../components/Orbe.vue';
-import { DatabaseBackup, FileUp, Cloud, X } from 'lucide-vue-next';
-import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar } from '../services/acesso.js';
+import { DatabaseBackup, FileUp, Cloud, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint } from 'lucide-vue-next';
+import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria } from '../services/acesso.js';
+import { jaInstalado, conviteDisponivel, instalarApp, instrucoes } from '../services/instalacao.js';
 import { perfil } from '../services/perfil.js';
-import { lerArquivo, previa, restaurar, recarregarApp } from '../services/backup.js';
+import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem } from '../services/backup.js';
+import { conectarNuvem } from '../services/nuvem/index.js';
 
 const emit = defineEmits(['liberado']);
 
@@ -36,6 +38,28 @@ function iniciarEspera() {
 }
 onMounted(iniciarEspera);
 
+// Boas-vindas: só no primeiro acesso (cadastro novo). Quem já tem acesso vê só o desbloqueio.
+const boasVindas = computed(() => modo.value === 'criar');
+const BENEFICIOS = [
+  { icone: ShieldCheck, texto: 'Seus dados ficam só no seu aparelho' },
+  { icone: WifiOff, texto: 'Funciona offline, sem servidor' },
+  { icone: LockKeyhole, texto: 'Backup criptografado, só você abre' },
+];
+const mostrarInstrucoes = ref(false);
+async function instalar() {
+  const r = await instalarApp();
+  mostrarInstrucoes.value = r === 'instrucoes';
+}
+
+// Desbloqueio por biometria (se foi ativado no Perfil e o aparelho ainda oferece).
+const bioDisponivel = ref(false);
+onMounted(async () => { bioDisponivel.value = biometriaMarcada() && await biometriaSuportada(); });
+async function entrarComBiometria() {
+  erro.value = ''; carregando.value = true;
+  try { await desbloquearComBiometria(); emit('liberado'); }
+  catch (e) { erro.value = e.message; } finally { carregando.value = false; }
+}
+
 const titulo = computed(() => ({ entrar: apelidoSalvo() ? `Olá, ${apelidoSalvo()}` : 'Entrar', criar: 'Criar acesso', redefinir: 'Crie um novo acesso', restaurar: 'Restaurar backup' }[modo.value]));
 const subtitulo = computed(() => ({
   entrar: 'Digite sua senha ou PIN para abrir o app.',
@@ -61,11 +85,28 @@ async function enviar() {
       await criarSenha(senha.value, apelido.value.trim());
       if (!perfil.nome) perfil.nome = apelido.value.trim();
       try { sessionStorage.removeItem('sf:pos-restauro'); } catch { /* ignora */ }
+      const idNuvem = (() => { try { return sessionStorage.getItem('sf:pos-restauro-nuvem'); } catch { return null; } })();
+      if (idNuvem && PROVEDORES[idNuvem]) {
+        oferta.value = { id: idNuvem, bioOk: await biometriaSuportada(), bio: true, auto: true };
+        return;
+      }
     }
     emit('liberado');
   } catch (e) {
     erro.value = e.message || 'Não foi possível continuar.';
     iniciarEspera();
+  } finally { carregando.value = false; }
+}
+
+// Depois de restaurar pela nuvem (aparelho novo): oferece biometria e backup automático nessa nuvem.
+const oferta = ref(null);
+async function concluirOferta() {
+  const o = oferta.value; erro.value = ''; carregando.value = true;
+  try {
+    if (o.bioOk && o.bio) { try { await ativarBiometria(); } catch (e) { erro.value = e.message + ' Você pode ativar depois em Perfil > Segurança.'; } }
+    if (o.auto) { configBackup.ultimoDestino = o.id; configBackup.automatico = true; if (configBackup.intervalo === 'desligado') configBackup.intervalo = 'semanal'; salvarConfig(); }
+    try { sessionStorage.removeItem('sf:pos-restauro-nuvem'); } catch { /* ignora */ }
+    emit('liberado');
   } finally { carregando.value = false; }
 }
 
@@ -78,7 +119,28 @@ const dadosPrevia = ref(null);
 // em todos os casos abre o seletor de arquivos do aparelho; o app da nuvem instalado aparece nele.
 const folha = ref(false);
 const origemRestauro = ref('');
-const NUVENS = ['Google Drive', 'Proton Drive', 'OneDrive', 'Mega'];
+const NUVENS = ['Google Drive', 'OneDrive', 'Dropbox', 'Proton Drive', 'Mega', 'iCloud'];
+// "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
+const nuvemRestauro = ref(null); // { id, nome, data }
+const ajudaNuvem = ref('');
+const ROTULO_ENTRAR = { google: 'Google', microsoft: 'Microsoft', dropbox: 'Dropbox' };
+const fmtData = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+async function entrarNuvem(id) {
+  const p = PROVEDORES[id];
+  if (!p.configurado()) { ajudaNuvem.value = ajudaNuvem.value === id ? '' : id; return; }
+  erro.value = ''; carregando.value = true; dadosPrevia.value = null; arquivo.value = null; senhaBackup.value = '';
+  try {
+    await conectarNuvem(id);
+    const itens = await listarBackupsNuvem(id);
+    if (!itens.length) throw new Error(`Não encontramos backups do app na sua conta ${p.nome}. Confira se entrou na conta certa.`);
+    const mais = itens[0];
+    arquivo.value = await abrirBackupNuvem(id, mais);
+    nuvemRestauro.value = { id, nome: p.nome, data: mais.data };
+    folha.value = false; modo.value = 'restaurar'; origemRestauro.value = p.nome;
+    if (!arquivo.value.cifrado) await verPrevia();
+  } catch (e) { if (!(e && e.codigo === 'cancelado')) { erro.value = e.message; folha.value = false; modo.value = 'restaurar'; origemRestauro.value = ''; } }
+  finally { carregando.value = false; }
+}
 async function escolher(ev, origem = '') {
   erro.value = '';
   dadosPrevia.value = null;
@@ -101,12 +163,12 @@ async function restaurarAgora() {
   carregando.value = true;
   try {
     await restaurar(dadosPrevia.value.dados, 'substituir');
-    try { sessionStorage.setItem('sf:pos-restauro', '1'); } catch { /* ignora */ }
+    try { sessionStorage.setItem('sf:pos-restauro', '1'); if (nuvemRestauro.value) sessionStorage.setItem('sf:pos-restauro-nuvem', nuvemRestauro.value.id); } catch { /* ignora */ }
     await recarregarApp();
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
-function voltar() { erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'criar'; }
+function voltar() { nuvemRestauro.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'criar'; }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada' };
 const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
 </script>
@@ -115,12 +177,21 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
   <div class="tela-acesso">
     <section class="painel-hero">
       <div class="orbe-entrada" aria-hidden="true"><Orbe :partes="partesOrbe" :tamanho="340" :arcos="false" girar /></div>
-      <span class="titulo-hero">Sistema Financeiro</span>
+      <span class="titulo-hero">{{ boasVindas ? 'Bem-vindo ao Dagda Capital' : 'Dagda Capital' }}</span>
       <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
+      <template v-if="boasVindas">
+        <ul class="beneficios">
+          <li v-for="b in BENEFICIOS" :key="b.texto"><component :is="b.icone" :size="18" :stroke-width="1.9" /><span>{{ b.texto }}</span></li>
+        </ul>
+        <template v-if="!jaInstalado">
+          <button type="button" class="instalar" @click="instalar"><Download :size="18" :stroke-width="2" /> Instalar o app</button>
+          <p v-if="mostrarInstrucoes || !conviteDisponivel" class="dica-instalar" :class="{ forte: mostrarInstrucoes }">{{ instrucoes() }}</p>
+        </template>
+      </template>
     </section>
 
     <section class="painel-form">
-      <form v-if="modo !== 'restaurar'" class="formulario" @submit.prevent="enviar">
+      <form v-if="modo !== 'restaurar' && !oferta" class="formulario" @submit.prevent="enviar">
         <h1>{{ titulo }}</h1>
         <p class="subtitulo">{{ subtitulo }}</p>
 
@@ -142,15 +213,26 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
 
         <button type="submit" :disabled="carregando || espera > 0">{{ carregando ? 'Aguarde…' : (modo === 'entrar' ? 'Entrar' : 'Salvar senha e entrar') }}</button>
+        <button v-if="modo === 'entrar' && bioDisponivel" type="button" class="secundario bio" :disabled="carregando" @click="entrarComBiometria"><Fingerprint :size="20" :stroke-width="1.9" /> Entrar com biometria</button>
         <button v-if="modo === 'entrar'" type="button" class="link" @click="abrirRestaurar">Esqueci a senha</button>
         <button type="button" class="restaurar" @click="folha = true"><DatabaseBackup :size="20" :stroke-width="2" /> Restaurar Backup</button>
       </form>
+
+      <div v-else-if="oferta" class="formulario" data-oferta>
+        <h1>Restaurado!</h1>
+        <p class="subtitulo">Seu acesso foi criado. Quer deixar o app mais prático neste aparelho?</p>
+        <label v-if="oferta.bioOk" class="oferta"><input v-model="oferta.bio" type="checkbox" /><span><b>Desbloquear com biometria</b><small>digital, rosto ou PIN do celular; a senha continua valendo</small></span></label>
+        <label class="oferta"><input v-model="oferta.auto" type="checkbox" /><span><b>Backup automático no {{ PROVEDORES[oferta.id].nome }}</b><small>envia sozinho ao abrir o app quando passar o prazo</small></span></label>
+        <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
+        <button type="button" :disabled="carregando" @click="concluirOferta">Continuar</button>
+      </div>
 
       <div v-else class="formulario">
         <h1>{{ titulo }}</h1>
         <p class="subtitulo">{{ subtitulo }}</p>
         <p v-if="origemRestauro" class="origem">Origem: {{ origemRestauro }}</p>
-        <label class="campo">
+        <p v-if="nuvemRestauro" class="origem" data-backup-recente>Backup mais recente: {{ fmtData(nuvemRestauro.data) }}</p>
+        <label v-if="!nuvemRestauro" class="campo">
           <span>Arquivo de backup</span>
           <input type="file" accept=".sfin,application/octet-stream" @change="escolher" />
         </label>
@@ -181,7 +263,13 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
             <span class="texto"><b>Restauração local</b><small>Escolher o arquivo .sfin deste aparelho</small></span>
             <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, 'Arquivo local')" />
           </label>
-          <h3>Nuvem</h3>
+          <h3>Entrar com sua nuvem</h3>
+          <button v-for="(r, id) in ROTULO_ENTRAR" :key="id" type="button" class="opcao entrar" :data-entrar="id" :disabled="carregando" @click="entrarNuvem(id)">
+            <span class="icone"><Cloud :size="20" :stroke-width="1.9" /></span>
+            <span class="texto"><b>{{ PROVEDORES[id].configurado() ? 'Entrar com ' + r : 'Configurar ' + PROVEDORES[id].nome }}</b><small>{{ PROVEDORES[id].configurado() ? 'Procura o backup mais recente na pasta do app' : 'Falta o ' + (id === 'dropbox' ? 'App key' : 'Client ID') + ' (veja docs-nuvem.md)' }}</small></span>
+          </button>
+          <p v-if="ajudaNuvem" class="explica" data-ajuda-nuvem>{{ PROVEDORES[ajudaNuvem].nome }} ainda não foi configurado neste app: crie {{ ajudaNuvem === 'dropbox' ? 'a App key' : 'o Client ID' }} e coloque em config.js (passo a passo em docs-nuvem.md).</p>
+          <h3>Pelo app da nuvem instalado</h3>
           <div class="nuvens">
             <label v-for="n in NUVENS" :key="n" class="opcao nuvem">
               <span class="icone"><Cloud :size="20" :stroke-width="1.9" /></span>
@@ -189,7 +277,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
               <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, n)" />
             </label>
           </div>
-          <p class="explica">Sem login e sem servidor: ao tocar, o seletor de arquivos do aparelho abre e você escolhe o .sfin dentro do app da nuvem (Drive, Proton, OneDrive ou Mega) instalado aqui.</p>
+          <p class="explica">Sem login: ao tocar, o seletor de arquivos do aparelho abre e você escolhe o .sfin dentro do app da nuvem instalado aqui. A internet só é usada ao entrar com a conta.</p>
         </div>
       </div>
     </Teleport>
@@ -228,6 +316,17 @@ button.secundario { background: var(--cor-fundo-elevado); color: var(--cor-texto
   .painel-form { align-items: flex-start; padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
 }
 
+.beneficios { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.beneficios li { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
+.beneficios li svg { color: var(--cor-primaria); flex: none; }
+button.instalar { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; }
+.dica-instalar { margin: 0; max-width: 34ch; font-size: 13px; line-height: 1.45; color: var(--cor-texto-suave); }
+.dica-instalar.forte { color: var(--cor-texto); }
+button.bio { display: flex; align-items: center; justify-content: center; gap: 10px; }
+@media (max-width: 860px) {
+  .beneficios li { font-size: 13.5px; }
+  .beneficios { gap: 6px; }
+}
 .texto-cadastro { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cor-texto-suave); }
 .origem { margin: -6px 0 0; font-size: 13px; color: var(--cor-texto-suave); }
 button.restaurar { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; background: color-mix(in srgb, var(--cor-primaria) 12%, transparent); color: var(--cor-primaria); border: 1.5px solid var(--cor-primaria); font-weight: 700; }
@@ -246,6 +345,12 @@ button.restaurar:hover:not(:disabled) { background: color-mix(in srgb, var(--cor
 .opcao .texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .opcao .texto b { font-size: 15px; font-weight: 600; }
 .opcao .texto small { font-size: 12.5px; color: var(--cor-texto-suave); }
+.opcao.entrar { width: 100%; text-align: left; font: inherit; color: inherit; }
+.opcao.entrar:disabled { opacity: 0.6; }
+.oferta { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--cor-borda); border-radius: 12px; font-size: 14px; }
+.oferta input { width: 22px; height: 22px; accent-color: var(--cor-primaria); flex: none; }
+.oferta span { display: flex; flex-direction: column; gap: 2px; }
+.oferta small { color: var(--cor-texto-suave); font-size: 12.5px; }
 .nuvens { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .opcao.nuvem { min-height: 52px; padding: 6px 10px; gap: 10px; }
 .opcao.nuvem .icone { width: 34px; height: 34px; }

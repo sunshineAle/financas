@@ -7,6 +7,7 @@ import { Download, FolderUp, Share2, FolderCog, ShieldCheck, TriangleAlert, Undo
 import CardPadrao from '../components/CardPadrao.vue';
 import BarraAcoes from '../components/BarraAcoes.vue';
 import BotaoAcao from '../components/BotaoAcao.vue';
+import BackupNuvem from '../components/BackupNuvem.vue';
 import AlterarSenhaAcesso from '../components/AlterarSenhaAcesso.vue';
 import {
   configBackup, salvarConfig, INTERVALOS, estadoPasta, suporte, ocupado, textoUltimoBackup, diasDesdeUltimo, backupDevido,
@@ -50,7 +51,12 @@ async function escolherArq(ev) {
   await abrirArquivo(f);
 }
 async function abrirArquivo(f) {
-  try { arq.value = await lerArquivo(f); if (!arq.value.cifrado) await verPrevia(); } catch (e) { erro.value = e.message; }
+  try { await aceitarLido(await lerArquivo(f)); } catch (e) { erro.value = e.message; }
+}
+async function aceitarLido(lido) {
+  erro.value = ''; pre.value = null; arq.value = lido;
+  if (!lido.cifrado) await verPrevia();
+  document.getElementById('sec-restaurar')?.scrollIntoView({ behavior: 'smooth' });
 }
 async function verPrevia() {
   erro.value = ''; trabalhando.value = true;
@@ -116,6 +122,8 @@ onMounted(async () => {
         </BarraAcoes>
       </template>
     </CardPadrao>
+
+    <BackupNuvem @escolhido="aceitarLido" />
 
     <CardPadrao titulo="Pasta da nuvem">
       <p v-if="estadoPasta.nome" class="dica">Pasta vinculada: <b>{{ estadoPasta.nome }}</b> <span v-if="estadoPasta.permissao && estadoPasta.permissao !== 'granted'">(o navegador vai pedir permissão no próximo backup)</span></p>

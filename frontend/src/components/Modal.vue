@@ -17,6 +17,19 @@ const props = defineProps({
 const emit = defineEmits(['fechar']);
 const caixa = ref(null);
 let anterior = null;
+// Teclado virtual: a folha acompanha a área visível (visualViewport) para o campo e Salvar/Cancelar não ficarem escondidos.
+const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+const altura = ref(0);
+const topo = ref(0);
+function ajustarTeclado() {
+  if (!vv) return;
+  altura.value = Math.round(vv.height);
+  topo.value = Math.round(vv.offsetTop);
+  const f = document.activeElement;
+  if (f && caixa.value?.contains(f) && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)) {
+    requestAnimationFrame(() => f.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  }
+}
 
 function aoApertarTecla(evento) {
   if (evento.key === 'Escape') emit('fechar');
@@ -28,12 +41,15 @@ watch(
     if (aberto) {
       anterior = document.activeElement;
       window.addEventListener('keydown', aoApertarTecla);
+      vv?.addEventListener('resize', ajustarTeclado); vv?.addEventListener('scroll', ajustarTeclado);
+      if (vv) { altura.value = Math.round(vv.height); topo.value = Math.round(vv.offsetTop); }
       document.documentElement.style.overflow = 'hidden';
       await nextTick();
       const alvo = caixa.value?.querySelector('[autofocus], input:not([type=hidden]), select, textarea') || caixa.value;
       alvo?.focus?.({ preventScroll: true });
     } else {
       window.removeEventListener('keydown', aoApertarTecla);
+      vv?.removeEventListener('resize', ajustarTeclado); vv?.removeEventListener('scroll', ajustarTeclado);
       document.documentElement.style.overflow = '';
       anterior?.focus?.({ preventScroll: true });
     }
@@ -43,6 +59,7 @@ watch(
 
 onUnmounted(() => {
   window.removeEventListener('keydown', aoApertarTecla);
+  vv?.removeEventListener('resize', ajustarTeclado); vv?.removeEventListener('scroll', ajustarTeclado);
   document.documentElement.style.overflow = '';
 });
 </script>
@@ -50,7 +67,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="aberto" :class="['fundo-modal', 'tema-' + tema]" @click.self="emit('fechar')">
+      <div v-if="aberto" :class="['fundo-modal', 'tema-' + tema]" :style="altura ? { '--vv-h': altura + 'px', '--vv-top': topo + 'px' } : null" @click.self="emit('fechar')">
         <div ref="caixa" class="modal" role="dialog" aria-modal="true" :aria-label="titulo" tabindex="-1" :style="{ '--largura': largura + 'px' }">
           <span class="alca" aria-hidden="true"></span>
           <div class="cabecalho-modal">
@@ -97,8 +114,8 @@ onUnmounted(() => {
 
 /* celular: folha que sobe da base */
 @media (max-width: 768px) {
-  .fundo-modal { align-items: flex-end; padding: 0; }
-  .modal { max-width: none; max-height: 92dvh; border-radius: 24px 24px 0 0; border-bottom: none; }
+  .fundo-modal { align-items: flex-end; padding: 0; inset: auto 0 auto 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); }
+  .modal { max-width: none; max-height: min(92dvh, var(--vv-h, 100dvh)); border-radius: 24px 24px 0 0; border-bottom: none; }
   .alca { display: block; width: 40px; height: 4px; border-radius: 999px; background: var(--cor-borda); margin: 8px auto 0; flex: none; }
   .modal::before { display: none; }
   .modal-enter-from .modal, .modal-leave-to .modal { transform: translateY(100%); opacity: 1; }
