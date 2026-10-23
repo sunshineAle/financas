@@ -1,0 +1,37 @@
+/* Estilos globais dos formularios (prefixo sf-). Importado dentro dos componentes Campo e FormularioModal.
+   Usa só tokens; --tema-cor vem de .tema-* (padrão: neutro/primária). */
+.sf-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; --tc: var(--tema-cor, var(--cor-primaria)); }
+.sf-rotulo { font-size: 12.5px; font-weight: 600; color: var(--cor-texto-suave); letter-spacing: 0.01em; }
+.sf-obrig { color: var(--cor-saida); margin-left: 2px; }
+.sf-dica { margin: 0; font-size: 12px; color: var(--cor-texto-suave); }
+.sf-erro { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--cor-saida); display: flex; align-items: center; gap: 5px; }
+
+.sf-entrada {
+  width: 100%; min-height: 48px; padding: 11px 14px; border-radius: 14px;
+  font-family: var(--fonte-texto); font-size: 16px; /* 16px evita zoom do iOS */
+  color: var(--cor-texto); background: var(--cor-fundo); border: 1.5px solid var(--cor-borda);
+  outline: none; transition: border-color var(--anim-rapida) ease, box-shadow var(--anim-rapida) ease, background var(--anim-rapida) ease;
+}
+.sf-entrada::placeholder { color: var(--cor-texto-suave); opacity: 0.7; }
+.sf-entrada:hover { border-color: color-mix(in srgb, var(--tc) 40%, var(--cor-borda)); }
+.sf-entrada:focus-visible, .sf-entrada:focus { border-color: var(--tc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 28%, transparent); }
+.sf-entrada:disabled { opacity: 0.55; cursor: not-allowed; }
+.sf-campo.tem-erro .sf-entrada { border-color: var(--cor-saida); }
+.sf-campo.tem-erro .sf-entrada:focus { box-shadow: 0 0 0 3px var(--cor-saida-fundo); }
+select.sf-entrada { appearance: none; -webkit-appearance: none; padding-right: 40px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--cor-texto-suave) 50%), linear-gradient(135deg, var(--cor-texto-suave) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat; }
+input[type='date'].sf-entrada { color-scheme: inherit; }
+
+/* opção selecionável (conta/categoria/tipo): foco visível e seleção com o tema */
+.sf-opcao:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc, var(--cor-primaria)) 35%, transparent); }
+
+/* botões de formulário */
+.sf-botao { min-height: 48px; padding: 0 20px; border-radius: 14px; font: 700 15px var(--fonte-texto); cursor: pointer; border: 1.5px solid transparent; transition: transform var(--anim-rapida) ease, opacity var(--anim-rapida) ease, background var(--anim-padrao) ease; }
+.sf-botao:active { transform: scale(0.98); }
+.sf-botao:disabled { opacity: 0.55; cursor: not-allowed; }
+.sf-botao.primario { color: var(--cor-sobre-cor); background: var(--tema-degrade, var(--degrade-entrada)); }
+.sf-botao.secundario { color: var(--cor-texto); background: transparent; border-color: var(--cor-borda); }
+.sf-botao.secundario:hover { background: var(--cor-realce); }
+.sf-botao.perigo { color: var(--cor-saida); background: transparent; border-color: var(--cor-saida); }
+.sf-botao:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tema-cor, var(--cor-primaria)) 35%, transparent); }

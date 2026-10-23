@@ -1,0 +1,32 @@
+{
+  "name": "sistema-financeiro-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --mode servidor",
+    "preview": "vite preview",
+    "build:demo": "vite build -c vite.demo.config.js",
+    "build:pwa": "vite build -c vite.pwa.config.js",
+    "build:servidor": "vite build --mode servidor",
+    "build:pc": "vite build --mode pc",
+    "build:android": "vite build --mode android --outDir dist-android",
+    "verificar:pwa": "node scripts/verificar-pwa.mjs",
+    "build:pages": "node scripts/build-pages.mjs"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^1.0.0",
+    "pdfjs-dist": "^4.10.38",
+    "qrcode": "^1.5.4",
+    "vue": "^3.4.29",
+    "vue-router": "^4.4.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.5",
+    "sql.js": "^1.14.2",
+    "vite": "^5.3.1",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

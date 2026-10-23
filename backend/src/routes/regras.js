@@ -1,0 +1,131 @@
+// Regras de categorização: lista, criação (com "aplicar nas antigas"), ativar/desativar e exclusão.
+const express = require('express');
+const db = require('../db');
+const dados = require('../dados');
+const { exigirAutenticacao } = require('../middleware/auth');
+const { nomesCategoriasReceita } = require('../utils/categoriasReceita');
+const R = require('../utils/regras');
+
+const router = express.Router();
+router.use(exigirAutenticacao);
+
+const numeroOuNulo = (v) => (v === undefined || v === null || v === '' ? null : R.arredondar(Number(v)));
+
+// Valida o corpo e devolve { dados } ou { erro }.
+function ler(usuarioId, corpo, atual = null) {
+  const c = corpo || {};
+  const d = {};
+  const tipo = c.tipo !== undefined ? c.tipo : atual ? atual.tipo : 'saida';
+  if (tipo !== 'saida' && tipo !== 'entrada') return { erro: 'Informe se a regra é de saída ou de entrada.' };
+  d.tipo = tipo;
+  if (c.padrao !== undefined || !atual) {
+    const padrao = String(c.padrao || '').trim().slice(0, 80);
+    if (padrao.length < 2) return { erro: 'Informe o trecho do nome (pelo menos 2 letras). Ex.: Padaria do José.' };
+    d.padrao = padrao;
+  }
+  for (const [campo, col] of [['valorMin', 'valor_min'], ['valorMax', 'valor_max']]) {
+    if (c[campo] !== undefined || !atual) {
+      const n = numeroOuNulo(c[campo]);
+      if (n !== null && (!Number.isFinite(n) || n < 0)) return { erro: 'Os valores da regra não podem ser negativos.' };
+      d[col] = n;
+    }
+  }
+  const min = d.valor_min !== undefined ? d.valor_min : atual && atual.valor_min;
+  const max = d.valor_max !== undefined ? d.valor_max : atual && atual.valor_max;
+  if (min !== null && min !== undefined && max !== null && max !== undefined && min > max) return { erro: 'O valor mínimo não pode ser maior que o máximo.' };
+  if (c.contaId !== undefined || !atual) {
+    const contaId = c.contaId ? String(c.contaId) : null;
+    if (contaId && !db.prepare('SELECT 1 FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(contaId, usuarioId)) return { erro: 'Conta não encontrada.' };
+    d.conta_id = contaId;
+  }
+  if (tipo === 'saida') {
+    const id = c.categoriaId !== undefined ? c.categoriaId : atual ? atual.categoria_id : null;
+    if (!id || !db.prepare('SELECT 1 FROM categorias_orcamento WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(id), usuarioId)) return { erro: 'Escolha a categoria de despesa da regra.' };
+    d.categoria_id = String(id);
+    d.categoria_receita = null;
+  } else {
+    const nome = c.categoriaReceita !== undefined ? c.categoriaReceita : atual ? atual.categoria_receita : null;
+    if (!nome || !nomesCategoriasReceita(usuarioId).includes(nome)) return { erro: 'Escolha a categoria de entrada da regra.' };
+    d.categoria_receita = nome;
+    d.categoria_id = null;
+  }
+  if (c.ativa !== undefined) d.ativa = c.ativa ? 1 : 0;
+  return { dados: d };
+}
+
+function paraSaida(r) {
+  let categoriaNome = r.categoria_receita || null;
+  let categoriaIcone = null;
+  if (r.categoria_id) {
+    const c = db.prepare('SELECT nome, icone, cor FROM categorias_orcamento WHERE id = ? AND excluido_em IS NULL').get(r.categoria_id);
+    categoriaNome = c ? c.nome : null; categoriaIcone = c ? c.icone : null;
+  } else if (r.categoria_receita) {
+    const c = db.prepare('SELECT icone FROM categorias_receita WHERE usuario_id = ? AND nome = ? AND excluido_em IS NULL').get(r.usuario_id, r.categoria_receita);
+    categoriaIcone = c ? c.icone : null;
+  }
+  const conta = r.conta_id ? db.prepare('SELECT nome FROM contas WHERE id = ? AND excluido_em IS NULL').get(r.conta_id) : null;
+  return {
+    id: r.id, tipo: r.tipo, padrao: r.padrao, valorMin: r.valor_min, valorMax: r.valor_max,
+    contaId: r.conta_id || null, contaNome: conta ? conta.nome : null,
+    categoriaId: r.categoria_id || null, categoriaReceita: r.categoria_receita || null, categoriaNome, categoriaIcone,
+    ativa: !!r.ativa, aplicacoes: r.aplicacoes || 0,
+  };
+}
+
+router.get('/', (req, res) => {
+  const lista = db.prepare('SELECT * FROM regras_categorias WHERE usuario_id = ? AND excluido_em IS NULL ORDER BY criado_em DESC, rowid DESC').all(req.usuario.id);
+  res.json(lista.map(paraSaida));
+});
+
+// Quantas transações antigas a regra (ainda não salva) mudaria de categoria.
+router.get('/previa', (req, res) => {
+  const q = req.query || {};
+  const l = ler(req.usuario.id, { tipo: q.tipo || 'saida', padrao: q.padrao, valorMin: q.valorMin, valorMax: q.valorMax, contaId: q.contaId, categoriaId: q.categoriaId, categoriaReceita: q.categoriaReceita });
+  if (l.erro) return res.status(400).json({ erro: l.erro });
+  const linhas = R.afetadas(req.usuario.id, { ...l.dados, usuario_id: req.usuario.id });
+  res.json({ quantidade: linhas.length, exemplos: linhas.slice(0, 5).map((x) => x.descricao) });
+});
+
+router.post('/', (req, res) => {
+  const l = ler(req.usuario.id, req.body);
+  if (l.erro) return res.status(400).json({ erro: l.erro });
+  const igual = db.prepare('SELECT * FROM regras_categorias WHERE usuario_id = ? AND excluido_em IS NULL AND tipo = ?').all(req.usuario.id, l.dados.tipo)
+    .find((r) => R.normalizar(r.padrao) === R.normalizar(l.dados.padrao) && (r.conta_id || null) === (l.dados.conta_id || null) && (r.valor_min ?? null) === (l.dados.valor_min ?? null) && (r.valor_max ?? null) === (l.dados.valor_max ?? null));
+  if (igual) return res.status(400).json({ erro: 'Já existe uma regra igual para esse trecho. Edite ou apague a antiga.' });
+  let regra; let aplicadas = 0;
+  dados.transacao(() => {
+    regra = dados.inserir('regras_categorias', { usuario_id: req.usuario.id, ativa: 1, aplicacoes: 0, ...l.dados });
+    if (req.body && req.body.aplicarAntigas) aplicadas = R.aplicarNasAntigas(req.usuario.id, regra);
+  });
+  res.status(201).json({ regra: paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(regra.id)), aplicadas });
+});
+
+function achar(req, res) {
+  const r = db.prepare('SELECT * FROM regras_categorias WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(req.params.id, req.usuario.id);
+  if (!r) res.status(404).json({ erro: 'Regra não encontrada.' });
+  return r;
+}
+
+router.put('/:id', (req, res) => {
+  const atual = achar(req, res);
+  if (!atual) return;
+  const l = ler(req.usuario.id, req.body, atual);
+  if (l.erro) return res.status(400).json({ erro: l.erro });
+  dados.atualizar('regras_categorias', atual.id, l.dados);
+  res.json(paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(atual.id)));
+});
+
+router.post('/:id/aplicar', (req, res) => {
+  const atual = achar(req, res);
+  if (!atual) return;
+  res.json({ aplicadas: R.aplicarNasAntigas(req.usuario.id, atual) });
+});
+
+router.delete('/:id', (req, res) => {
+  const atual = achar(req, res);
+  if (!atual) return;
+  dados.excluir('regras_categorias', atual.id);
+  res.json({ ok: true });
+});
+
+module.exports = router;

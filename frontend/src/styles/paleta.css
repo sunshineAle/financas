@@ -1,0 +1,104 @@
+/* Paleta oficial v2 (onda 5): 4 grupos x 8 matizes x 3 luminosidades. NOMES ANTIGOS MANTIDOS COMO ALIASES.
+   Saídas = carmim→âmbar (vermelho puro só alerta grave) · Entradas = VERDE (nomes --entrada-* agora verdes) ·
+   Metas = violeta→uva-rosé (índigo removido) · Investimentos = PETRÓLEO/CIANO (nomes --investimento-* agora petróleo).
+   Interface (botões/links) = índigo sólido (--cor-interface-*, em tokens.css). Zerado/no limite = menta.
+   Não use estes tons direto nas telas: use os tokens semânticos de tokens.css. */
+:root {
+  /* saida */
+  --saida-carmim-escuro: #841524;
+  --saida-carmim-medio: #CE2239;
+  --saida-carmim-claro: #EB8492;
+  --saida-vermelho-escuro: #881511;
+  --saida-vermelho-medio: #D5211A;
+  --saida-vermelho-claro: #EF8480;
+  --saida-brasa-escuro: #8A240F;
+  --saida-brasa-medio: #D83818;
+  --saida-brasa-claro: #F1927E;
+  --saida-coral-escuro: #8E300B;
+  --saida-coral-medio: #DE4C12;
+  --saida-coral-claro: #F49D7B;
+  --saida-tangerina-escuro: #903D09;
+  --saida-tangerina-medio: #E15F0E;
+  --saida-tangerina-claro: #F6A979;
+  --saida-laranja-escuro: #914A08;
+  --saida-laranja-medio: #E4740C;
+  --saida-laranja-claro: #F8B577;
+  --saida-abobora-escuro: #905A09;
+  --saida-abobora-medio: #E18D0E;
+  --saida-abobora-claro: #F6C479;
+  --saida-ambar-escuro: #8E690B;
+  --saida-ambar-medio: #DFA511;
+  --saida-ambar-claro: #F5D27A;
+  /* entrada */
+  --entrada-ceruleo-escuro: #2E8F5A;
+  --entrada-ceruleo-medio: #63C98A;
+  --entrada-ceruleo-claro: #C4EFD4;
+  --entrada-oceano-escuro: #1B7F47;
+  --entrada-oceano-medio: #3FB874;
+  --entrada-oceano-claro: #B4EACA;
+  --entrada-ceu-escuro: #1E8A4D;
+  --entrada-ceu-medio: #4CC27A;
+  --entrada-ceu-claro: #B0E8C6;
+  --entrada-aco-escuro: #3A6B50;
+  --entrada-aco-medio: #5E9C78;
+  --entrada-aco-claro: #BFDCCA;
+  --entrada-azul-escuro: #167A42;
+  --entrada-azul-medio: #2FAE66;
+  --entrada-azul-claro: #A8E6BE;
+  --entrada-royal-escuro: #146B3A;
+  --entrada-royal-medio: #22A55A;
+  --entrada-royal-claro: #A8E6BE;
+  --entrada-cobalto-escuro: #0F5A30;
+  --entrada-cobalto-medio: #167A42;
+  --entrada-cobalto-claro: #93DCAF;
+  --entrada-safira-escuro: #0B4527;
+  --entrada-safira-medio: #146B3A;
+  --entrada-safira-claro: #7FCF9F;
+  /* meta */
+  --meta-violeta-escuro: #3C0F8A;
+  --meta-violeta-medio: #5E18D8;
+  --meta-violeta-claro: #A87EF1;
+  --meta-roxo-escuro: #4D1584;
+  --meta-roxo-medio: #7822CE;
+  --meta-roxo-claro: #B884EB;
+  --meta-purpura-escuro: #5A1B7E;
+  --meta-purpura-medio: #8D2AC6;
+  --meta-purpura-claro: #C489E6;
+  --meta-ametista-escuro: #632277;
+  --meta-ametista-medio: #9B36BA;
+  --meta-ametista-claro: #CD90DF;
+  --meta-orquidea-escuro: #702079;
+  --meta-orquidea-medio: #AF32BD;
+  --meta-orquidea-claro: #D98EE1;
+  --meta-ameixa-escuro: #6F2A6D;
+  --meta-ameixa-medio: #AE42AA;
+  --meta-ameixa-claro: #D897D6;
+  --meta-uva-rose-escuro: #772266;
+  --meta-uva-rose-medio: #BA369F;
+  --meta-uva-rose-claro: #DF90CF;
+  /* investimento */
+  --investimento-anis-escuro: #127383;
+  --investimento-anis-medio: #3AB0BF;
+  --investimento-anis-claro: #C2ECF0;
+  --investimento-lima-escuro: #0E6A79;
+  --investimento-lima-medio: #2BA7B8;
+  --investimento-lima-claro: #B4E8EE;
+  --investimento-pistache-escuro: #0C6371;
+  --investimento-pistache-medio: #1F9FB0;
+  --investimento-pistache-claro: #ADE5EC;
+  --investimento-folha-escuro: #0B6270;
+  --investimento-folha-medio: #1AA3B5;
+  --investimento-folha-claro: #A9E4EC;
+  --investimento-esmeralda-escuro: #0B5C68;
+  --investimento-esmeralda-medio: #1597A8;
+  --investimento-esmeralda-claro: #A6E3EC;
+  --investimento-menta-escuro: #0E6E7C;
+  --investimento-menta-medio: #22C3D6;
+  --investimento-menta-claro: #A0E0EA;
+  --investimento-jade-escuro: #09525D;
+  --investimento-jade-medio: #1390A1;
+  --investimento-jade-claro: #9ADDE8;
+  --investimento-verde-agua-escuro: #084A55;
+  --investimento-verde-agua-medio: #108899;
+  --investimento-verde-agua-claro: #94DAE5;
+}

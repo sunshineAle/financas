@@ -1,0 +1,22 @@
+node_modules/
+dist/
+dist-*/
+frontend/dist*/
+backend/data/
+*.db
+*.sqlite
+.env
+.env.*
+!.env.example
+*.log
+*.sfin
+# Dados pessoais: extratos, faturas e backups reais NUNCA vão para o repositório
+exemplos-importacao/
+**/exemplos-importacao/
+pluggy-teste/
+*.ofx
+*.pdf
+*.zip
+# docs/ (cópia do dist-pwa) é versionado de propósito: alternativa de publicação direta no GitHub Pages
+!docs/
+!docs/**

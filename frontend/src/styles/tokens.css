@@ -1,0 +1,213 @@
+@import './paleta.css';
+
+/* Tokens semânticos. As telas usam SÓ estes nomes; a paleta oficial (paleta.css) alimenta todos.
+   O tema escuro é o valor-base; o claro redefine; "automático" segue o aparelho (ver services/tema.js,
+   que grava data-theme="light|dark" no <html>). */
+:root {
+  /* Neutros v2 (escuro = valor-base; o claro redefine abaixo) */
+  --cor-fundo: #141413;
+  --cor-fundo-elevado: #1F1F1D;
+  --cor-fundo-sidebar: #191918;
+  --cor-texto: #F2F1EC;
+  --cor-texto-suave: #A3A29C;
+  --cor-trilho: #2E2E2B;
+  --cor-borda: #2E2E2B;
+  --cor-realce: rgba(255, 255, 255, 0.05); /* hover de itens e linhas */
+  --cor-sobre-cor: #ffffff; /* texto sobre fundo colorido */
+
+  /* Entradas / positivo = VERDE */
+  --cor-entrada: var(--entrada-royal-medio); /* #22A55A */
+  --cor-entrada-clara: var(--entrada-royal-claro); /* #A8E6BE */
+  --cor-entrada-escuro: var(--entrada-royal-escuro); /* #146B3A */
+  --cor-entrada-texto: #5FD08E;
+  --cor-entrada-fundo: color-mix(in srgb, var(--entrada-royal-medio) 22%, transparent);
+  /* Saídas = CARMIM → ÂMBAR (vermelho puro só em alerta grave) */
+  --cor-saida: var(--saida-carmim-medio);
+  --cor-saida-clara: var(--saida-carmim-claro);
+  --cor-saida-texto: #F27C8C;
+  --cor-saida-fundo: color-mix(in srgb, var(--saida-carmim-medio) 22%, transparent);
+  /* Zerado / no limite (>=95%) = MENTA, nunca cinza */
+  --cor-zero: #9FE3C8;
+  --cor-zero-clara: #D2F3E4;
+  --cor-zero-texto: #C4F2DE;
+  --cor-zero-fundo: color-mix(in srgb, #9FE3C8 22%, transparent);
+  /* Metas = ROXO (violeta → uva-rosé). Reserva de Liberdade = violeta */
+  --cor-meta: var(--meta-violeta-medio);
+  --cor-meta-clara: var(--meta-violeta-claro);
+  --cor-meta-texto: #B98AF0;
+  --cor-meta-fundo: color-mix(in srgb, var(--meta-violeta-medio) 24%, transparent);
+  /* Investimentos = PETRÓLEO / CIANO */
+  --cor-investimento: var(--investimento-esmeralda-medio); /* #1597A8 */
+  --cor-investimento-clara: var(--investimento-esmeralda-claro); /* #A6E3EC */
+  --cor-investimento-escuro: var(--investimento-esmeralda-escuro); /* #0B5C68 */
+  --cor-investimento-brilho: #22C3D6;
+  --cor-investimento-texto: #4FD0E0;
+  --cor-investimento-fundo: color-mix(in srgb, var(--investimento-esmeralda-medio) 22%, transparent);
+
+  /* INTERFACE (botões, links, seletores) = ÍNDIGO sólido. Nunca em dado/gráfico. */
+  --cor-interface: #4A5BDB;
+  --cor-interface-hover: #6272E6;
+  --cor-interface-link: #8E9CF5;
+  --cor-interface-selecao: color-mix(in srgb, #4A5BDB 28%, transparent);
+
+  /* Nomes antigos (aliases): as telas já usam, agora ligados à paleta v2 */
+  --cor-primaria: var(--cor-interface);
+  --cor-primaria-hover: var(--cor-interface-hover);
+  --cor-violeta: var(--cor-interface); /* era índigo das metas; agora interface sólido (degradê primária→violeta vira cor sólida) */
+  --cor-positivo: var(--cor-entrada);
+  /* Vermelho puro SÓ para alerta grave (orçamento estourado, fatura vencida, dívida em risco) */
+  --cor-alerta: #D5211A;
+  --cor-alerta-escuro: #9E1610;
+  --cor-alerta-texto: #FF8A80;
+  --cor-rosa: var(--cor-saida);
+  --cor-reserva: var(--cor-meta);
+  --cor-amarelo: var(--saida-ambar-medio);
+
+  /* REGRA DO SINAL (cards): positivo = verde, zerado = menta, negativo = carmim. Sempre com sinal (+/−) e ícone (↓ ↑ =). */
+  --sinal-pos-de: #123F27; --sinal-pos-ate: #0C2C1B; --sinal-pos-texto: #9BE6B8;
+  --sinal-zero-de: #1B3D33; --sinal-zero-ate: #132D26; --sinal-zero-texto: #C4F2DE;
+  --sinal-neg-de: #4E111B; --sinal-neg-ate: #360B12; --sinal-neg-texto: #F7AAB4;
+
+  /* paleta cíclica usada nos gráficos (alterna matizes distantes) */
+  --paleta-categorias: var(--cor-entrada), var(--cor-amarelo), var(--cor-rosa), var(--cor-investimento), var(--cor-meta), var(--saida-tangerina-medio);
+
+  --fonte-display: 'Sora', system-ui, sans-serif;
+  --fonte-texto: 'Inter', system-ui, sans-serif;
+
+  --raio-padrao: 16px;
+  --sombra-suave: 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+
+  /* Animações: um lugar só (suaves e discretas). Com "reduzir movimento" valem 0. */
+  --anim-rapida: 150ms;
+  --anim-padrao: 260ms;
+  --anim-lenta: 700ms;
+  --anim-curva: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --anim-curva-suave: cubic-bezier(0.33, 1, 0.68, 1);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --cor-fundo: #F6F5F2;
+  --cor-fundo-elevado: #FFFFFF;
+  --cor-fundo-sidebar: #FFFFFF;
+  --cor-texto: #1A1A1A;
+  --cor-texto-suave: #6B6A66;
+  --cor-trilho: #ECEAE4;
+  --cor-borda: #E4E2DB;
+  --cor-realce: rgba(26, 26, 26, 0.05);
+  --sombra-suave: 0 12px 32px -18px rgba(26, 26, 26, 0.35);
+  /* No claro, o tom escuro do grupo lê melhor em texto pequeno */
+  --cor-entrada-texto: #146B3A;
+  --cor-saida-texto: #A51A2E;
+  --cor-zero-texto: #1E5E47;
+  --cor-meta-texto: #5B1A9E;
+  --cor-investimento-texto: #0B5C68;
+  --cor-alerta-texto: #A51A1A;
+  --cor-entrada-fundo: color-mix(in srgb, var(--entrada-royal-medio) 14%, transparent);
+  --cor-saida-fundo: color-mix(in srgb, var(--saida-carmim-medio) 14%, transparent);
+  --cor-zero-fundo: color-mix(in srgb, #9FE3C8 40%, transparent);
+  --cor-meta-fundo: color-mix(in srgb, var(--meta-violeta-medio) 14%, transparent);
+  --cor-investimento-fundo: color-mix(in srgb, var(--investimento-esmeralda-medio) 16%, transparent);
+  --cor-grave-fundo: color-mix(in srgb, var(--saida-vermelho-medio) 14%, transparent);
+  --cor-interface: #3446C4;
+  --cor-interface-hover: #2A378F;
+  --cor-interface-link: #3446C4;
+  --cor-interface-selecao: #DCE1FB;
+  --sinal-pos-de: #E3F6EA; --sinal-pos-ate: #C2EBD1; --sinal-pos-texto: #0E4A28;
+  --sinal-zero-de: #EAF9F2; --sinal-zero-ate: #D2F3E4; --sinal-zero-texto: #1E5E47;
+  --sinal-neg-de: #FBE4E7; --sinal-neg-ate: #F6CDD3; --sinal-neg-texto: #8A1526;
+  color-scheme: light;
+}
+
+html[data-reduzir-movimento='1'] {
+  --anim-rapida: 0ms;
+  --anim-padrao: 0ms;
+  --anim-lenta: 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-reduzir-movimento='0']) {
+    --anim-rapida: 0ms;
+    --anim-padrao: 0ms;
+    --anim-lenta: 0ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font-family: var(--fonte-texto);
+  -webkit-font-smoothing: antialiased;
+}
+
+.numero-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barras de rolagem discretas: trilho transparente e o "polegar" na cor da marca, com pouca opacidade */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--cor-primaria) 38%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--cor-primaria) 32%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--cor-primaria) 60%, transparent); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ==========================================================================
+   BIBLIOTECA DE PADRÕES (onda 2) — ver /home/claude/work-cartoes/PADROES.md
+   Só ADICIONADO: nada acima mudou.
+   ========================================================================== */
+:root {
+  /* Card padrão: UM fundo/borda/raio/espaço para todo o sistema (molde de Objetivos). */
+  --cor-card: var(--cor-fundo-elevado);
+  --cor-card-borda: var(--cor-borda);
+  --raio-card: var(--raio-padrao);
+  --espaco-card: 16px;
+
+  /* DEGRADÊ obrigatório em todo gráfico: nenhuma cor termina seca.
+     --degrade-<x> = degradê "de dado" (barras, anéis, discos). --degrade-<x>-ativo = versão mais funda p/ fundos com texto branco (abas, botões). */
+  --degrade-entrada: linear-gradient(135deg, #4CC27A, #22A55A, #167A42);
+  --degrade-entrada-ativo: linear-gradient(135deg, #198045, #167A42, #146B3A);
+  --degrade-saida: linear-gradient(135deg, #CE2239, #E15F0E, #DFA511);
+  --degrade-saida-ativo: linear-gradient(135deg, #CE2239, #A91C2F);
+  --degrade-zero: linear-gradient(135deg, #E6F9F1, #B9EBD6, #9FE3C8);
+  --cor-grave: var(--cor-alerta);
+  --cor-grave-clara: var(--saida-vermelho-claro);
+  --cor-grave-fundo: color-mix(in srgb, var(--cor-alerta) 22%, transparent);
+  --degrade-grave: linear-gradient(135deg, #D5211A, #9E1610);
+  --degrade-meta: linear-gradient(135deg, #5E18D8, #8D2AC6, #BA369F);
+  --degrade-meta-ativo: linear-gradient(135deg, #5E18D8, #7822CE, #9B36BA);
+  --degrade-investimento: linear-gradient(135deg, #22C3D6, #1597A8, #0B5C68);
+  --degrade-investimento-ativo: linear-gradient(135deg, #0E7F90, #0B6B7A, #0B5C68);
+  --degrade-interface: linear-gradient(135deg, var(--cor-interface), var(--cor-interface)); /* sólido: interface não usa degradê */
+  --degrade-neutro: linear-gradient(135deg, var(--cor-interface), var(--cor-interface));
+  /* Cards pela regra do sinal */
+  --degrade-sinal-pos: linear-gradient(135deg, var(--sinal-pos-de), var(--sinal-pos-ate));
+  --degrade-sinal-zero: linear-gradient(135deg, var(--sinal-zero-de), var(--sinal-zero-ate));
+  --degrade-sinal-neg: linear-gradient(135deg, var(--sinal-neg-de), var(--sinal-neg-ate));
+}
+
+/* Tema da página: coloque a classe num contêiner (ou use a prop `tema` dos componentes).
+   Expõe --tema-degrade (fundos ativos), --tema-cor (acentos/foco) e --tema-fundo (tom suave). */
+.tema-entrada { --tema-degrade: var(--degrade-entrada-ativo); --tema-cor: var(--cor-entrada); --tema-fundo: var(--cor-entrada-fundo); }
+.tema-saida { --tema-degrade: var(--degrade-saida-ativo); --tema-cor: var(--cor-saida); --tema-fundo: var(--cor-saida-fundo); }
+.tema-meta { --tema-degrade: var(--degrade-meta-ativo); --tema-cor: var(--cor-meta); --tema-fundo: var(--cor-meta-fundo); }
+.tema-investimento { --tema-degrade: var(--degrade-investimento-ativo); --tema-cor: var(--cor-investimento); --tema-fundo: var(--cor-investimento-fundo); }
+.tema-neutro { --tema-degrade: var(--degrade-neutro); --tema-cor: var(--cor-primaria); --tema-fundo: var(--cor-realce); }

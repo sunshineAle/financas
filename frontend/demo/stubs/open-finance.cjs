@@ -1,0 +1,10 @@
+const express = require('express');
+const router = express.Router();
+const recusa = (req, res) => res.status(400).json({ erro: 'O Open Finance precisa do servidor e das chaves da Pluggy. Não funciona na versão de demonstração.' });
+router.get('/status', (req, res) => res.json({ configurado: false, conexoes: [], limiteConexoesGratuito: 5, investimentos: { total: 0, itens: [] } }));
+router.post('/connect-token', recusa);
+router.post('/conexoes', recusa);
+router.post('/sincronizar', recusa);
+router.post('/sincronizar/:id', recusa);
+router.delete('/conexoes/:id', recusa);
+module.exports = router;
