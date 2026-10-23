@@ -177,7 +177,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
 <template>
   <div class="tela-acesso">
     <section class="painel-hero">
-      <div class="orbe-entrada"><MarcaDagda :tamanho="340" completa /></div>
+      <div class="orbe-entrada"><MarcaDagda completa /></div>
       <span v-if="boasVindas" class="titulo-hero">Bem-vindo</span>
       <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
       <template v-if="boasVindas">
@@ -288,7 +288,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
 <style scoped>
 .tela-acesso { min-height: 100%; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--cor-fundo); color: var(--cor-texto); overflow: auto; }
 .painel-hero { background: var(--cor-fundo-sidebar); border-right: 1px solid var(--cor-borda); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 48px 32px; gap: 20px; overflow: hidden; }
-.orbe-entrada { width: min(340px, 62vw); flex: none; }
+.orbe-entrada { width: min(72vw, 42vh, 360px); aspect-ratio: 1; flex: none; margin-inline: auto; }
 .titulo-hero { font-family: var(--fonte-display); font-weight: 700; font-size: clamp(24px, 3vw, 32px); }
 .frase-hero { max-width: 34ch; font-size: 17px; line-height: 1.5; opacity: 0.9; margin: 0; }
 .painel-form { display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
@@ -312,7 +312,7 @@ button.secundario { background: var(--cor-fundo-elevado); color: var(--cor-texto
 @media (max-width: 860px) {
   .tela-acesso { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
   .painel-hero { flex: none; border-right: none; border-bottom: 1px solid var(--cor-borda); padding: 24px 24px 16px; gap: 8px; }
-  .orbe-entrada { width: min(180px, 44vw); }
+  .orbe-entrada { width: min(72vw, 34vh, 240px); }
   .frase-hero { font-size: 14px; }
   .painel-form { align-items: flex-start; padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
 }
@@ -320,7 +320,7 @@ button.secundario { background: var(--cor-fundo-elevado); color: var(--cor-texto
 .beneficios { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left; }
 .beneficios li { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
 .beneficios li svg { color: var(--cor-primaria); flex: none; }
-button.instalar { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; }
+button.instalar { background: linear-gradient(135deg, #5e18d8, #1597a8); border-color: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; }
 .dica-instalar { margin: 0; max-width: 34ch; font-size: 13px; line-height: 1.45; color: var(--cor-texto-suave); }
 .dica-instalar.forte { color: var(--cor-texto); }
 button.bio { display: flex; align-items: center; justify-content: center; gap: 10px; }
