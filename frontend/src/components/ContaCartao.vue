@@ -1,9 +1,10 @@
 <script setup>
 // Card COMPACTO de conta (carrossel da página Contas): fundo na cor do banco, tipo no canto superior esquerdo,
-// logo/iniciais grande mesclado (tom sobre tom) no lado direito e cortado pela borda, saldo em destaque,
+// logo (iniciais só como reserva) grande mesclado (tom sobre tom) no lado direito e cortado pela borda, saldo em destaque,
 // nome do banco e última transação em texto pequeno.
 import { computed } from 'vue';
 import IconeBanco from './IconeBanco.vue';
+import { bancoPorSlug, reconhecerBanco } from '../utils/catalogoBancos.js';
 
 const props = defineProps({
   conta: { type: Object, required: true },
@@ -15,6 +16,13 @@ const props = defineProps({
 import { moedaTotal } from '../services/privacidade.js';
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const ehImagem = (i) => String(i || '').startsWith('data:image/');
+// logo do catálogo (escolhido no cadastro ou reconhecido pelo nome); sigla só como reserva
+const logo = computed(() => {
+  const ic = props.conta.icone || '';
+  if (ehImagem(ic)) return ic;
+  const b = ic.startsWith('banco:') ? bancoPorSlug(ic.slice(6)) : (!ic || ic === '🏦' || ic === '💳') ? reconhecerBanco({ nome: props.conta.nome, codigo: props.conta.codigo }) : null;
+  return b && (b.arquivos.icone || b.arquivos.iconeFundo) ? (b.arquivos.icone || b.arquivos.iconeFundo) : '';
+});
 const iniciais = computed(() => {
   const palavras = String(props.conta.nome || '?').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
   if (!palavras.length) return '?';
@@ -48,7 +56,7 @@ const ultimaTxt = computed(() => {
 <template>
   <article class="conta-cartao" :class="{ claro }" :style="{ '--banco': cor }">
     <div class="marca" aria-hidden="true">
-      <img v-if="ehImagem(conta.icone)" :src="conta.icone" alt="" />
+      <img v-if="logo" :src="logo" alt="" />
       <span v-else>{{ iniciais }}</span>
     </div>
     <span class="tipo">{{ tipo }}<template v-if="conta.origem === 'conectada'"> · conectada</template></span>
@@ -70,10 +78,10 @@ const ultimaTxt = computed(() => {
 }
 .conta-cartao.claro { --txt: #17181f; --txt-suave: rgba(23, 24, 31, 0.72); --marca: rgba(23, 24, 31, 0.14); }
 .marca {
-  position: absolute; z-index: -1; right: -34px; top: 50%; width: 150px; height: 150px; transform: translateY(-50%);
+  position: absolute; z-index: -1; right: -38px; top: 50%; width: 130px; height: 130px; transform: translateY(-50%);
   border-radius: 50%; display: grid; place-items: center; overflow: hidden; pointer-events: none;
 }
-.marca img { width: 100%; height: 100%; object-fit: cover; opacity: 0.28; filter: grayscale(1) contrast(1.1); mix-blend-mode: luminosity; }
+.marca img { width: 84%; height: 84%; object-fit: contain; opacity: 0.5; mix-blend-mode: soft-light; filter: saturate(0.4); }
 .marca span { font-family: var(--fonte-display); font-weight: 800; font-size: 76px; letter-spacing: -0.04em; color: var(--marca); transform: translateX(-12px); }
 .tipo { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--txt-suave); }
 .saldo { font-family: var(--fonte-display); font-weight: 700; font-size: clamp(24px, 6.4vw, 30px); line-height: 1.15; margin-top: 8px; white-space: nowrap; }

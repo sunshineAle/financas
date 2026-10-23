@@ -17,6 +17,8 @@ const { carregarAcesso } = await import('../../src/services/acesso.js');
 await carregarAcesso();
 const { mostrarAcesso } = await import('./gate.js');
 await mostrarAcesso();
+// Todo acesso começa pela página Início, seja qual for a última rota (o router lê o hash ao iniciar).
+location.hash = '#/';
 
 await import('../../src/main.js');
 const [{ iniciarArmazenamento }, { iniciarLembrete }, { iniciarBacen }, { iniciarAutoBloqueio }] = await Promise.all([

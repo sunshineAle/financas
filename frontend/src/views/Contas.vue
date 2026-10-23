@@ -26,7 +26,9 @@ import { corPorNome, corDoBanco } from '../utils/corBanco.js';
 import { periodo, anoInteiro, rotuloPeriodo, ehAtual } from '../services/mes.js';
 
 const router = useRouter();
-const props = defineProps({ embutido: { type: Boolean, default: false } });
+const props = defineProps({ embutido: { type: Boolean, default: false }, fluxo: { type: Boolean, default: false } });
+const emit = defineEmits(['fluxo-fim']); // fluxo: usada pelo modal de primeiro cadastro (abre só o formulário)
+let salvouNoFluxo = false;
 
 const contas = ref([]);
 const carregando = ref(true);
@@ -171,6 +173,7 @@ async function salvar() {
       return;
     }
     const salva = await resposta.json();
+    salvouNoFluxo = true;
     cancelarEdicao();
     await carregarContas();
     if (novo) { const i = contas.value.findIndex((c) => c.id === salva.id); sel.value = i >= 0 ? i : 0; }
@@ -235,7 +238,8 @@ async function carregarCategorias() {
 }
 const rotuloMes = computed(() => rotuloPeriodo.value);
 
-onMounted(async () => { carregarCategorias(); await carregarContas(); carregarExtrato(); });
+watch(modalAberto, (v) => { if (props.fluxo && !v) emit('fluxo-fim', salvouNoFluxo); });
+onMounted(async () => { if (props.fluxo) abrirNova(); carregarCategorias(); await carregarContas(); carregarExtrato(); });
 watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); }); // lançou pela janela: números da conta atualizam sem sair daqui
 </script>
 

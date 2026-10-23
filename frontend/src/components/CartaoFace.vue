@@ -93,8 +93,8 @@ onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
 }
 .face.escuro { --txt: rgb(0 0 0 / 0.86); --txt-suave: rgb(0 0 0 / 0.62); --tom: rgb(0 0 0 / 0.16); }
 /* logo grande, tom sobre tom, cortado pela borda direita */
-.logo { position: absolute; right: -16%; top: 50%; width: 62%; aspect-ratio: 1; transform: translateY(-50%); display: grid; place-items: center; pointer-events: none; border-radius: 50%; background: var(--tom); }
-.logo img { width: 74%; height: 74%; object-fit: contain; border-radius: 50%; opacity: 0.5; mix-blend-mode: soft-light; filter: saturate(0.4); }
+.logo { position: absolute; right: -16%; top: 50%; width: 62%; aspect-ratio: 1; transform: translateY(-50%); display: grid; place-items: center; pointer-events: none; }
+.logo img { width: 74%; height: 74%; object-fit: contain; opacity: 0.5; mix-blend-mode: soft-light; filter: saturate(0.4); }
 .logo .emoji { font-size: clamp(60px, 28cqw, 108px); line-height: 1; opacity: 0.45; filter: grayscale(1); margin-right: 18%; }
 .logo .iniciais { font-family: var(--fonte-display); font-weight: 800; font-size: clamp(48px, 22cqw, 84px); letter-spacing: -0.04em; color: var(--txt); opacity: 0.3; margin-right: 22%; }
 .selo { position: relative; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--tom); color: var(--txt); }

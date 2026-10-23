@@ -40,10 +40,11 @@ const router = createRouter({
     { path: '/custos-fixos', name: 'custos-fixos', component: CustosFixos, meta: { titulo: 'Custos fixos' } },
     { path: '/importar', name: 'importar', component: Importar, meta: { titulo: 'Importar extrato ou fatura' } },
     // Rotas antigas: tudo vive em /perfil (Perfil e configurações), com âncoras. Mantidas para links, avisos e favoritos.
-    { path: '/backup', name: 'backup', redirect: (to) => ({ path: '/perfil', query: to.query, hash: '#dados-backup' }) },
-    { path: '/perfil', name: 'perfil', component: Perfil, meta: { titulo: 'Perfil e configurações' } },
+    { path: '/backup', name: 'backup', redirect: (to) => ({ path: '/mais/dados-backup', query: to.query }) },
+    { path: '/perfil', name: 'perfil', redirect: (to) => ({ path: '/mais/' + (String(to.hash).replace('#', '') || 'perfil'), query: to.query }) },
+    { path: '/mais/:secao(perfil|financas|reserva|dados-backup|seguranca|configuracoes|notificacoes|sobre)', name: 'mais-secao', component: Perfil, meta: { titulo: 'Perfil e configurações' } },
     { path: '/relatorios', name: 'relatorios', component: Relatorios, meta: { titulo: 'Relatórios' } },
-    { path: '/configuracoes', name: 'configuracoes', redirect: { path: '/perfil', hash: '#configuracoes' } },
+    { path: '/configuracoes', name: 'configuracoes', redirect: '/mais/configuracoes' },
   ],
 });
 

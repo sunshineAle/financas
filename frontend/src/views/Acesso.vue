@@ -4,12 +4,15 @@
 import { ref, computed, onMounted } from 'vue';
 import Orbe from '../components/Orbe.vue';
 import MarcaDagda from '../components/MarcaDagda.vue';
-import { DatabaseBackup, FileUp, Cloud, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint } from 'lucide-vue-next';
+import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint } from 'lucide-vue-next';
 import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria } from '../services/acesso.js';
 import { jaInstalado, conviteDisponivel, instalarApp, instrucoes } from '../services/instalacao.js';
 import { perfil } from '../services/perfil.js';
 import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem } from '../services/backup.js';
 import { conectarNuvem } from '../services/nuvem/index.js';
+import NuvemLogo from '../components/NuvemLogo.vue';
+import { reavisar } from '../services/atualizacao.js';
+import { marcarPrimeiroCadastro } from '../services/primeiroCadastro.js';
 
 const emit = defineEmits(['liberado']);
 
@@ -38,6 +41,8 @@ function iniciarEspera() {
   if (espera.value > 0) relogio = setInterval(() => { espera.value = esperaAteTentar(); if (espera.value <= 0) clearInterval(relogio); }, 1000);
 }
 onMounted(iniciarEspera);
+// Nova versão ignorada antes: o convite volta sempre que a tela de entrada aparece.
+onMounted(reavisar);
 
 // Boas-vindas: só no primeiro acesso (cadastro novo). Quem já tem acesso vê só o desbloqueio.
 const boasVindas = computed(() => modo.value === 'criar');
@@ -83,7 +88,9 @@ async function enviar() {
       const e = validarNovaSenha(senha.value);
       if (e) { erro.value = e; return; }
       if (senha.value !== confirmacao.value) { erro.value = 'A confirmação não é igual à senha ou PIN.'; return; }
+      const primeiro = modo.value === 'criar';
       await criarSenha(senha.value, apelido.value.trim());
+      if (primeiro) marcarPrimeiroCadastro();
       if (!perfil.nome) perfil.nome = apelido.value.trim();
       try { sessionStorage.removeItem('sf:pos-restauro'); } catch { /* ignora */ }
       const idNuvem = (() => { try { return sessionStorage.getItem('sf:pos-restauro-nuvem'); } catch { return null; } })();
@@ -120,15 +127,17 @@ const dadosPrevia = ref(null);
 // em todos os casos abre o seletor de arquivos do aparelho; o app da nuvem instalado aparece nele.
 const folha = ref(false);
 const origemRestauro = ref('');
-const NUVENS = ['Google Drive', 'OneDrive', 'Dropbox', 'Proton Drive', 'Mega', 'iCloud'];
+// Nuvens com login (só aparecem se o Client ID/App key estiver configurado) e as que usam o seletor de arquivos.
+const COM_LOGIN = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
+const PELO_APP = [{ id: 'proton', nome: 'Proton Drive' }, { id: 'mega', nome: 'Mega' }, { id: 'icloud', nome: 'iCloud' }];
+const nuvensAbertas = ref(false);
+const dicaApp = ref('');
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
 const nuvemRestauro = ref(null); // { id, nome, data }
-const ajudaNuvem = ref('');
 const ROTULO_ENTRAR = { google: 'Google', microsoft: 'Microsoft', dropbox: 'Dropbox' };
 const fmtData = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 async function entrarNuvem(id) {
   const p = PROVEDORES[id];
-  if (!p.configurado()) { ajudaNuvem.value = ajudaNuvem.value === id ? '' : id; return; }
   erro.value = ''; carregando.value = true; dadosPrevia.value = null; arquivo.value = null; senhaBackup.value = '';
   try {
     await conectarNuvem(id);
@@ -196,12 +205,16 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <h1>{{ titulo }}</h1>
         <p class="subtitulo">{{ subtitulo }}</p>
 
+        <template v-if="modo === 'entrar' && bioDisponivel">
+          <button type="button" class="bio-principal" :disabled="carregando" @click="entrarComBiometria"><Fingerprint :size="22" :stroke-width="1.9" /> Entrar com biometria</button>
+          <p class="ou-senha"><span>ou use sua senha</span></p>
+        </template>
         <label v-if="modo !== 'entrar'" class="campo">
           <span>Apelido</span>
           <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Como quer ser chamado" :autofocus="modo !== 'entrar'" />
         </label>
         <label class="campo">
-          <span>{{ modo === 'entrar' ? 'Senha ou PIN' : 'Senha ou PIN' }}</span>
+          <span>Senha ou PIN</span>
           <input v-model="senha" type="password" :autocomplete="modo === 'entrar' ? 'current-password' : 'new-password'" required :placeholder="modo === 'entrar' ? '••••••••' : 'PIN de 4 a 12 números ou senha com 6+ caracteres'" :autofocus="modo === 'entrar'" />
         </label>
         <label v-if="modo !== 'entrar'" class="campo">
@@ -209,12 +222,11 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
           <input v-model="confirmacao" type="password" autocomplete="new-password" required placeholder="••••••••" />
         </label>
         <p v-if="modo === 'criar'" class="aviso-senha">Não há como recuperar esta senha ou PIN: se esquecer, só restaurando um backup. Anote em local seguro.</p>
-        <p class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
+        <p v-if="modo === 'criar'" class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
         <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
 
-        <button type="submit" :disabled="carregando || espera > 0">{{ carregando ? 'Aguarde…' : (modo === 'entrar' ? 'Entrar' : 'Salvar senha e entrar') }}</button>
-        <button v-if="modo === 'entrar' && bioDisponivel" type="button" class="secundario bio" :disabled="carregando" @click="entrarComBiometria"><Fingerprint :size="20" :stroke-width="1.9" /> Entrar com biometria</button>
+        <button type="submit" :class="{ secundario: modo === 'entrar' && bioDisponivel }" :disabled="carregando || espera > 0">{{ carregando ? 'Aguarde…' : (modo === 'entrar' ? (bioDisponivel ? 'Entrar com senha ou PIN' : 'Entrar') : 'Salvar senha e entrar') }}</button>
         <button v-if="modo === 'entrar'" type="button" class="link" @click="abrirRestaurar">Esqueci a senha</button>
         <button type="button" class="restaurar" @click="folha = true"><DatabaseBackup :size="20" :stroke-width="2" /> Restaurar Backup</button>
       </form>
@@ -260,25 +272,25 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <div class="folha" role="dialog" aria-modal="true" aria-label="Restaurar Backup">
           <header><h2>Restaurar Backup</h2><button type="button" class="fechar" aria-label="Fechar" @click="folha = false"><X :size="20" :stroke-width="2" /></button></header>
           <label class="opcao">
-            <span class="icone"><FileUp :size="22" :stroke-width="1.9" /></span>
-            <span class="texto"><b>Restauração local</b><small>Escolher o arquivo .sfin deste aparelho</small></span>
+            <span class="icone"><Smartphone :size="22" :stroke-width="1.9" /></span>
+            <span class="texto"><b>Deste aparelho</b></span>
             <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, 'Arquivo local')" />
           </label>
-          <h3>Entrar com sua nuvem</h3>
-          <button v-for="(r, id) in ROTULO_ENTRAR" :key="id" type="button" class="opcao entrar" :data-entrar="id" :disabled="carregando" @click="entrarNuvem(id)">
-            <span class="icone"><Cloud :size="20" :stroke-width="1.9" /></span>
-            <span class="texto"><b>{{ PROVEDORES[id].configurado() ? 'Entrar com ' + r : 'Configurar ' + PROVEDORES[id].nome }}</b><small>{{ PROVEDORES[id].configurado() ? 'Procura o backup mais recente na pasta do app' : 'Falta o ' + (id === 'dropbox' ? 'App key' : 'Client ID') + ' (veja docs-nuvem.md)' }}</small></span>
+          <button type="button" class="opcao entrar" data-conectar-nuvem :aria-expanded="nuvensAbertas" @click="nuvensAbertas = !nuvensAbertas">
+            <span class="icone"><Cloud :size="22" :stroke-width="1.9" /></span>
+            <span class="texto"><b>Conectar nuvem</b></span>
+            <ChevronDown :size="18" :stroke-width="2" class="seta" :class="{ aberta: nuvensAbertas }" />
           </button>
-          <p v-if="ajudaNuvem" class="explica" data-ajuda-nuvem>{{ PROVEDORES[ajudaNuvem].nome }} ainda não foi configurado neste app: crie {{ ajudaNuvem === 'dropbox' ? 'a App key' : 'o Client ID' }} e coloque em config.js (passo a passo em docs-nuvem.md).</p>
-          <h3>Pelo app da nuvem instalado</h3>
-          <div class="nuvens">
-            <label v-for="n in NUVENS" :key="n" class="opcao nuvem">
-              <span class="icone"><Cloud :size="20" :stroke-width="1.9" /></span>
-              <span class="texto"><b>{{ n }}</b></span>
-              <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, n)" />
+          <div v-if="nuvensAbertas" class="nuvens" data-nuvens>
+            <button v-for="id in COM_LOGIN" :key="id" type="button" class="opcao nuvem" :data-entrar="id" :disabled="carregando" @click="entrarNuvem(id)">
+              <NuvemLogo :id="id" :tamanho="30" /><span class="texto"><b>{{ PROVEDORES[id].nome }}</b></span>
+            </button>
+            <label v-for="n in PELO_APP" :key="n.id" class="opcao nuvem" :data-app="n.id" @click="dicaApp = n.nome">
+              <NuvemLogo :id="n.id" :tamanho="30" /><span class="texto"><b>{{ n.nome }}</b></span>
+              <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, n.nome)" />
             </label>
           </div>
-          <p class="explica">Sem login: ao tocar, o seletor de arquivos do aparelho abre e você escolhe o .sfin dentro do app da nuvem instalado aqui. A internet só é usada ao entrar com a conta.</p>
+          <p v-if="nuvensAbertas && dicaApp" class="explica" data-dica-app>No {{ dicaApp }}, salve o arquivo .sfin pelo app instalado e escolha-o na janela que abrir.</p>
         </div>
       </div>
     </Teleport>
@@ -353,6 +365,14 @@ button.restaurar:hover:not(:disabled) { background: color-mix(in srgb, var(--cor
 .oferta span { display: flex; flex-direction: column; gap: 2px; }
 .oferta small { color: var(--cor-texto-suave); font-size: 12.5px; }
 .nuvens { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opcao .seta { margin-left: auto; color: var(--cor-texto-suave); transition: transform 0.15s ease; }
+.opcao .seta.aberta { transform: rotate(180deg); }
+button.opcao { color: var(--cor-texto); background: var(--cor-fundo); font-weight: 400; justify-content: flex-start; }
+button.opcao:hover:not(:disabled) { background: var(--cor-realce); }
+button.bio-principal { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 56px; font-size: 16px; background: linear-gradient(135deg, #5e18d8, #1597a8); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, #5e18d8 35%, transparent); }
+button.bio-principal:hover:not(:disabled) { background: linear-gradient(135deg, #6c2be6, #1aa9bb); }
+.ou-senha { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--cor-texto-suave); }
+.ou-senha::before, .ou-senha::after { content: ''; flex: 1; height: 1px; background: var(--cor-borda); }
 .opcao.nuvem { min-height: 52px; padding: 6px 10px; gap: 10px; }
 .opcao.nuvem .icone { width: 34px; height: 34px; }
 .explica { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cor-texto-suave); }

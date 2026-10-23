@@ -222,6 +222,9 @@ async function removerCompra() {
 }
 
 // Detalhes e faturas (pop-up): dados do cartão + lista de faturas com pagar/desfazer
+const props = defineProps({ fluxo: { type: Boolean, default: false } });
+const emit = defineEmits(['fluxo-fim']); // fluxo: usado pelo modal de primeiro cadastro (abre só o formulário)
+let salvouNoFluxo = false;
 const detalhe = ref(false);
 function extratoDeFatura(chave) { detalhe.value = false; router.push({ name: 'cartao-extrato', params: { id: cartao.value.id }, query: { fatura: chave } }); }
 
@@ -257,6 +260,7 @@ async function salvar() {
     const d = await r.json();
     if (!r.ok) { erro.value = d.erro || 'Não foi possível salvar o cartão.'; return; }
     const novo = !editandoId.value;
+    salvouNoFluxo = true;
     fecharModal();
     await carregarCartoes();
     if (novo) { const i = cartoes.value.findIndex((c) => c.id === d.id); if (i >= 0) sel.value = i; }
@@ -269,7 +273,8 @@ async function remover(c) {
   await carregarCartoes();
 }
 
-onMounted(carregarCartoes);
+watch(modalAberto, (v) => { if (props.fluxo && !v) emit('fluxo-fim', salvouNoFluxo); });
+onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 </script>
 
 <template>

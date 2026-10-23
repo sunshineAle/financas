@@ -1,33 +1,49 @@
 <script setup>
-// Mais (botão "Mais" do rodapé do celular): atalhos para as telas e para as seções do Perfil e configurações (/perfil#...).
-// Perfil, backup, segurança, tema e sobre vivem todos em UMA página (Perfil.vue); aqui só há os atalhos.
+// Mais = tela-índice (botão "Mais" do rodapé): cabeçalho com foto/nome e a lista de seções, cada uma em SUA página (/mais/<seção>,
+// renderizada por Perfil.vue). Cada item: ícone, título, resumo de uma linha e seta.
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { ChartColumn, Tags, CalendarClock, ListChecks, FileUp, DatabaseBackup, ShieldCheck, SlidersHorizontal, Info, LogOut, ChevronRight, BookOpen, Heart } from 'lucide-vue-next';
+import { ChartColumn, FileUp, LogOut, ChevronRight } from 'lucide-vue-next';
 import AvatarMini from '../components/AvatarMini.vue';
-import { perfil, nomeExibido, inicialDe } from '../services/perfil.js';
+import { perfil, nomeExibido, inicialDe, ultimoBackup } from '../services/perfil.js';
+import { SECOES_PERFIL } from '../config/perfilSecoes.js';
+import { modoTema } from '../services/tema.js';
+import { configAlertas, permissaoNotificacao } from '../services/alertas.js';
+import { textoVersao } from '../services/versao.js';
+import { modoPWA, biometriaSuportada, biometriaAtiva, carregarBiometria } from '../services/acesso.js';
 
 const router = useRouter();
 const rotaRegras = computed(() => (router.getRoutes().some((r) => r.path === '/regras') ? '/regras' : '/orcamento?aba=regras'));
+// Resumo de uma linha de cada seção de Perfil e configurações (o índice mostra só ícone, título, resumo e seta).
+const bioLigada = ref(false);
+const versao = ref('');
+function resumoBackup() {
+  const iso = ultimoBackup();
+  if (!iso) return 'Nenhum backup ainda';
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (!(dias >= 0)) return 'Backup recente';
+  return dias === 0 ? 'Backup hoje' : dias === 1 ? 'Backup ontem' : `Backup há ${dias} dias`;
+}
+const NOMES_TEMA = { auto: 'automático', claro: 'claro', escuro: 'escuro' };
+const resumos = computed(() => ({
+  perfil: emailTopo.value || nomeTopo.value,
+  financas: 'Custos fixos, categorias e regras',
+  reserva: 'Quanto guardar por mês',
+  'dados-backup': resumoBackup(),
+  seguranca: modoPWA ? (bioLigada.value ? 'Biometria ativada' : 'Senha ou PIN') : 'Senha e sessões',
+  configuracoes: `Tema ${NOMES_TEMA[modoTema.value] || 'automático'}`,
+  notificacoes: configAlertas.notificar && permissaoNotificacao() === 'granted' ? 'Avisos ligados' : 'Avisos desligados',
+  sobre: versao.value ? `Versão ${versao.value}` : 'Atualizações, manual e apoio',
+}));
 const GRUPOS = computed(() => [
   { titulo: 'Análises', itens: [{ rotulo: 'Relatórios', sub: 'evolução, comparações, categorias', icone: ChartColumn, rota: '/relatorios' }] },
-  { titulo: 'Minhas finanças', itens: [
-    { rotulo: 'Categorias', sub: 'categorias, cores e orçamento por categoria', icone: Tags, rota: '/orcamento' },
-    { rotulo: 'Custos fixos', sub: 'aluguel, internet… e a projeção do mês seguinte', icone: CalendarClock, rota: '/custos-fixos' },
-    { rotulo: 'Regras de categorização', sub: 'ativar, desativar e excluir regras', icone: ListChecks, rota: rotaRegras.value },
-  ] },
-  { titulo: 'Dados e configurações', itens: [
-    { rotulo: 'Importar extrato ou fatura', sub: 'OFX, CSV, planilha ou PDF; sem duplicar', icone: FileUp, rota: '/importar' },
-    { rotulo: 'Dados e backup', sub: 'backup, restaurar e armazenamento', icone: DatabaseBackup, rota: '/perfil#dados-backup' },
-    { rotulo: 'Segurança', sub: 'senha, PIN e bloqueio', icone: ShieldCheck, rota: '/perfil#seguranca' },
-    { rotulo: 'Configurações', sub: 'tema, animações e notificações', icone: SlidersHorizontal, rota: '/perfil#configuracoes' },
-    { rotulo: 'Sobre o app', sub: 'atualizações, manual e reset', icone: Info, rota: '/perfil#sobre' },
-  ] },
-  { titulo: 'Ajuda', itens: [
-    { rotulo: 'Manual / Tutorial', sub: 'passo a passo do sistema', icone: BookOpen, rota: '/manual' },
-    { rotulo: 'Apoie o desenvolvedor', sub: 'projeto independente e gratuito', icone: Heart, rota: '/apoie' },
-  ] },
+  { titulo: 'Dados', itens: [{ rotulo: 'Importar extrato ou fatura', sub: 'OFX, CSV, planilha ou PDF; sem duplicar', icone: FileUp, rota: '/importar' }] },
+  { titulo: 'Perfil e configurações', itens: SECOES_PERFIL.map((x) => ({ rotulo: x.rotulo, sub: resumos.value[x.id], icone: x.icone, rota: '/mais/' + x.id })) },
 ]);
+onMounted(async () => {
+  try { versao.value = await textoVersao(); } catch { /* sem versão */ }
+  if (modoPWA) { try { if (await biometriaSuportada()) { await carregarBiometria(); bioLigada.value = biometriaAtiva(); } } catch { /* sem biometria */ } }
+});
 
 const conta = ref({ nome: '', email: '' });
 onMounted(async () => {
@@ -51,7 +67,7 @@ async function sair() {
     <h1 class="titulo-pagina">Mais</h1>
 
     <div class="card">
-      <button type="button" class="linha perfil-atalho" @click="router.push('/perfil')">
+      <button type="button" class="linha perfil-atalho" @click="router.push('/mais/perfil')">
         <AvatarMini :inicial="inicial" :tamanho="48" />
         <span class="texto"><b>{{ nomeTopo }}</b><small>{{ emailTopo || 'Perfil e configurações' }}</small></span>
         <ChevronRight :size="18" :stroke-width="1.8" class="seta" />

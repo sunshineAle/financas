@@ -1,12 +1,12 @@
 <script setup>
-// Perfil e configurações (UMA página, app e web). Seções com âncora (#perfil, #financas, #dados-backup, #seguranca, #configuracoes, #sobre):
-// 1 Perfil · 2 Minhas finanças · 3 Dados e backup · 4 Segurança · 5 Configurações · 6 Sobre o app (Apoie por último).
-// As rotas antigas (/configuracoes, /backup) redirecionam para as âncoras daqui (ver router.js).
+// Perfil e configurações: cada seção é SUA página (/mais/:secao), e o índice é a tela Mais (/mais, views/Mais.vue).
+// Seções: perfil · financas · reserva · dados-backup · seguranca · configuracoes · notificacoes · sobre. Este arquivo guarda
+// a lógica de todas e mostra só a da rota. As rotas antigas (/perfil, /configuracoes, /backup) redirecionam (ver router.js).
 // Nome, e-mail e foto ficam só neste aparelho (services/perfil.js); senha: PUT /api/auth/senha (web) ou senha de acesso (PWA).
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
-  Pencil, KeyRound, LogOut, ShieldCheck, Lock, CalendarClock, Tags, Gauge as GaugeIcon, ListChecks, FileUp, BookOpen, Heart, RotateCcw, RefreshCw, Bell,
+  Pencil, KeyRound, ShieldCheck, Lock, CalendarClock, Tags, Gauge as GaugeIcon, ListChecks, FileUp, BookOpen, Heart, RotateCcw, RefreshCw, Bell,
   ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff, Gauge, Info, Users, User, Wallet, DatabaseBackup, SlidersHorizontal,
 } from 'lucide-vue-next';
 import FormularioModal from '../components/FormularioModal.vue';
@@ -34,26 +34,9 @@ const router = useRouter();
 const route = useRoute();
 const ehPwa = !!import.meta.env.VITE_PWA;
 
-const SECOES = [
-  { id: 'perfil', rotulo: 'Perfil', icone: User },
-  { id: 'financas', rotulo: 'Minhas finanças', icone: Wallet },
-  { id: 'dados-backup', rotulo: 'Dados e backup', icone: DatabaseBackup },
-  { id: 'seguranca', rotulo: 'Segurança', icone: ShieldCheck },
-  { id: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
-  { id: 'sobre', rotulo: 'Sobre o app', icone: Info },
-];
-const secaoAtiva = ref('perfil');
-function irPara(id, suave = true) {
-  secaoAtiva.value = id;
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' });
-}
-function aplicarHash() {
-  if (route.query.restaurar === '1') return; // o Backup rola sozinho até "Restaurar"
-  const id = String(route.hash || '').replace('#', '');
-  if (SECOES.some((s) => s.id === id)) nextTick(() => setTimeout(() => irPara(id, false), 60));
-}
-watch(() => route.hash, aplicarHash);
+import { SECOES_PERFIL as SECOES } from '../config/perfilSecoes.js';
+const secao = computed(() => String(route.params.secao || 'perfil'));
+const tituloSecao = computed(() => (SECOES.find((x) => x.id === secao.value) || SECOES[0]).rotulo);
 
 // ---- 1. Perfil ----
 const conta = ref({ nome: '', email: '' });
@@ -66,7 +49,6 @@ onMounted(async () => {
   } catch { /* sem rede: usa o que está guardado */ }
   nome.value = perfil.nome || conta.value.nome || '';
   email.value = perfil.email || conta.value.email || '';
-  aplicarHash();
 });
 const nomeTopo = computed(() => nomeExibido(conta.value) || 'Você');
 const emailAtual = computed(() => perfil.email || conta.value.email || '');
@@ -195,24 +177,20 @@ function carregarExemplo() {
   window.dispatchEvent(new Event('sf:carregar-exemplo'));
 }
 
-async function sair() {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  router.push('/login');
-}
 </script>
 
 <template>
   <div class="pagina">
-    <h1 class="titulo-pagina">Perfil e configurações</h1>
+    <h1 class="so-leitor">{{ tituloSecao }}</h1>
 
     <nav class="indice" aria-label="Seções">
-      <button v-for="s in SECOES" :key="s.id" type="button" :class="{ ativa: secaoAtiva === s.id }" :aria-current="secaoAtiva === s.id ? 'true' : null" @click="irPara(s.id)">
+      <button v-for="s in SECOES" :key="s.id" type="button" :class="{ ativa: secao === s.id }" :aria-current="secao === s.id ? 'page' : null" @click="router.push('/mais/' + s.id)">
         <component :is="s.icone" :size="15" :stroke-width="2" /> {{ s.rotulo }}
       </button>
     </nav>
 
     <!-- 1. Perfil -->
-    <section id="perfil" class="secao" aria-labelledby="h-perfil">
+    <section v-if="secao === 'perfil'" id="perfil" class="secao" aria-labelledby="h-perfil">
       <h2 id="h-perfil">Perfil</h2>
       <header class="topo-perfil">
         <PerfilAvatar :inicial="inicial" />
@@ -234,7 +212,7 @@ async function sair() {
     </section>
 
     <!-- 2. Minhas finanças -->
-    <section id="financas" class="secao" aria-labelledby="h-financas">
+    <section v-if="secao === 'financas'" id="financas" class="secao" aria-labelledby="h-financas">
       <h2 id="h-financas">Minhas finanças</h2>
       <CardPadrao>
         <div class="linhas">
@@ -245,11 +223,16 @@ async function sair() {
           </button>
         </div>
       </CardPadrao>
+    </section>
+
+    <!-- 2b. Plano da Reserva de Liberdade -->
+    <section v-if="secao === 'reserva'" id="reserva" class="secao" aria-labelledby="h-reserva">
+      <h2 id="h-reserva">Plano da Reserva de Liberdade</h2>
       <PlanoReserva />
     </section>
 
     <!-- 3. Dados e backup -->
-    <section id="dados-backup" class="secao" aria-labelledby="h-dados">
+    <section v-if="secao === 'dados-backup'" id="dados-backup" class="secao" aria-labelledby="h-dados">
       <h2 id="h-dados">Dados e backup</h2>
       <CardPadrao>
         <div class="linhas">
@@ -264,7 +247,7 @@ async function sair() {
     </section>
 
     <!-- 4. Segurança -->
-    <section id="seguranca" class="secao" aria-labelledby="h-seg">
+    <section v-if="secao === 'seguranca'" id="seguranca" class="secao" aria-labelledby="h-seg">
       <h2 id="h-seg">Segurança</h2>
       <CardPadrao :subtitulo="ehPwa ? 'protege o app neste aparelho' : 'acesso à sua conta'">
         <p v-if="ehPwa" class="nota">A senha ou PIN é pedida ao abrir o app e também protege seus backups. Fica só neste aparelho: se esquecer, restaure um backup.</p>
@@ -299,7 +282,7 @@ async function sair() {
     </section>
 
     <!-- 5. Configurações -->
-    <section id="configuracoes" class="secao" aria-labelledby="h-conf">
+    <section v-if="secao === 'configuracoes'" id="configuracoes" class="secao" aria-labelledby="h-conf">
       <h2 id="h-conf">Configurações</h2>
       <CardPadrao>
         <div class="bloco">
@@ -311,7 +294,12 @@ async function sair() {
           <PerfilAbas :model-value="movimento" :opcoes="MOVIMENTOS" rotulo="Animações" @update:model-value="definirMovimento" />
         </div>
       </CardPadrao>
-      <CardPadrao titulo="Notificações" subtitulo="os avisos também aparecem no sino do topo">
+    </section>
+
+    <!-- 5b. Notificações -->
+    <section v-if="secao === 'notificacoes'" id="notificacoes" class="secao" aria-labelledby="h-notif">
+      <h2 id="h-notif">Notificações</h2>
+      <CardPadrao subtitulo="os avisos também aparecem no sino do topo">
         <div class="linhas">
           <div class="linha">
             <span class="quadro"><Bell :size="20" :stroke-width="1.8" /></span>
@@ -336,7 +324,7 @@ async function sair() {
     </section>
 
     <!-- 6. Sobre o app -->
-    <section id="sobre" class="secao" aria-labelledby="h-sobre">
+    <section v-if="secao === 'sobre'" id="sobre" class="secao" aria-labelledby="h-sobre">
       <h2 id="h-sobre">Sobre o app</h2>
       <CardPadrao>
         <div class="linhas">
@@ -360,8 +348,6 @@ async function sair() {
       </CardPadrao>
     </section>
 
-    <button type="button" class="sair" @click="sair"><LogOut :size="18" :stroke-width="1.8" /> Sair</button>
-
     <FormularioModal :aberto="editando" titulo="Editar dados" rotulo-salvar="Salvar" :erro="erroDados" @salvar="salvarDados" @fechar="editando = false">
       <CampoTexto v-model="nome" :rotulo="ehPwa ? 'Apelido' : 'Nome'" :placeholder="ehPwa ? 'Como quer ser chamado' : 'Seu nome'" maxlength="60" autocomplete="name" />
       <CampoTexto v-if="!ehPwa" v-model="email" rotulo="E-mail" type="email" placeholder="voce@email.com" maxlength="120" autocomplete="email" :erro="emailInvalido ? 'Confira o e-mail digitado.' : ''" />
@@ -378,11 +364,12 @@ async function sair() {
 
 <style scoped>
 .pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
-.titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
-.indice { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px; margin: 0 -2px; background: var(--cor-fundo); scrollbar-width: none; }
+.so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.indice { display: none; position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px; margin: 0 -2px; background: var(--cor-fundo); scrollbar-width: none; }
 .indice::-webkit-scrollbar { display: none; }
 .indice button { flex: none; min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); font-family: var(--fonte-texto); font-size: 13px; font-weight: 600; cursor: pointer; }
 .indice button.ativa { background: var(--cor-interface, var(--cor-primaria)); border-color: transparent; color: var(--cor-sobre-cor); }
+@media (min-width: 768px) { .indice { display: flex; flex-wrap: wrap; overflow: visible; position: static; } }
 .secao { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 56px; }
 .secao > h2 { margin: 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cor-texto-suave); }
 .topo-perfil { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; text-align: center; }

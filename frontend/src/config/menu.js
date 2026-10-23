@@ -42,7 +42,7 @@ export const GRUPOS = [
       { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
       { rota: '/custos-fixos', rotulo: 'Custos fixos', icone: CalendarClock },
       { rota: '/importar', rotulo: 'Importar extrato', rotuloCurto: 'Importar', icone: FileUp },
-      { rota: '/perfil', rotulo: 'Perfil e configurações', rotuloCurto: 'Perfil', icone: UserRound },
+      { rota: '/mais/perfil', rotulo: 'Perfil e configurações', rotuloCurto: 'Perfil', icone: UserRound },
       { rota: '/manual', rotulo: 'Manual', icone: BookOpen },
       { rota: '/apoie', rotulo: 'Apoie o desenvolvedor', rotuloCurto: 'Apoie', icone: Heart },
           ],
@@ -61,6 +61,7 @@ const EXTRAS = { 'cartao-extrato': 'cartoes', mais: 'mais', regras: 'mais' };
 
 export function grupoDaRota(rota) {
   if (rota.name && EXTRAS[rota.name]) return EXTRAS[rota.name];
+  if (rota.name === 'mais-secao') return 'mais'; // /mais/<seção> (Perfil e configurações)
   for (const g of GRUPOS) {
     for (const i of g.itens) {
       if (i.rota === '/' ? rota.path === '/' : rota.path === i.rota || rota.path.startsWith(i.rota + '/')) return g.id;
