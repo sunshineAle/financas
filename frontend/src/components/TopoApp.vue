@@ -7,6 +7,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { Bell, X, CheckCheck, CalendarClock, TriangleAlert, Info } from 'lucide-vue-next';
 import AvatarMini from './AvatarMini.vue';
+import MarcaDagda from './MarcaDagda.vue';
 import BotaoOlho from './BotaoOlho.vue';
 import { topoValorMontados } from '../services/privacidade.js';
 import { inicialDe, nomeExibido } from '../services/perfil.js';
@@ -51,6 +52,7 @@ onUnmounted(() => {
     </button>
 
     <h1 v-if="tituloTopo" class="titulo-topo">{{ tituloTopo }}</h1>
+    <MarcaDagda v-else class="marca-topo" :tamanho="34" />
 
     <div class="area-sino">
       <!-- olho de "ocultar valores": só aqui em telas sem card de topo (os cards trazem o seu) -->
@@ -84,6 +86,7 @@ onUnmounted(() => {
 
 <style scoped>
 .topo-app { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin-bottom: 6px; position: relative; z-index: 20; }
+.marca-topo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 .titulo-topo { position: absolute; left: 100px; right: 100px; top: 50%; transform: translateY(-50%); margin: 0; text-align: center; font-family: var(--fonte-display); font-size: 16px; font-weight: 600; letter-spacing: 0.01em; color: var(--cor-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .botao-perfil, .sino { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 50%; border: none; background: none; cursor: pointer; color: var(--cor-texto-suave); -webkit-tap-highlight-color: transparent; transition: background var(--anim-rapida) ease, color var(--anim-rapida) ease; }
 .botao-perfil:hover, .sino:hover, .sino.ativo { background: var(--cor-realce); color: var(--cor-texto); }

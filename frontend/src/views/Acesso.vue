@@ -3,6 +3,7 @@
 // e "Esqueci a senha" -> restaurar um backup (e criar uma senha nova). Tudo no aparelho, sem servidor.
 import { ref, computed, onMounted } from 'vue';
 import Orbe from '../components/Orbe.vue';
+import MarcaDagda from '../components/MarcaDagda.vue';
 import { DatabaseBackup, FileUp, Cloud, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint } from 'lucide-vue-next';
 import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria } from '../services/acesso.js';
 import { jaInstalado, conviteDisponivel, instalarApp, instrucoes } from '../services/instalacao.js';
@@ -176,8 +177,8 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
 <template>
   <div class="tela-acesso">
     <section class="painel-hero">
-      <div class="orbe-entrada" aria-hidden="true"><Orbe :partes="partesOrbe" :tamanho="340" :arcos="false" girar /></div>
-      <span class="titulo-hero">{{ boasVindas ? 'Bem-vindo ao Dagda Capital' : 'Dagda Capital' }}</span>
+      <div class="orbe-entrada"><MarcaDagda :tamanho="340" completa /></div>
+      <span v-if="boasVindas" class="titulo-hero">Bem-vindo</span>
       <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
       <template v-if="boasVindas">
         <ul class="beneficios">
