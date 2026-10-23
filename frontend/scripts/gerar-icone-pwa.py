@@ -1,3 +1,4 @@
+# OBSOLETO: icones definitivos vindos de dagda-capital-identidade-v2.zip (nao rode).
 """Gera o ícone PROVISÓRIO do PWA (esfera de vidro, degradê Violeta #5E18D8 -> Petróleo #1597A8, sem texto).
 Quando a logo definitiva chegar, troque a função `esfera` (ou substitua os PNGs de public-pwa/icons) e rode:
   python3 scripts/gerar-icone-pwa.py
