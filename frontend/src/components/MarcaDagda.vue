@@ -1,30 +1,17 @@
 <script setup>
-// Marca Dagda Capital (anotação 32): esfera de vidro Violeta→Petróleo com ARCOS finos que não se fecham (degradê violeta→ciano,
-// pontas sumindo em transparência, como o orbe do Início). Os arcos giram no sentido horário; a transição de cores dentro da
-// esfera gira no anti-horário; o texto fica parado, com um reflexo de luz suave passando pelas letras. Escala pelo tamanho do
-// contêiner (cqw): ocupa 100% da largura do pai e mantém 1:1. Movimento reduzido = tudo parado.
-//   <MarcaDagda completa />  (o pai define a largura, ex.: min(72vw, 42vh, 360px))   |   <MarcaDagda />  só o "D"
-import { computed } from 'vue';
+// Marca Dagda Capital (anotação 32): esfera de vidro Violeta→Petróleo com ARCOS finos que não se fecham (mesma técnica do orbe do
+// Início: conic-gradient com pontas transparentes, recortado em anel). Os arcos giram no sentido horário; a transição de cores dentro
+// da esfera gira no anti-horário; o texto fica parado, com um reflexo de luz suave passando pelas letras. Escala pelo contêiner (cqw):
+// ocupa 100% da largura do pai e mantém 1:1. Movimento reduzido = tudo parado.
+//   <MarcaDagda completa />  (o pai define a largura, ex.: min(72vw, 42vh, 360px))   |   <MarcaDagda :tamanho="36" />  só o "D"
+const arcoGrad = (ini, comp, c1, c2) => `conic-gradient(from ${ini}deg, color-mix(in srgb, ${c1} 0%, transparent) 0deg, ${c1} ${comp * 0.3}deg, ${c2} ${comp * 0.7}deg, color-mix(in srgb, ${c2} 0%, transparent) ${comp}deg, transparent ${comp}deg 360deg)`;
+const ARCOS = [arcoGrad(-30, 135, '#9b6bff', '#6f8cf2'), arcoGrad(150, 135, '#3fb4e6', '#22c5dd')];
 defineProps({ completa: { type: Boolean, default: false }, tamanho: { type: Number, default: 0 } });
-const R = 48.6;
-function ponto(graus) { const a = (graus - 90) * Math.PI / 180; return [50 + R * Math.cos(a), 50 + R * Math.sin(a)]; }
-function arco(ini, fim) { const [x1, y1] = ponto(ini), [x2, y2] = ponto(fim); return { d: `M${x1.toFixed(2)} ${y1.toFixed(2)} A${R} ${R} 0 ${fim - ini > 180 ? 1 : 0} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`, x1, y1, x2, y2 }; }
-const arcos = computed(() => [arco(-30, 100), arco(150, 280)]); // 2 arcos com folga entre eles (abertos embaixo-esquerda e no topo-direita)
 </script>
 
 <template>
   <span class="marca" :class="{ completa }" :style="tamanho ? { width: tamanho + 'px' } : null" role="img" aria-label="Dagda Capital">
-    <svg class="arcos" viewBox="0 0 100 100" aria-hidden="true">
-      <defs>
-        <linearGradient v-for="(a, i) in arcos" :id="`mg${i}`" :key="i" gradientUnits="userSpaceOnUse" :x1="a.x1" :y1="a.y1" :x2="a.x2" :y2="a.y2">
-          <stop offset="0" :stop-color="i ? '#22c5dd' : '#9b6bff'" stop-opacity="0" />
-          <stop offset="0.28" :stop-color="i ? '#3fb4e6' : '#9b6bff'" stop-opacity="1" />
-          <stop offset="0.72" :stop-color="i ? '#22c5dd' : '#6f8cf2'" stop-opacity="1" />
-          <stop offset="1" :stop-color="i ? '#22c5dd' : '#22c5dd'" stop-opacity="0" />
-        </linearGradient>
-      </defs>
-      <g class="giro-arcos"><path v-for="(a, i) in arcos" :key="i" :d="a.d" fill="none" :stroke="`url(#mg${i})`" stroke-width="0.9" stroke-linecap="round" /></g>
-    </svg>
+    <div class="giro-arcos" aria-hidden="true"><span v-for="(g, i) in ARCOS" :key="i" class="arco" :style="{ backgroundImage: g }"></span></div>
     <span class="esfera" aria-hidden="true">
       <span class="cores"></span>
       <span class="vidro"></span>
@@ -36,8 +23,8 @@ const arcos = computed(() => [arco(-30, 100), arco(150, 280)]); // 2 arcos com f
 <style scoped>
 @property --marca-ang { syntax: '<angle>'; inherits: false; initial-value: 135deg; }
 .marca { position: relative; display: block; width: 100%; aspect-ratio: 1; max-width: 100%; flex: none; container-type: inline-size; margin-inline: auto; }
-.arcos { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.giro-arcos { transform-origin: 50% 50%; animation: marca-horario 36s linear infinite; }
+.giro-arcos { position: absolute; inset: 0; transform-origin: 50% 50%; animation: marca-horario 36s linear infinite; }
+.arco { position: absolute; inset: 0; border-radius: 50%; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - max(1.5px, 0.8cqw)), #000 calc(100% - max(1.5px, 0.8cqw) + 0.5px)); mask: radial-gradient(farthest-side, transparent calc(100% - max(1.5px, 0.8cqw)), #000 calc(100% - max(1.5px, 0.8cqw) + 0.5px)); }
 .esfera { position: absolute; inset: 6.2%; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
   box-shadow: 0 6cqw 9cqw -3cqw rgba(48, 14, 120, 0.38), 0 1.2cqw 3cqw rgba(48, 14, 120, 0.22); animation: marca-forma 1.6s cubic-bezier(.2, .7, .2, 1) both; }
 .cores { position: absolute; inset: 0; background: linear-gradient(var(--marca-ang), #7a3cf0 0%, #4a12b0 30%, #1f4a90 62%, #0f6275 100%); animation: marca-anti 22s linear infinite; }

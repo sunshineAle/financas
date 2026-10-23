@@ -7,6 +7,7 @@ import AvisoToast from './AvisoToast.vue';
 import LancamentoModal from './LancamentoModal.vue';
 import BotaoVoltar from './BotaoVoltar.vue';
 import TopoApp from './TopoApp.vue';
+import MarcaDagda from './MarcaDagda.vue';
 import AvisoArmazenamento from './AvisoArmazenamento.vue';
 import AvatarMini from './AvatarMini.vue';
 import { GRUPOS, grupoDaRota, ehTelaInternaDoMais, ROTAS_COM_TOPO } from '../config/menu.js';
@@ -55,17 +56,7 @@ onMounted(async () => {
     <aside v-if="!ehCelular" class="sidebar">
       <div class="topo-sidebar">
         <div class="marca" title="Dagda Capital">
-          <svg viewBox="0 0 32 32" class="logo-marca" aria-label="Dagda Capital">
-            <defs>
-              <linearGradient id="gradLogo" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#5E18D8" />
-                <stop offset="1" stop-color="#1597A8" />
-              </linearGradient>
-            </defs>
-            <rect width="32" height="32" rx="9" fill="url(#gradLogo)" />
-            <path d="M8 20l5-6 4 3 7-9" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="24" cy="8" r="1.6" fill="#ffffff" />
-          </svg>
+          <MarcaDagda class="logo-marca" :tamanho="38" />
         </div>
       </div>
 
@@ -150,8 +141,7 @@ onMounted(async () => {
 }
 
 .logo-marca {
-  width: 34px;
-  height: 34px;
+  width: 38px;
   flex-shrink: 0;
 }
 
