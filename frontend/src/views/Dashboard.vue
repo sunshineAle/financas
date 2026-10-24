@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
 import IconeCat from '../components/IconeCat.vue';
+import IconeCategoria from '../components/IconeCategoria.vue';
 import { chaveFinalCategoria } from '../utils/iconesCategoria.js';
 import { ArrowDown, ArrowUp, ArrowLeftRight, Receipt, Tag, Plus, CreditCard, Landmark, ChartColumn, ShieldCheck, TriangleAlert, ChevronRight, CircleCheck } from 'lucide-vue-next';
 import Orbe from '../components/Orbe.vue';
@@ -306,7 +307,7 @@ onMounted(async () => {
             <strong class="reserva-valor"><DashNumero :valor="reserva.total" /></strong>
             <template v-if="reserva.proximaMeta">
               <div class="reserva-meta">
-                <span class="descricao">{{ reserva.proximaMeta.icone || '🎯' }} {{ reserva.proximaMeta.nome }}</span>
+                <span class="descricao meta-nome"><IconeCategoria :valor="reserva.proximaMeta.icone || '🎯'" tipo="meta" :tamanho="26" /> {{ reserva.proximaMeta.nome }}</span>
                 <b class="numero-tabular">{{ reserva.proximaMeta.pct }}%</b>
               </div>
               <BarraDegrade :pct="reserva.proximaMeta.pct" de="var(--meta-violeta-medio)" ate="var(--meta-violeta-claro)" :altura="12" />
@@ -377,7 +378,7 @@ onMounted(async () => {
 .periodo::first-letter { text-transform: uppercase; }
 .palco-valor { font-family: var(--fonte-display); font-size: clamp(32px, 9vw, 46px); line-height: 1.1; margin-top: 2px; overflow-wrap: anywhere; }
 .palco-valor.negativo { color: var(--cor-saida); }
-.palco-orbe { width: 100%; max-width: 460px; will-change: transform; padding-bottom: 8px; margin-top: 6px; }
+.palco-orbe { width: 100%; max-width: 420px; will-change: transform; padding-bottom: 4px; margin-top: 4px; }
 .legenda-orbe { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; font-size: 13px; color: var(--cor-texto-suave); }
 .legenda-orbe li { display: inline-flex; align-items: center; gap: 7px; }
 .legenda-orbe b { color: var(--cor-texto); font-weight: 600; }
@@ -388,17 +389,17 @@ onMounted(async () => {
 
 /* Folha: cobre o orbe ao rolar (mesma cor do fundo da página: acima da aba não há fundo visível) */
 .folha { position: relative; z-index: 1; background: var(--cor-fundo); padding: 8px 0 0; min-height: 80vh; }
-.corpo-mes { display: flex; flex-direction: column; gap: 14px; }
+.corpo-mes { display: flex; flex-direction: column; gap: 12px; }
 
 /* Grade sem buracos: colunas balanceadas (celular = 1 coluna; PC = 2). Cada card entra inteiro, sem espaços vazios entre eles */
 .grade { column-count: 1; column-gap: 16px; }
 @media (min-width: 900px) { .grade { column-count: 2; } }
-.grade > * { break-inside: avoid; margin-bottom: 16px; display: flex; flex-direction: column; }
-.grade > .coluna { gap: 14px; }
+.grade > * { break-inside: avoid; margin-bottom: 12px; display: flex; flex-direction: column; }
+.grade > .coluna { gap: 12px; }
 .coluna { min-width: 0; }
 
 /* Cartões: molde da página Objetivos */
-.cartao { background: var(--cor-card); border: 1px solid var(--cor-card-borda); border-radius: var(--raio-card, 16px); padding: 22px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.cartao { background: var(--cor-card); border: 1px solid var(--cor-card-borda); border-radius: var(--raio-card, 16px); padding: 16px 18px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .cartao h2 { font-family: var(--fonte-display); font-size: 16px; margin: 0; }
 .cabeca { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .nota { font-size: 13px; color: var(--cor-texto-suave); margin: 0; }
@@ -419,7 +420,7 @@ onMounted(async () => {
 .lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .linha {
   display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  padding: 10px 6px; min-height: 56px; border-radius: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; -webkit-tap-highlight-color: transparent;
+  padding: 7px 4px; min-height: 50px; border-radius: 12px; cursor: pointer; transition: background var(--anim-rapida) ease; -webkit-tap-highlight-color: transparent;
 }
 .linha:hover, .linha:focus-visible { background: var(--cor-realce); outline: none; }
 .linha.parado { cursor: default; grid-template-columns: 40px minmax(0, 1fr); }
@@ -444,9 +445,9 @@ onMounted(async () => {
 
 /* Orçamento por categoria: lista com barras em degradê (frio → âmbar → quente conforme a faixa) */
 .orcamento { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 4px; }
-.orc-item { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 6px; border-radius: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; min-width: 0; }
+.orc-item { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; padding: 7px 4px; border-radius: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; min-width: 0; }
 .orc-item:hover, .orc-item:focus-visible { background: var(--cor-realce); outline: none; }
-.orc-corpo { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.orc-corpo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .orc-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .orc-pct { font-family: var(--fonte-display); font-size: 15px; }
 .orc-item.alto .orc-pct { color: var(--cor-saida-texto); }
@@ -468,17 +469,18 @@ onMounted(async () => {
 .cartao.reserva .seta { color: var(--cor-texto-suave); }
 .reserva-valor { font-family: var(--fonte-display); font-size: 28px; }
 .reserva-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.meta-nome { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .reserva-meta b { color: var(--cor-meta-clara); }
 :root[data-theme='light'] .reserva-meta b { color: var(--cor-meta); }
 
 /* Ranking de dívidas */
 .ranking { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ranking li { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; cursor: pointer; min-height: 44px; transition: background var(--anim-rapida) ease; }
+.ranking li { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; cursor: pointer; min-height: 44px; transition: background var(--anim-rapida) ease; }
 .ranking li:hover, .ranking li:focus-visible { background: var(--cor-realce); outline: none; }
 .rk-topo { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
 .rk-topo .descricao { font-weight: 500; font-size: 14px; }
 
 @media (max-width: 480px) {
-  .cartao { padding: 18px 14px; }
+  .cartao { padding: 14px 12px; }
 }
 </style>

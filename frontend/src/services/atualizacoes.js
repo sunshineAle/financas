@@ -19,12 +19,17 @@ export async function atualizacaoBacen() {
   } catch { return '—'; }
 }
 
+// Investimentos e metas: data da última movimentação registrada (guardar, resgatar, rendimento). Sem movimentação,
+// o rendimento das metas usa o CDI do Bacen: mostra a data dos índices. Nunca depende do Open Finance (versão offline).
 export async function atualizacaoInvestimentos() {
   try {
-    const r = await fetch('/api/open-finance/status', { credentials: 'include' });
-    if (!r.ok) return '—';
-    const itens = ((await r.json()).investimentos || {}).itens || [];
-    const datas = itens.map((i) => i.atualizado_em).filter(Boolean).sort();
-    return datas.length ? formatar(datas[datas.length - 1].replace(' ', 'T') + (datas[datas.length - 1].includes('Z') ? '' : 'Z')) : '—';
-  } catch { return '—'; }
+    const r = await fetch('/api/investimentos', { credentials: 'include' });
+    if (r.ok) {
+      const j = await r.json();
+      const v = j && j.atualizado_em;
+      if (v) return formatar(String(v).includes('T') || String(v).endsWith('Z') ? v : String(v).replace(' ', 'T') + 'Z');
+    }
+  } catch { /* segue para o Bacen */ }
+  const b = await atualizacaoBacen();
+  return b === '—' ? 'nenhuma movimentação ainda' : `rendimentos pelo CDI de ${b}`;
 }

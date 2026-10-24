@@ -11,6 +11,7 @@ import { modoTema } from '../services/tema.js';
 import { configAlertas, permissaoNotificacao } from '../services/alertas.js';
 import { textoVersao } from '../services/versao.js';
 import { modoPWA, biometriaSuportada, biometriaAtiva, carregarBiometria } from '../services/acesso.js';
+import { ehCelular } from '../services/layout.js';
 
 const router = useRouter();
 const rotaRegras = computed(() => (router.getRoutes().some((r) => r.path === '/regras') ? '/regras' : '/orcamento?aba=regras'));
@@ -38,7 +39,7 @@ const resumos = computed(() => ({
 const GRUPOS = computed(() => [
   { titulo: 'Análises', itens: [{ rotulo: 'Relatórios', sub: 'evolução, comparações, categorias', icone: ChartColumn, rota: '/relatorios' }] },
   { titulo: 'Dados', itens: [{ rotulo: 'Importar extrato ou fatura', sub: 'OFX, CSV, planilha ou PDF; sem duplicar', icone: FileUp, rota: '/importar' }] },
-  { titulo: 'Perfil e configurações', itens: SECOES_PERFIL.map((x) => ({ rotulo: x.rotulo, sub: resumos.value[x.id], icone: x.icone, rota: '/mais/' + x.id })) },
+  { titulo: 'Configurações', itens: SECOES_PERFIL.filter((x) => x.id !== 'perfil').map((x) => ({ rotulo: x.rotulo, sub: resumos.value[x.id], icone: x.icone, rota: '/mais/' + x.id })) },
 ]);
 onMounted(async () => {
   try { versao.value = await textoVersao(); } catch { /* sem versão */ }
@@ -53,7 +54,7 @@ onMounted(async () => {
   } catch { /* sem rede */ }
 });
 const nomeTopo = computed(() => nomeExibido(conta.value) || 'Você');
-const emailTopo = computed(() => perfil.email || conta.value.email || '');
+const emailTopo = computed(() => { const e = perfil.email || conta.value.email || ''; return e === 'local@aparelho' ? '' : e; });
 const inicial = computed(() => inicialDe(conta.value));
 
 async function sair() {
@@ -64,12 +65,12 @@ async function sair() {
 
 <template>
   <div class="pagina">
-    <h1 class="titulo-pagina">Mais</h1>
+    <h1 class="titulo-pagina">{{ ehCelular ? 'Mais' : 'Configurações' }}</h1>
 
     <div class="card">
       <button type="button" class="linha perfil-atalho" @click="router.push('/mais/perfil')">
         <AvatarMini :inicial="inicial" :tamanho="48" />
-        <span class="texto"><b>{{ nomeTopo }}</b><small>{{ emailTopo || 'Perfil e configurações' }}</small></span>
+        <span class="texto"><b>{{ nomeTopo }}</b><small>{{ emailTopo || 'Ver perfil' }}</small></span>
         <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
       </button>
     </div>
@@ -90,7 +91,7 @@ async function sair() {
 </template>
 
 <style scoped>
-.pagina { padding: 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 @media (max-width: 480px) { .pagina { padding: 20px 16px; } }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .grupo { display: flex; flex-direction: column; gap: 8px; }
@@ -98,7 +99,7 @@ async function sair() {
 .card { background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: var(--raio-padrao); padding: 6px; display: flex; flex-direction: column; }
 .linha { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 10px; background: none; border: none; border-radius: 12px; color: var(--cor-texto); font-family: var(--fonte-texto); text-align: left; cursor: pointer; width: 100%; }
 button.linha:hover, button.linha:active { background: var(--cor-realce); }
-.quadro { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--cor-entrada-fundo); color: var(--cor-primaria); flex-shrink: 0; }
+.quadro { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--cor-primaria) 12%, transparent); color: var(--cor-primaria); flex-shrink: 0; }
 .texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .texto b { font-size: 15px; font-weight: 600; }
 .texto small { font-size: 12.5px; color: var(--cor-texto-suave); }

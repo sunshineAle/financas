@@ -11,7 +11,7 @@ import { computed } from 'vue';
 import Icone from './Icone.vue';
 import IconeCat from './IconeCat.vue';
 import { CATALOGO, PADRAO_POR_TIPO, resolverChave, corDaChave, ehImagem, ehEmoji } from '../utils/icones.js';
-import { chaveFinalCategoria } from '../utils/iconesCategoria.js';
+import { chaveFinalCategoria, META_V2 } from '../utils/iconesCategoria.js';
 import { PALETA_DESPESA, corDespesa } from '../utils/coresDespesa.js';
 import { PALETA_RECEITA } from '../utils/coresReceita.js';
 
@@ -25,8 +25,13 @@ const props = defineProps({
 });
 
 // Categorias de saída/entrada usam os ícones do manifesto (v2); emojis e chaves antigas são traduzidos; desconhecido = "Geral".
-const ehCategoria = computed(() => (props.tipo === 'saida' || props.tipo === 'entrada') && !ehImagem(props.valor));
-const chaveCat = computed(() => (ehCategoria.value ? chaveFinalCategoria(props.valor, props.tipo) : ''));
+// Metas (anotação 34): o mesmo set novo em linha, sempre com o fundo na cor da meta (eixo roxo da paleta v2).
+const ehMetaV2 = computed(() => props.tipo === 'meta' && !ehImagem(props.valor));
+const ehCategoria = computed(() => ((props.tipo === 'saida' || props.tipo === 'entrada') && !ehImagem(props.valor)) || ehMetaV2.value);
+const chaveCat = computed(() => {
+  if (ehMetaV2.value) return META_V2[props.valor] || (String(props.valor).startsWith('cat-') ? props.valor : 'cat-saida-geral');
+  return ehCategoria.value ? chaveFinalCategoria(props.valor, props.tipo) : '';
+});
 function corDaCategoria(chave) {
   let h = 0;
   for (const ch of chave) h = (h * 31 + ch.codePointAt(0)) >>> 0;
@@ -40,7 +45,7 @@ const chave = computed(() => {
 const imagem = computed(() => ehImagem(props.valor));
 const emojiDesconhecido = computed(() => !imagem.value && !ehCategoria.value && !chave.value && ehEmoji(props.valor));
 const chaveFinal = computed(() => chave.value || PADRAO_POR_TIPO[props.tipo] || 'generico');
-const corFinal = computed(() => props.cor || (ehCategoria.value ? corDaCategoria(chaveCat.value) : corDaChave(chaveFinal.value, props.tipo)));
+const corFinal = computed(() => props.cor || (ehMetaV2.value ? 'var(--cor-meta)' : ehCategoria.value ? corDaCategoria(chaveCat.value) : corDaChave(chaveFinal.value, props.tipo)));
 const lado = computed(() => props.tamanho);
 </script>
 

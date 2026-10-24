@@ -113,7 +113,7 @@ const negativo = computed(() => estado.value === 'neg');
 
 <style scoped>
 .topo-valor {
-  position: relative; overflow: hidden; border-radius: 22px; padding: 22px 20px; color: var(--cor-sobre-cor);
+  position: relative; overflow: hidden; border-radius: 22px; padding: 18px 18px 16px; color: var(--cor-sobre-cor);
   background: var(--sinal-fundo, var(--tema-degrade)); display: flex; flex-direction: column; gap: 6px; box-shadow: var(--sombra-suave);
   font-family: var(--fonte-texto); min-width: 0;
 }
@@ -139,7 +139,7 @@ const negativo = computed(() => estado.value === 'neg');
 .sinal-zero { --sinal-fundo: var(--degrade-sinal-zero); --cor-sobre-cor: var(--sinal-zero-texto); --tema-cor: var(--sinal-zero-texto); --sinal-destaque-cor: var(--sinal-zero-de); }
 .sinal-neg { --sinal-fundo: var(--degrade-sinal-neg); --cor-sobre-cor: var(--sinal-neg-texto); --tema-cor: var(--sinal-neg-texto); --sinal-destaque-cor: var(--sinal-neg-de); }
 .sinal-pos, .sinal-zero, .sinal-neg { box-shadow: var(--sombra-suave), inset 0 0 0 1px color-mix(in srgb, var(--cor-sobre-cor) 14%, transparent); }
-.linhas { margin: 8px 0 0; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--cor-sobre-cor) 28%, transparent); display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.linhas { margin: 6px 0 0; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--cor-sobre-cor) 28%, transparent); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .linhas > div { display: flex; justify-content: space-between; gap: 12px; }
 .linhas dt { opacity: 0.9; }
 .linhas dd { margin: 0; font-weight: 600; }

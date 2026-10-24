@@ -1,16 +1,19 @@
 <script setup>
 // Tela de acesso do PWA (antes do app): criar a senha de acesso na 1ª vez, pedir ao abrir,
 // e "Esqueci a senha" -> restaurar um backup (e criar uma senha nova). Tudo no aparelho, sem servidor.
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import Orbe from '../components/Orbe.vue';
 import MarcaDagda from '../components/MarcaDagda.vue';
-import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint } from 'lucide-vue-next';
-import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria } from '../services/acesso.js';
+import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint, Delete, KeyRound } from 'lucide-vue-next';
+import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria,
+  acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
+import AvisoSenha from '../components/AvisoSenha.vue';
+import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import { jaInstalado, conviteDisponivel, instalarApp, instrucoes } from '../services/instalacao.js';
 import { perfil } from '../services/perfil.js';
-import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem } from '../services/backup.js';
+import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem, guardarMestraParaAdotar, adotarMestraGuardada, descartarMestraGuardada } from '../services/backup.js';
 import { conectarNuvem } from '../services/nuvem/index.js';
-import NuvemLogo from '../components/NuvemLogo.vue';
+import OrigemBackup from '../components/OrigemBackup.vue';
 import { reavisar } from '../services/atualizacao.js';
 import { marcarPrimeiroCadastro } from '../services/primeiroCadastro.js';
 
@@ -24,7 +27,7 @@ const partesOrbe = [
   { nome: 'Investimentos', valor: 1, cor: 'var(--investimento-esmeralda-medio)' },
 ];
 
-// modo: entrar | criar | redefinir (após restaurar) | restaurar
+// modo: entrar | criar | redefinir (após restaurar) | restaurar | codigo (esqueci: digitar o código) | nova-senha (após o código) | chave (mostrar o código novo)
 const posRestauro = (() => { try { return sessionStorage.getItem('sf:pos-restauro') === '1'; } catch { return false; } })();
 const modo = ref(posRestauro ? 'redefinir' : (configurada() ? 'entrar' : 'criar'));
 const apelido = ref(apelidoSalvo() || perfil.nome || '');
@@ -58,17 +61,44 @@ async function instalar() {
 }
 
 // Desbloqueio por biometria (se foi ativado no Perfil e o aparelho ainda oferece).
+// Login rápido: a biometria é chamada sozinha ao abrir (se ativada) e o teclado de PIN já aparece.
 const bioDisponivel = ref(false);
-onMounted(async () => { bioDisponivel.value = biometriaMarcada() && await biometriaSuportada(); });
-async function entrarComBiometria() {
+const ehPinAcesso = acessoEhPin();
+onMounted(async () => {
+  bioDisponivel.value = biometriaMarcada() && await biometriaSuportada();
+  if (bioDisponivel.value && modo.value === 'entrar') entrarComBiometria(true);
+});
+async function entrarComBiometria(automatico = false) {
   erro.value = ''; carregando.value = true;
-  try { await desbloquearComBiometria(); emit('liberado'); }
-  catch (e) { erro.value = e.message; } finally { carregando.value = false; }
+  try { await desbloquearComBiometria(); liberar(); }
+  catch (e) { if (!automatico) erro.value = e.message; } finally { carregando.value = false; }
+}
+// Teclado de PIN na tela (também aceita o teclado físico).
+const DIGITOS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+function tecla(d) { if (senha.value.length < 12) senha.value += d; erro.value = ''; }
+function apagarTecla() { senha.value = senha.value.slice(0, -1); }
+function teclaFisica(e) {
+  if (modo.value !== 'entrar' || !ehPinAcesso) return;
+  if (/^\d$/.test(e.key)) { tecla(e.key); e.preventDefault(); }
+  else if (e.key === 'Backspace') { apagarTecla(); e.preventDefault(); }
+  else if (e.key === 'Enter' && senha.value.length >= 4) { enviar(); e.preventDefault(); }
+}
+onMounted(() => window.addEventListener('keydown', teclaFisica));
+onBeforeUnmount(() => window.removeEventListener('keydown', teclaFisica));
+
+// Transição login -> Início: a esfera do login cresce e se funde ao orbe principal enquanto o app carrega (até ~600 ms).
+const orbeRef = ref(null);
+function liberar() {
+  const r = orbeRef.value ? orbeRef.value.getBoundingClientRect() : null;
+  emit('liberado', { rect: r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null, html: orbeRef.value ? orbeRef.value.outerHTML : '' });
 }
 
-const titulo = computed(() => ({ entrar: apelidoSalvo() ? `Olá, ${apelidoSalvo()}` : 'Entrar', criar: 'Criar acesso', redefinir: 'Crie um novo acesso', restaurar: 'Restaurar backup' }[modo.value]));
+const titulo = computed(() => ({ entrar: apelidoSalvo() ? `Olá, ${apelidoSalvo()}` : 'Entrar', criar: 'Criar acesso', redefinir: 'Crie um novo acesso', restaurar: 'Restaurar backup', codigo: 'Esqueci a senha', 'nova-senha': 'Nova senha', chave: 'Código de recuperação' }[modo.value]));
 const subtitulo = computed(() => ({
-  entrar: 'Digite sua senha ou PIN para abrir o app.',
+  entrar: ehPinAcesso ? 'Digite seu PIN.' : 'Digite sua senha ou PIN.',
+  codigo: 'Digite o código de recuperação que você guardou no cadastro.',
+  'nova-senha': 'Código aceito. Crie a nova senha ou PIN deste aparelho.',
+  chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
   criar: 'Escolha um apelido e uma senha ou PIN. Não pedimos e-mail nem usamos servidor.',
   redefinir: 'Backup restaurado. Defina agora o apelido e a senha ou PIN deste aparelho.',
   restaurar: 'Escolha um arquivo .sfin. Os dados atuais deste aparelho serão substituídos.',
@@ -81,7 +111,18 @@ async function enviar() {
   try {
     if (modo.value === 'entrar') {
       const ok = await verificarSenha(senha.value);
-      if (!ok) { erro.value = 'Senha incorreta.'; senha.value = ''; iniciarEspera(); return; }
+      if (!ok) { erro.value = ehPinAcesso ? 'PIN incorreto.' : 'Senha incorreta.'; senha.value = ''; iniciarEspera(); return; }
+      // Cadastro antigo, sem código de recuperação: gera agora e mostra antes de entrar.
+      if (codigoRecuperacaoPendente()) { codigoNovo.value = await gerarNovoCodigo(); modo.value = 'chave'; return; }
+    } else if (modo.value === 'codigo') {
+      await entrarComCodigo(codigoDigitado.value);
+      senha.value = ''; confirmacao.value = ''; modo.value = 'nova-senha'; return;
+    } else if (modo.value === 'nova-senha') {
+      const e = validarNovaSenha(senha.value);
+      if (e) { erro.value = e; return; }
+      if (senha.value !== confirmacao.value) { erro.value = 'A confirmação não é igual à senha ou PIN.'; return; }
+      await redefinirSenhaComCodigo(senha.value);
+      liberar(); return;
     } else {
       const ea = validarApelido(apelido.value);
       if (ea) { erro.value = ea; return; }
@@ -89,7 +130,10 @@ async function enviar() {
       if (e) { erro.value = e; return; }
       if (senha.value !== confirmacao.value) { erro.value = 'A confirmação não é igual à senha ou PIN.'; return; }
       const primeiro = modo.value === 'criar';
+      const restaurado = modo.value === 'redefinir';
+      if (restaurado) await adotarMestraGuardada();
       await criarSenha(senha.value, apelido.value.trim());
+      if (restaurado) { await aplicarRecAdotado(); await descartarMestraGuardada(); }
       if (primeiro) marcarPrimeiroCadastro();
       if (!perfil.nome) perfil.nome = apelido.value.trim();
       try { sessionStorage.removeItem('sf:pos-restauro'); } catch { /* ignora */ }
@@ -98,13 +142,21 @@ async function enviar() {
         oferta.value = { id: idNuvem, bioOk: await biometriaSuportada(), bio: true, auto: true };
         return;
       }
+      // Primeiro cadastro (ou backup antigo sem código): mostra o código de recuperação antes de entrar.
+      if (codigoRecuperacaoPendente()) { codigoNovo.value = await gerarNovoCodigo(); modo.value = 'chave'; return; }
     }
-    emit('liberado');
+    liberar();
   } catch (e) {
     erro.value = e.message || 'Não foi possível continuar.';
     iniciarEspera();
   } finally { carregando.value = false; }
 }
+
+// Código de recuperação: gerado no cadastro (ou no 1º acesso de quem cadastrou antes dele existir).
+const codigoNovo = ref('');
+const codigoDigitado = ref('');
+async function codigoGuardado() { await confirmarCodigoGuardado(); liberar(); }
+function abrirCodigo() { erro.value = ''; codigoDigitado.value = ''; modo.value = 'codigo'; }
 
 // Depois de restaurar pela nuvem (aparelho novo): oferece biometria e backup automático nessa nuvem.
 const oferta = ref(null);
@@ -114,7 +166,8 @@ async function concluirOferta() {
     if (o.bioOk && o.bio) { try { await ativarBiometria(); } catch (e) { erro.value = e.message + ' Você pode ativar depois em Perfil > Segurança.'; } }
     if (o.auto) { configBackup.ultimoDestino = o.id; configBackup.automatico = true; if (configBackup.intervalo === 'desligado') configBackup.intervalo = 'semanal'; salvarConfig(); }
     try { sessionStorage.removeItem('sf:pos-restauro-nuvem'); } catch { /* ignora */ }
-    emit('liberado');
+    if (codigoRecuperacaoPendente()) { codigoNovo.value = await gerarNovoCodigo(); oferta.value = null; modo.value = 'chave'; return; }
+    liberar();
   } finally { carregando.value = false; }
 }
 
@@ -129,9 +182,7 @@ const folha = ref(false);
 const origemRestauro = ref('');
 // Nuvens com login (só aparecem se o Client ID/App key estiver configurado) e as que usam o seletor de arquivos.
 const COM_LOGIN = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
-const PELO_APP = [{ id: 'proton', nome: 'Proton Drive' }, { id: 'mega', nome: 'Mega' }, { id: 'icloud', nome: 'iCloud' }];
 const nuvensAbertas = ref(false);
-const dicaApp = ref('');
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
 const nuvemRestauro = ref(null); // { id, nome, data }
 const ROTULO_ENTRAR = { google: 'Google', microsoft: 'Microsoft', dropbox: 'Dropbox' };
@@ -151,10 +202,10 @@ async function entrarNuvem(id) {
   } catch (e) { if (!(e && e.codigo === 'cancelado')) { erro.value = e.message; folha.value = false; modo.value = 'restaurar'; origemRestauro.value = ''; } }
   finally { carregando.value = false; }
 }
-async function escolher(ev, origem = '') {
+const escolher = (ev, origem = '') => escolherArquivo(ev.target.files && ev.target.files[0], origem);
+async function escolherArquivo(f, origem = '') {
   erro.value = '';
   dadosPrevia.value = null;
-  const f = ev.target.files && ev.target.files[0];
   if (!f) return;
   if (folha.value) { folha.value = false; modo.value = 'restaurar'; origemRestauro.value = origem; }
   try {
@@ -173,23 +224,25 @@ async function restaurarAgora() {
   carregando.value = true;
   try {
     await restaurar(dadosPrevia.value.dados, 'substituir');
+    await guardarMestraParaAdotar().catch((e) => console.warn('sf: chave do backup não guardada', e && e.message));
     try { sessionStorage.setItem('sf:pos-restauro', '1'); if (nuvemRestauro.value) sessionStorage.setItem('sf:pos-restauro-nuvem', nuvemRestauro.value.id); } catch { /* ignora */ }
     await recarregarApp();
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
-function voltar() { nuvemRestauro.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'criar'; }
+function voltar() {
+  senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'criar'; }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada' };
 const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
 </script>
 
 <template>
-  <div class="tela-acesso">
+  <div class="tela-acesso" :class="['modo-' + modo, { 'com-boas-vindas': boasVindas }]">
     <section class="painel-hero">
-      <div class="orbe-entrada"><MarcaDagda completa /></div>
-      <span v-if="boasVindas" class="titulo-hero">Bem-vindo</span>
-      <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
+      <div ref="orbeRef" class="orbe-entrada"><MarcaDagda completa /></div>
       <template v-if="boasVindas">
+        <span class="titulo-hero">Bem-vindo</span>
+        <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
         <ul class="beneficios">
           <li v-for="b in BENEFICIOS" :key="b.texto"><component :is="b.icone" :size="18" :stroke-width="1.9" /><span>{{ b.texto }}</span></li>
         </ul>
@@ -201,35 +254,89 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
     </section>
 
     <section class="painel-form">
-      <form v-if="modo !== 'restaurar' && !oferta" class="formulario" @submit.prevent="enviar">
+      <!-- Entrar: login rápido (PIN na tela ou senha; biometria chamada sozinha) -->
+      <form v-if="modo === 'entrar'" class="formulario entrar" data-login @submit.prevent="enviar">
         <h1>{{ titulo }}</h1>
         <p class="subtitulo">{{ subtitulo }}</p>
-
-        <template v-if="modo === 'entrar' && bioDisponivel">
-          <button type="button" class="bio-principal" :disabled="carregando" @click="entrarComBiometria"><Fingerprint :size="22" :stroke-width="1.9" /> Entrar com biometria</button>
-          <p class="ou-senha"><span>ou use sua senha</span></p>
+        <template v-if="ehPinAcesso">
+          <div class="pontos" :class="{ erro: !!erro }" aria-live="polite" :aria-label="`${senha.length} dígitos digitados`">
+            <span v-for="n in Math.max(4, senha.length)" :key="n" :class="{ cheio: n <= senha.length }"></span>
+          </div>
+          <div class="teclado" role="group" aria-label="Teclado do PIN">
+            <button v-for="d in DIGITOS" :key="d" type="button" class="tecla" :disabled="carregando || espera > 0" @click="tecla(d)">{{ d }}</button>
+            <button v-if="bioDisponivel" type="button" class="tecla icone" aria-label="Entrar com biometria" title="Biometria" :disabled="carregando" @click="entrarComBiometria()"><Fingerprint :size="24" :stroke-width="1.8" /></button>
+            <span v-else></span>
+            <button type="button" class="tecla" :disabled="carregando || espera > 0" @click="tecla('0')">0</button>
+            <button type="button" class="tecla icone" aria-label="Apagar" :disabled="!senha" @click="apagarTecla"><Delete :size="22" :stroke-width="1.8" /></button>
+          </div>
         </template>
-        <label v-if="modo !== 'entrar'" class="campo">
+        <template v-else>
+          <label class="campo">
+            <span class="so-leitor">Senha ou PIN</span>
+            <div class="com-bio">
+              <input v-model="senha" type="password" autocomplete="current-password" required placeholder="Senha ou PIN" autofocus />
+              <button v-if="bioDisponivel" type="button" class="bio-mini" aria-label="Entrar com biometria" title="Biometria" :disabled="carregando" @click="entrarComBiometria()"><Fingerprint :size="22" :stroke-width="1.8" /></button>
+            </div>
+          </label>
+        </template>
+        <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
+        <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
+        <button type="submit" :disabled="carregando || espera > 0 || (ehPinAcesso && senha.length < 4)">{{ carregando ? 'Aguarde…' : 'Entrar' }}</button>
+        <div class="links-ajuda">
+          <button type="button" class="link" @click="abrirCodigo"><KeyRound :size="16" :stroke-width="2" /> Esqueci a senha</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="link" @click="folha = true"><DatabaseBackup :size="16" :stroke-width="2" /> Restaurar backup</button>
+        </div>
+      </form>
+
+      <!-- Criar / redefinir após restaurar / nova senha pelo código -->
+      <form v-else-if="['criar', 'redefinir', 'nova-senha'].includes(modo) && !oferta" class="formulario" @submit.prevent="enviar">
+        <h1>{{ titulo }}</h1>
+        <p class="subtitulo">{{ subtitulo }}</p>
+        <label v-if="modo !== 'nova-senha'" class="campo">
           <span>Apelido</span>
-          <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Como quer ser chamado" :autofocus="modo !== 'entrar'" />
+          <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Como quer ser chamado" autofocus />
         </label>
         <label class="campo">
           <span>Senha ou PIN</span>
-          <input v-model="senha" type="password" :autocomplete="modo === 'entrar' ? 'current-password' : 'new-password'" required :placeholder="modo === 'entrar' ? '••••••••' : 'PIN de 4 a 12 números ou senha com 6+ caracteres'" :autofocus="modo === 'entrar'" />
+          <input v-model="senha" type="password" autocomplete="new-password" required placeholder="PIN de 4 a 12 números ou senha com 6+ caracteres" />
         </label>
-        <label v-if="modo !== 'entrar'" class="campo">
+        <label class="campo">
           <span>Repita a senha ou PIN</span>
           <input v-model="confirmacao" type="password" autocomplete="new-password" required placeholder="••••••••" />
         </label>
-        <p v-if="modo === 'criar'" class="aviso-senha">Não há como recuperar esta senha ou PIN: se esquecer, só restaurando um backup. Anote em local seguro.</p>
+        <AvisoSenha />
         <p v-if="modo === 'criar'" class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
+        <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
+        <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
+        <button v-if="modo === 'criar'" type="button" class="restaurar" @click="folha = true"><DatabaseBackup :size="20" :stroke-width="2" /> Restaurar Backup</button>
+        <button v-if="modo === 'nova-senha'" type="button" class="link" @click="voltar">Cancelar</button>
+      </form>
+
+      <!-- Esqueci a senha: código de recuperação -->
+      <form v-else-if="modo === 'codigo'" class="formulario" data-esqueci @submit.prevent="enviar">
+        <h1>{{ titulo }}</h1>
+        <p class="subtitulo">{{ subtitulo }}</p>
+        <label class="campo">
+          <span>Código de recuperação</span>
+          <input v-model="codigoDigitado" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="ABCD-EFGH-JKLM-NPQR-STUV-WXYZ" class="campo-codigo" autofocus />
+        </label>
         <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
-
-        <button type="submit" :class="{ secundario: modo === 'entrar' && bioDisponivel }" :disabled="carregando || espera > 0">{{ carregando ? 'Aguarde…' : (modo === 'entrar' ? (bioDisponivel ? 'Entrar com senha ou PIN' : 'Entrar') : 'Salvar senha e entrar') }}</button>
-        <button v-if="modo === 'entrar'" type="button" class="link" @click="abrirRestaurar">Esqueci a senha</button>
-        <button type="button" class="restaurar" @click="folha = true"><DatabaseBackup :size="20" :stroke-width="2" /> Restaurar Backup</button>
+        <button type="submit" :disabled="carregando || espera > 0 || !codigoDigitado">{{ carregando ? 'Conferindo…' : 'Continuar' }}</button>
+        <p class="texto-cadastro">Não tem o código? Restaure um backup: ele abre com a senha da época ou com o código.</p>
+        <div class="links-ajuda">
+          <button type="button" class="link" @click="voltar">Voltar</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="link" @click="folha = true"><DatabaseBackup :size="16" :stroke-width="2" /> Restaurar backup</button>
+        </div>
       </form>
+
+      <!-- Código de recuperação recém-gerado -->
+      <div v-else-if="modo === 'chave'" class="formulario">
+        <h1>{{ titulo }}</h1>
+        <ChaveRecuperacao :codigo="codigoNovo" rotulo-continuar="Entrar no app" @guardado="codigoGuardado" />
+      </div>
 
       <div v-else-if="oferta" class="formulario" data-oferta>
         <h1>Restaurado!</h1>
@@ -251,8 +358,8 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         </label>
         <template v-if="arquivo && arquivo.cifrado">
           <label class="campo">
-            <span>Senha usada no backup</span>
-            <input v-model="senhaBackup" type="password" autocomplete="off" placeholder="Senha de acesso da época do backup" @keyup.enter="verPrevia" />
+            <span>Senha do backup ou código de recuperação</span>
+            <input v-model="senhaBackup" type="password" autocomplete="off" placeholder="Senha da época do backup ou o código" @keyup.enter="verPrevia" />
           </label>
           <button type="button" class="secundario" :disabled="carregando || !senhaBackup" @click="verPrevia">Abrir backup</button>
         </template>
@@ -271,26 +378,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
       <div v-if="folha" class="folha-fundo" @click.self="folha = false">
         <div class="folha" role="dialog" aria-modal="true" aria-label="Restaurar Backup">
           <header><h2>Restaurar Backup</h2><button type="button" class="fechar" aria-label="Fechar" @click="folha = false"><X :size="20" :stroke-width="2" /></button></header>
-          <label class="opcao">
-            <span class="icone"><Smartphone :size="22" :stroke-width="1.9" /></span>
-            <span class="texto"><b>Deste aparelho</b></span>
-            <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, 'Arquivo local')" />
-          </label>
-          <button type="button" class="opcao entrar" data-conectar-nuvem :aria-expanded="nuvensAbertas" @click="nuvensAbertas = !nuvensAbertas">
-            <span class="icone"><Cloud :size="22" :stroke-width="1.9" /></span>
-            <span class="texto"><b>Conectar nuvem</b></span>
-            <ChevronDown :size="18" :stroke-width="2" class="seta" :class="{ aberta: nuvensAbertas }" />
-          </button>
-          <div v-if="nuvensAbertas" class="nuvens" data-nuvens>
-            <button v-for="id in COM_LOGIN" :key="id" type="button" class="opcao nuvem" :data-entrar="id" :disabled="carregando" @click="entrarNuvem(id)">
-              <NuvemLogo :id="id" :tamanho="30" /><span class="texto"><b>{{ PROVEDORES[id].nome }}</b></span>
-            </button>
-            <label v-for="n in PELO_APP" :key="n.id" class="opcao nuvem" :data-app="n.id" @click="dicaApp = n.nome">
-              <NuvemLogo :id="n.id" :tamanho="30" /><span class="texto"><b>{{ n.nome }}</b></span>
-              <input type="file" accept=".sfin,application/octet-stream" @change="escolher($event, n.nome)" />
-            </label>
-          </div>
-          <p v-if="nuvensAbertas && dicaApp" class="explica" data-dica-app>No {{ dicaApp }}, salve o arquivo .sfin pelo app instalado e escolha-o na janela que abrir.</p>
+          <OrigemBackup modo="restaurar" :ocupado="carregando" @arquivo="(f) => escolherArquivo(f, 'Arquivo local')" @nuvem="entrarNuvem" />
         </div>
       </div>
     </Teleport>
@@ -376,4 +464,39 @@ button.bio-principal:hover:not(:disabled) { background: linear-gradient(135deg, 
 .opcao.nuvem { min-height: 52px; padding: 6px 10px; gap: 10px; }
 .opcao.nuvem .icone { width: 34px; height: 34px; }
 .explica { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cor-texto-suave); }
+
+/* ---- Login rápido (anotação 34): logo maior e centralizada, formulário compacto mais abaixo, biometria discreta ---- */
+.so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.modo-entrar.tela-acesso { grid-template-columns: 1fr; grid-template-rows: auto auto; align-content: center; min-height: 100dvh; }
+.modo-entrar .painel-form { padding-top: 22px !important; }
+.modo-entrar .painel-hero { background: none; border: none; padding: max(36px, 7vh) 24px 8px; justify-content: flex-end; }
+.modo-entrar .orbe-entrada { width: min(70vw, 40vh, 380px); }
+.modo-entrar .painel-form { align-items: flex-start; padding: 12px 24px calc(28px + env(safe-area-inset-bottom, 0px)); }
+.formulario.entrar { max-width: 320px; gap: 12px; text-align: center; margin: 0 auto; }
+.formulario.entrar h1 { font-size: 22px; }
+.formulario.entrar .subtitulo { margin: -6px 0 2px; }
+.pontos { display: flex; justify-content: center; gap: 14px; min-height: 18px; margin: 2px 0 4px; }
+.pontos span { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--cor-texto-suave); transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease; }
+.pontos span.cheio { background: linear-gradient(135deg, #7a3bea, #1597a8); border-color: transparent; transform: scale(1.06); }
+.pontos.erro span { border-color: var(--cor-alerta); }
+.teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; justify-items: center; margin: 0 auto; width: 100%; max-width: 280px; }
+.teclado > span { display: block; }
+button.tecla { width: 68px; height: 68px; min-height: 0; padding: 0; border-radius: 50%; background: var(--cor-fundo-elevado); color: var(--cor-texto); border: 1px solid var(--cor-borda); font: 500 26px var(--fonte-display); display: inline-flex; align-items: center; justify-content: center; }
+button.tecla:hover:not(:disabled) { background: var(--cor-realce); }
+button.tecla:active:not(:disabled) { transform: scale(0.95); }
+button.tecla.icone { background: transparent; border-color: transparent; color: var(--cor-texto-suave); }
+.com-bio { display: flex; gap: 8px; }
+.com-bio input { flex: 1; min-width: 0; }
+button.bio-mini { width: 46px; min-height: 44px; padding: 0; border-radius: 10px; background: transparent; color: var(--cor-texto-suave); border: 1px solid var(--cor-borda); display: inline-flex; align-items: center; justify-content: center; }
+button.bio-mini:hover:not(:disabled) { background: var(--cor-realce); color: var(--cor-texto); }
+.formulario.entrar button[type=submit] { background: linear-gradient(135deg, #5e18d8, #1597a8); }
+.links-ajuda { display: flex; align-items: center; justify-content: center; gap: 2px; flex-wrap: wrap; color: var(--cor-texto-suave); }
+.links-ajuda .link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13.5px; }
+.campo-codigo { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace !important; letter-spacing: 0.05em; text-transform: uppercase; }
+@media (max-width: 860px) {
+  .modo-entrar .painel-hero { padding-top: max(28px, 6vh); }
+  .modo-entrar .orbe-entrada { width: min(66vw, 34vh, 300px); }
+  button.tecla { width: 64px; height: 64px; }
+}
+@media (max-height: 640px) { button.tecla { width: 56px; height: 56px; font-size: 22px; } .teclado { gap: 6px 16px; } }
 </style>

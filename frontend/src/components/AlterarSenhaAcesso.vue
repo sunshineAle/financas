@@ -5,6 +5,7 @@
 import { ref, watch } from 'vue';
 import FormularioModal from './FormularioModal.vue';
 import CampoTexto from './CampoTexto.vue';
+import AvisoSenha from './AvisoSenha.vue';
 import { alterarSenha, validarNovaSenha } from '../services/acesso.js';
 import { avisar } from '../services/avisos.js';
 
@@ -24,7 +25,8 @@ async function salvar() {
   salvando.value = true;
   try {
     await alterarSenha(atual.value, nova.value);
-    avisar('Senha de acesso alterada. Backups novos usarão a nova senha.', { tipo: 'ok' });
+    // Backups antigos continuam abrindo com a senha antiga (e com o código de recuperação). Oferece um backup novo na hora.
+    avisar('Senha alterada. Backups antigos abrem com a senha antiga ou com o código de recuperação. Toque para fazer um backup novo agora.', { tipo: 'ok', rota: '/backup?fazer=1', duracao: 12000 });
     emit('fechar');
   } catch (x) { geral.value = x.message; } finally { salvando.value = false; }
 }
@@ -33,7 +35,8 @@ async function salvar() {
 <template>
   <FormularioModal :aberto="aberto" titulo="Alterar senha de acesso" rotulo-salvar="Alterar senha" :carregando="salvando" :erro="geral" @salvar="salvar" @fechar="emit('fechar')">
     <CampoTexto v-model="atual" type="password" rotulo="Senha atual" autocomplete="current-password" :erro="erros.atual" obrigatorio />
-    <CampoTexto v-model="nova" type="password" rotulo="Nova senha" autocomplete="new-password" dica="Mínimo de 6 caracteres. Backups antigos continuam abrindo com a senha da época." :erro="erros.nova" obrigatorio />
+    <CampoTexto v-model="nova" type="password" rotulo="Nova senha" autocomplete="new-password" dica="PIN de 4 a 12 números ou senha com 6+ caracteres. Backups antigos continuam abrindo com a senha antiga." :erro="erros.nova" obrigatorio />
     <CampoTexto v-model="conf" type="password" rotulo="Repita a nova senha" autocomplete="new-password" :erro="erros.conf" obrigatorio />
+    <AvisoSenha />
   </FormularioModal>
 </template>

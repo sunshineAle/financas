@@ -7,7 +7,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
   Pencil, KeyRound, ShieldCheck, Lock, CalendarClock, Tags, Gauge as GaugeIcon, ListChecks, FileUp, BookOpen, Heart, RotateCcw, RefreshCw, Bell,
-  ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff, Gauge, Info, Users, User, Wallet, DatabaseBackup, SlidersHorizontal,
+  ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff, Gauge, Info, Users, User, Wallet, DatabaseBackup, SlidersHorizontal, Trash2,
 } from 'lucide-vue-next';
 import FormularioModal from '../components/FormularioModal.vue';
 import CardPadrao from '../components/CardPadrao.vue';
@@ -16,13 +16,15 @@ import PerfilAvatar from '../components/PerfilAvatar.vue';
 import PerfilAbas from '../components/PerfilAbas.vue';
 import AlterarSenhaAcesso from '../components/AlterarSenhaAcesso.vue';
 import DesbloqueioBiometrico from '../components/DesbloqueioBiometrico.vue';
-import ResetDemoModal from '../components/ResetDemoModal.vue';
+import ApagarDadosModal from '../components/ApagarDadosModal.vue';
+import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
+import Modal from '../components/Modal.vue';
 import PlanoReserva from '../components/PlanoReserva.vue';
 import Backup from './Backup.vue';
 import { destino } from '../config/destino.js';
 import { perfil, nomeExibido, inicialDe, trocarSenha } from '../services/perfil.js';
 import { avisar } from '../services/avisos.js';
-import { minutosAutoBloqueio, definirAutoBloqueio, definirApelido, bloquear } from '../services/acesso.js';
+import { minutosAutoBloqueio, definirAutoBloqueio, definirApelido, bloquear, conferirSenha, gerarNovoCodigo, confirmarCodigoGuardado, codigoRecuperacaoPendente } from '../services/acesso.js';
 import { atualizacaoBacen, atualizacaoInvestimentos } from '../services/atualizacoes.js';
 import { atualizar as atualizarBacen, estadoBacen } from '../services/bacen.js';
 import { resetDisponivel } from '../services/resetDemo.js';
@@ -169,13 +171,22 @@ const dataInvest = ref('—');
 async function carregarDatas() { dataBacen.value = await atualizacaoBacen(); dataInvest.value = await atualizacaoInvestimentos(); }
 onMounted(carregarDatas);
 async function atualizarIndices() { await atualizarBacen({ forcar: true }); await carregarDatas(); avisar('Índices do Bacen atualizados.', { tipo: 'ok' }); }
-const passoReset = ref(0);
+const apagarAberto = ref(false);
 const versao = ref('—');
 onMounted(async () => { versao.value = await textoVersao(); });
-function carregarExemplo() {
-  if (!confirm('Carregar dados de exemplo? Eles são adicionados a este aparelho; faça um backup antes se já tem dados seus.')) return;
-  window.dispatchEvent(new Event('sf:carregar-exemplo'));
+// ---- Chave de recuperação (Segurança): gerar uma nova pede a senha ----
+const recPendente = ref(codigoRecuperacaoPendente());
+const modalRec = ref(false);
+const senhaRec = ref('');
+const erroRec = ref('');
+const codigoRec = ref('');
+function abrirRec() { senhaRec.value = ''; erroRec.value = ''; codigoRec.value = ''; modalRec.value = true; }
+async function gerarRec() {
+  erroRec.value = '';
+  if (!(await conferirSenha(senhaRec.value))) { erroRec.value = 'Senha incorreta.'; return; }
+  try { codigoRec.value = await gerarNovoCodigo(); } catch (e) { erroRec.value = e.message; }
 }
+async function recGuardado() { await confirmarCodigoGuardado(); recPendente.value = false; modalRec.value = false; avisar('Código de recuperação guardado. Faça um backup novo para ele valer também no arquivo.', { tipo: 'ok', rota: '/backup?fazer=1', duracao: 10000 }); }
 
 </script>
 
@@ -183,11 +194,6 @@ function carregarExemplo() {
   <div class="pagina">
     <h1 class="so-leitor">{{ tituloSecao }}</h1>
 
-    <nav class="indice" aria-label="Seções">
-      <button v-for="s in SECOES" :key="s.id" type="button" :class="{ ativa: secao === s.id }" :aria-current="secao === s.id ? 'page' : null" @click="router.push('/mais/' + s.id)">
-        <component :is="s.icone" :size="15" :stroke-width="2" /> {{ s.rotulo }}
-      </button>
-    </nav>
 
     <!-- 1. Perfil -->
     <section v-if="secao === 'perfil'" id="perfil" class="secao" aria-labelledby="h-perfil">
@@ -244,13 +250,20 @@ function carregarExemplo() {
         </div>
       </CardPadrao>
       <Backup embutido />
+      <CardPadrao v-if="resetDisponivel()">
+        <button type="button" class="linha atalho perigo" data-apagar @click="apagarAberto = true">
+          <span class="quadro"><Trash2 :size="20" :stroke-width="1.8" /></span>
+          <span class="texto"><b>Apagar dados e redefinir o app</b><small>apaga tudo deste aparelho e volta à tela de boas-vindas</small></span>
+          <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
+        </button>
+      </CardPadrao>
     </section>
 
     <!-- 4. Segurança -->
     <section v-if="secao === 'seguranca'" id="seguranca" class="secao" aria-labelledby="h-seg">
       <h2 id="h-seg">Segurança</h2>
       <CardPadrao :subtitulo="ehPwa ? 'protege o app neste aparelho' : 'acesso à sua conta'">
-        <p v-if="ehPwa" class="nota">A senha ou PIN é pedida ao abrir o app e também protege seus backups. Fica só neste aparelho: se esquecer, restaure um backup.</p>
+        <p v-if="ehPwa" class="nota">A senha ou PIN é pedida ao abrir o app e também protege seus backups. Se esquecer, use o código de recuperação.</p>
         <div class="linhas">
           <button type="button" class="linha atalho" @click="abrirSenha">
             <span class="quadro"><KeyRound :size="20" :stroke-width="1.8" /></span>
@@ -258,6 +271,11 @@ function carregarExemplo() {
             <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
           </button>
           <template v-if="ehPwa">
+            <button type="button" class="linha atalho" data-chave-rec @click="abrirRec">
+              <span class="quadro"><KeyRound :size="20" :stroke-width="1.8" /></span>
+              <span class="texto"><b>Ver/gerar nova chave de recuperação</b><small>{{ recPendente ? 'pendente: gere e guarde o seu código' : 'o código substitui a senha se você a esquecer' }}</small></span>
+              <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
+            </button>
             <DesbloqueioBiometrico />
             <label class="linha">
               <span class="quadro"><Lock :size="20" :stroke-width="1.8" /></span>
@@ -327,23 +345,22 @@ function carregarExemplo() {
     <section v-if="secao === 'sobre'" id="sobre" class="secao" aria-labelledby="h-sobre">
       <h2 id="h-sobre">Sobre o app</h2>
       <CardPadrao>
+        <div class="sobre-topo">
+          <b>Dagda Capital</b>
+          <small>{{ destino.rotulo }} · {{ versao }}</small>
+        </div>
         <div class="linhas">
-          <div class="linha fixa"><span class="quadro"><RefreshCw :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Índices do Bacen</b><small>Selic, CDI, IPCA · atualizados em {{ dataBacen }}</small></span>
-            <button type="button" class="mini" :disabled="estadoBacen.atualizando" @click="atualizarIndices">{{ estadoBacen.atualizando ? 'Atualizando…' : 'Atualizar' }}</button></div>
-          <div class="linha fixa"><span class="quadro"><RefreshCw :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Investimentos e metas</b><small>última atualização: {{ dataInvest }}</small></span></div>
-          <div class="linha fixa"><span class="quadro"><Info :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Sobre o sistema</b><small>{{ destino.rotulo }} · versão de testes · {{ versao }}</small></span></div>
           <button type="button" class="linha atalho" @click="router.push('/manual')">
             <span class="quadro"><BookOpen :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Manual / Tutorial</b><small>passo a passo do sistema</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
-          </button>
-          <button v-if="resetDisponivel()" type="button" class="linha atalho" @click="carregarExemplo">
-            <span class="quadro"><DatabaseBackup :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Carregar dados de exemplo</b><small>opcional: preenche o app para você conhecer</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
-          </button>
-          <button v-if="resetDisponivel()" type="button" class="linha atalho" @click="passoReset = 1">
-            <span class="quadro"><RotateCcw :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Reset</b><small>apaga todos os dados deste aparelho (faça um backup antes)</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
           </button>
           <button type="button" class="linha atalho" @click="router.push('/apoie')">
             <span class="quadro"><Heart :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Apoie o desenvolvedor</b><small>projeto independente e gratuito</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
           </button>
+        </div>
+        <div class="indices" data-indices>
+          <p><RefreshCw :size="13" :stroke-width="2" /> Índices do Bacen (Selic, CDI, IPCA): {{ dataBacen }}
+            <button type="button" class="link-mini" :disabled="estadoBacen.atualizando" @click="atualizarIndices">{{ estadoBacen.atualizando ? 'Atualizando…' : 'Atualizar' }}</button></p>
+          <p>Investimentos e metas: {{ dataInvest }}</p>
         </div>
       </CardPadrao>
     </section>
@@ -358,18 +375,21 @@ function carregarExemplo() {
       <CampoTexto v-model="confirmar" rotulo="Confirmar nova senha" type="password" autocomplete="new-password" :erro="erros.confirmar" />
     </FormularioModal>
     <AlterarSenhaAcesso :aberto="modalAcesso" @fechar="modalAcesso = false" />
-    <ResetDemoModal v-model:passo="passoReset" />
+    <ApagarDadosModal v-model:aberto="apagarAberto" />
+    <Modal :aberto="modalRec" titulo="Chave de recuperação" @fechar="modalRec = false">
+      <template v-if="!codigoRec">
+        <p class="nota">O código atual não pode ser mostrado de novo (ele não fica guardado em texto). Gere um novo: os backups feitos a partir de agora abrem com o código novo; os antigos, com o código da época ou com a senha.</p>
+        <CampoTexto v-model="senhaRec" type="password" rotulo="Sua senha ou PIN" autocomplete="current-password" :erro="erroRec" @keyup.enter="gerarRec" />
+        <button type="button" class="botao-prim" :disabled="!senhaRec" style="margin-top: 12px" @click="gerarRec"><KeyRound :size="18" :stroke-width="2" /> Gerar novo código</button>
+      </template>
+      <ChaveRecuperacao v-else :codigo="codigoRec" rotulo-continuar="Concluir" @guardado="recGuardado" />
+    </Modal>
   </div>
 </template>
 
 <style scoped>
 .pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.indice { display: none; position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px; margin: 0 -2px; background: var(--cor-fundo); scrollbar-width: none; }
-.indice::-webkit-scrollbar { display: none; }
-.indice button { flex: none; min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); font-family: var(--fonte-texto); font-size: 13px; font-weight: 600; cursor: pointer; }
-.indice button.ativa { background: var(--cor-interface, var(--cor-primaria)); border-color: transparent; color: var(--cor-sobre-cor); }
-@media (min-width: 768px) { .indice { display: flex; flex-wrap: wrap; overflow: visible; position: static; } }
 .secao { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 56px; }
 .secao > h2 { margin: 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cor-texto-suave); }
 .topo-perfil { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; text-align: center; }
@@ -380,7 +400,7 @@ function carregarExemplo() {
 .linhas { display: flex; flex-direction: column; gap: 4px; }
 .linha { display: flex; align-items: center; gap: 14px; min-height: 56px; }
 .linha.fixa { cursor: default; }
-.quadro { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--cor-entrada-fundo); color: var(--cor-primaria); flex-shrink: 0; }
+.quadro { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--cor-primaria) 12%, transparent); color: var(--cor-primaria); flex-shrink: 0; }
 .texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .texto b { font-size: 15px; font-weight: 600; }
 .texto small { font-size: 12.5px; color: var(--cor-texto-suave); }
@@ -398,4 +418,13 @@ select { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px sol
 .chave.on { background: color-mix(in srgb, var(--cor-interface, var(--cor-primaria)) 35%, transparent); border-color: var(--cor-interface, var(--cor-primaria)); }
 .chave.on span { transform: translateX(20px); background: var(--cor-interface, var(--cor-primaria)); }
 @media (prefers-reduced-motion: reduce) { .chave, .chave span { transition: none; } }
+.sobre-topo { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 10px; text-align: center; }
+.sobre-topo b { font-family: var(--fonte-display); font-size: 17px; }
+.sobre-topo small { font-size: 12.5px; color: var(--cor-texto-suave); }
+.indices { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--cor-borda); display: flex; flex-direction: column; gap: 4px; }
+.indices p { margin: 0; font-size: 12px; color: var(--cor-texto-suave); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.link-mini { background: none; border: none; padding: 2px 4px; color: var(--cor-primaria); font: 600 12px var(--fonte-texto); cursor: pointer; text-decoration: underline; }
+.link-mini:disabled { opacity: 0.5; }
+.perigo .quadro { background: color-mix(in srgb, var(--cor-grave, #c0283c) 12%, transparent); color: var(--cor-grave, #c0283c); }
+.perigo b { color: var(--cor-grave, #c0283c); }
 </style>

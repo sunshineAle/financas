@@ -3,7 +3,7 @@
 //   import { configBackup, gerarArquivo, baixar, salvarNaPasta, compartilhar, lerArquivo, restaurar, verificarLembrete } from './backup.js';
 import { reactive, ref } from 'vue';
 import { kvGet, kvSet, kvDel } from './idb.js';
-import { senhaDaSessao, modoPWA } from './acesso.js';
+import { senhaDaSessao, modoPWA, chaveMestraDaSessao, embrulhoSenha, embrulhoRecuperacao, desembrulharMestra, normalizarCodigo, codigoValido, adotarMestra } from './acesso.js';
 import { avisar } from './avisos.js';
 import { PROVEDORES, estadoNuvem, nuvemConectada, enviarParaNuvem, listarNuvem, baixarDaNuvem } from './nuvem/index.js';
 
@@ -83,7 +83,14 @@ export async function empacotar(dados, { criptografar = configBackup.criptografa
   const env = { sfin: 1, criado_em: new Date().toISOString(), versao_esquema: dados.versao_esquema ?? null, aparelho: (dados.aparelho && dados.aparelho.id) || null, tipo: dados.formato === 'sqlite-bruto' ? 'sqlite-bruto' : 'dados', compressao: null, criptografia: null, dados: null };
   let bytes = new TextEncoder().encode(JSON.stringify(dados));
   if (suporte.gzip) { bytes = await gzip(bytes); env.compressao = 'gzip'; }
-  if (criptografar) {
+  const mestra = chaveMestraDaSessao();
+  if (criptografar && mestra && embrulhoSenha()) {
+    // v2: conteúdo cifrado pela chave mestra; a chave vai embrulhada pela senha atual e pelo código de recuperação.
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const k = await crypto.subtle.importKey('raw', mestra, 'AES-GCM', false, ['encrypt']);
+    bytes = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, bytes));
+    env.criptografia = { alg: 'AES-GCM-256', chave: 'mestra', iv: b64(iv), chaves: { senha: embrulhoSenha(), recuperacao: embrulhoRecuperacao() } };
+  } else if (criptografar) {
     if (!senha) throw new Error('Desbloqueie o app com a senha de acesso para cifrar o backup.');
     if (!suporte.cripto) throw new Error('Este navegador não oferece criptografia. Desligue a criptografia ou use o app instalado (HTTPS).');
     const sal = crypto.getRandomValues(new Uint8Array(16));
@@ -104,11 +111,42 @@ export function lerEnvelope(texto) {
 }
 export const estaCifrado = (env) => !!env.criptografia;
 
+let ultimaMestra = null;
+// Chave mestra do último backup aberto (v2). A tela de acesso a guarda, cifrada por uma chave NÃO-EXTRAÍVEL no IndexedDB,
+// para o aparelho adotá-la ao criar a senha nova depois de restaurar (o mesmo código de recuperação continua valendo).
+export async function guardarMestraParaAdotar() {
+  if (!ultimaMestra) { await kvDel('sf:mestra-tmp'); return; }
+  const k = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, ultimaMestra.mestra));
+  // rec pode vir de um objeto reativo da tela (Proxy): copia em JSON puro para o IndexedDB aceitar.
+  const rec = ultimaMestra.rec ? JSON.parse(JSON.stringify(ultimaMestra.rec)) : null;
+  if (!(await kvSet('sf:mestra-tmp', { k, iv, ct, rec }))) throw new Error('Não foi possível guardar a chave do backup.');
+}
+export async function adotarMestraGuardada() {
+  const t = await kvGet('sf:mestra-tmp');
+  if (!t) return false;
+  try { adotarMestra(new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: t.iv }, t.k, t.ct)), t.rec); } catch { return false; }
+  return true;
+}
+export const descartarMestraGuardada = () => kvDel('sf:mestra-tmp');
 export async function abrirEnvelope(env, senha) {
   let bytes;
   if (typeof env.dados !== 'string') return env.dados;
   bytes = deB64(env.dados);
-  if (env.criptografia) {
+  if (env.criptografia && env.criptografia.chave === 'mestra') {
+    if (!senha) throw new Error('Informe a senha do backup ou o código de recuperação.');
+    const c = env.criptografia;
+    let mestra = await desembrulharMestra(c.chaves && c.chaves.senha, senha);
+    if (!mestra && codigoValido(senha)) mestra = await desembrulharMestra(c.chaves && c.chaves.recuperacao, normalizarCodigo(senha));
+    if (!mestra) throw new Error('Senha ou código de recuperação incorreto para este backup.');
+    try {
+      const k = await crypto.subtle.importKey('raw', mestra, 'AES-GCM', false, ['decrypt']);
+      bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(c.iv) }, k, bytes));
+    } catch { throw new Error('O conteúdo do backup está corrompido.'); }
+    // Guarda para o aparelho adotar a mesma chave (o código de recuperação continua valendo depois de restaurar).
+    ultimaMestra = { mestra, rec: (c.chaves && c.chaves.recuperacao) || null };
+  } else if (env.criptografia) {
     if (!senha) throw new Error('Informe a senha usada neste backup.');
     try {
       const c = env.criptografia;

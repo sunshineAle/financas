@@ -29,7 +29,7 @@ const sub = computed(() => props.t.subcategoria);
     <span class="textos">
       <span class="descricao">{{ t.descricao }}</span>
       <span class="secundario">
-        <span class="cat-mobile">{{ info.nome }}<span class="ponto">·</span></span>
+        <span class="cat-mobile">{{ info.nome }}<template v-if="sub"> › {{ sub }}</template></span><span class="ponto">·</span>
         <IconeBanco :icone="t.conta_icone" :nome="t.conta_nome" :tamanho="14" :padrao="t.cartao ? '💳' : '🏦'" />
         <span class="conta">{{ t.conta_nome }}</span>
         <span v-if="t.cartao" class="chip-mini"><CreditCard :size="11" :stroke-width="2.2" />cartão</span>
@@ -62,12 +62,13 @@ const sub = computed(() => props.t.subcategoria);
 .linha:hover, .linha:focus-visible { background: var(--cor-realce); outline: none; }
 .ic { grid-area: ic; }
 .textos { grid-area: tx; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.descricao { font-size: 15px; font-weight: 600; color: var(--cor-texto); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; line-height: 1.25; }
-.secundario { display: flex; align-items: center; flex-wrap: wrap; row-gap: 2px; gap: 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; white-space: nowrap; }
+.descricao { font-size: 15px; font-weight: 600; color: var(--cor-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; line-height: 1.3; }
+/* Linha de baixo (anotação 34): categoria, conta/cartão e etiquetas numa linha só, cortando com reticências. */
+.secundario { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; white-space: nowrap; overflow: hidden; }
 .conta { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .chip-mini { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--cor-borda); flex: none; }
 .col-cat { display: none; }
-.cat-mobile { display: inline-flex; gap: 5px; flex: none; color: var(--cor-texto); opacity: 0.8; }
+.cat-mobile { display: inline-flex; gap: 5px; flex: 0 1 auto; min-width: 0; color: var(--cor-texto); opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }
 .valor { grid-area: vl; font-family: var(--fonte-display); font-weight: 600; font-size: 15px; white-space: nowrap; text-align: right; }
 .valor.positivo { color: var(--txt-entrada, var(--cor-entrada)); }
 .valor.negativo { color: var(--txt-saida, var(--cor-saida)); }
@@ -82,10 +83,6 @@ const sub = computed(() => props.t.subcategoria);
 .linha.fora-totais .descricao { color: var(--cor-texto-suave); }
 
 @media (min-width: 769px) {
-  .linha { grid-template-columns: 40px minmax(0, 1.6fr) minmax(0, 1fr) 140px 44px; grid-template-areas: 'ic tx ct vl mn'; gap: 16px; }
-  .cat-mobile { display: none; }
-  .col-cat { grid-area: ct; display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 13px; color: var(--cor-texto-suave); }
-  .nome-cat, .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { font-size: 11.5px; opacity: 0.85; }
+  .linha { grid-template-columns: 40px minmax(0, 1fr) minmax(120px, auto) 44px; grid-template-areas: 'ic tx vl mn'; gap: 16px; }
 }
 </style>

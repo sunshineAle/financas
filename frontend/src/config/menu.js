@@ -7,7 +7,7 @@
 // `centro` = botão central do rodapé; `acoes` = opções de lançamento do botão central (+ ou segurar).
 import {
   House, Landmark, ArrowLeftRight, CreditCard, ReceiptText, Target, Ellipsis,
-  ChartColumn, Tags, UserRound, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, BookOpen, Heart, FileUp, CalendarClock,
+  ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock,
 } from 'lucide-vue-next';
 
 export const GRUPOS = [
@@ -42,10 +42,9 @@ export const GRUPOS = [
       { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
       { rota: '/custos-fixos', rotulo: 'Custos fixos', icone: CalendarClock },
       { rota: '/importar', rotulo: 'Importar extrato', rotuloCurto: 'Importar', icone: FileUp },
-      { rota: '/mais/perfil', rotulo: 'Perfil e configurações', rotuloCurto: 'Perfil', icone: UserRound },
-      { rota: '/manual', rotulo: 'Manual', icone: BookOpen },
+      // Perfil fica só no rodapé do menu (avatar + nome) e Configurações logo abaixo dele; o Manual fica em Sobre o app.
       { rota: '/apoie', rotulo: 'Apoie o desenvolvedor', rotuloCurto: 'Apoie', icone: Heart },
-          ],
+    ],
   },
 ];
 
@@ -57,7 +56,7 @@ export const ACOES_LANCAR = [
 ];
 
 // Rotas que "pertencem" a um grupo mesmo não sendo itens dele (ex.: o extrato abre sobre Cartões).
-const EXTRAS = { 'cartao-extrato': 'cartoes', mais: 'mais', regras: 'mais' };
+const EXTRAS = { 'cartao-extrato': 'cartoes', mais: 'mais', regras: 'mais', manual: 'mais' };
 
 export function grupoDaRota(rota) {
   if (rota.name && EXTRAS[rota.name]) return EXTRAS[rota.name];

@@ -1,8 +1,10 @@
 // Senha de acesso NO APARELHO (modo PWA). Não existe servidor: guardamos só um hash PBKDF2 + sal.
-// Recuperação = restaurar um backup (a senha não vai dentro do backup; cria-se uma nova depois).
+// Chave de recuperação (anotação 31): no cadastro o app gera uma CHAVE MESTRA aleatória (cifra os backups) e um CÓDIGO
+// de recuperação (24 caracteres). A chave mestra fica guardada embrulhada duas vezes: pela senha e pelo código. O código
+// substitui a senha: abre o app e os backups e permite criar uma senha nova. Trocar a senha não invalida os backups.
 //   import { configurada, criarSenha, verificarSenha, alterarSenha, senhaDaSessao, bloquear } from './acesso.js';
 import { ref } from 'vue';
-import { kvGet, kvSet } from './idb.js';
+import { kvGet, kvSet, kvLimparTudo } from './idb.js';
 
 export const modoPWA = !!import.meta.env.VITE_PWA;
 
@@ -70,6 +72,7 @@ export function validarNovaSenha(s) {
 export const ehPin = (s) => /^\d+$/.test(s || '');
 
 // Apelido: o único dado de cadastro (sem e-mail, sem servidor). Fica no registro de acesso, neste aparelho.
+export const acessoEhPin = () => !!(registro && registro.pin);
 export const apelidoSalvo = () => (registro && registro.apelido) || '';
 export function validarApelido(a) {
   const t = String(a || '').trim();
@@ -85,7 +88,12 @@ export async function criarSenha(senha, apelido) {
   if (nome) { const e2 = validarApelido(nome); if (e2) throw new Error(e2); }
   const sal = crypto.getRandomValues(new Uint8Array(16));
   const hash = await derivar(senha, sal, ITERACOES);
-  await gravarRegistro({ v: 1, iter: ITERACOES, sal: b64(sal), hash: b64(hash), apelido: nome || undefined, criada_em: new Date().toISOString() });
+  // Mantém a chave mestra que já existe (troca de senha / recuperação); senão, cria uma nova.
+  const mestra = mestraMemoria || aleatorio(32);
+  const novo = mestraMemoria === null;
+  const base = registro && !novo ? { rec: registro.rec, rec_confirmada: registro.rec_confirmada } : {};
+  await gravarRegistro({ v: 2, iter: ITERACOES, sal: b64(sal), hash: b64(hash), apelido: nome || undefined, pin: ehPin(senha), criada_em: (registro && registro.criada_em) || new Date().toISOString(), ...base, ms: await embrulharMestra(mestra, senha) });
+  mestraMemoria = mestra;
   senhaMemoria = senha;
   estadoAcesso.value = { ...estadoAcesso.value, desbloqueado: true };
   await reembrulharBiometria();
@@ -132,6 +140,7 @@ export async function verificarSenha(senha) {
   if (!ok) { registrarFalha(); return false; }
   zerarFalhas();
   senhaMemoria = senha;
+  await abrirMestraComSenha(senha);
   estadoAcesso.value = { ...estadoAcesso.value, desbloqueado: true };
   return true;
 }
@@ -246,6 +255,98 @@ export async function desbloquearComBiometria() {
   if (!(await conferirSenha(senha))) { await desativarBiometria(); throw new Error('A senha mudou. Use a senha ou PIN e ative a biometria de novo.'); }
   zerarFalhas();
   senhaMemoria = senha;
+  await abrirMestraComSenha(senha);
   estadoAcesso.value = { ...estadoAcesso.value, desbloqueado: true };
   return true;
+}
+
+// ---- Chave mestra + código de recuperação ----
+let mestraMemoria = null; // Uint8Array(32) só em memória, durante a sessão
+export const chaveMestraDaSessao = () => mestraMemoria;
+export const codigoRecuperacaoPendente = () => !!registro && !registro.rec_confirmada;
+
+const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem 0/O, 1/I
+export function gerarCodigo() {
+  const b = aleatorio(24);
+  let t = '';
+  for (let i = 0; i < 24; i++) t += ALFABETO[b[i] % 32];
+  return t.match(/.{4}/g).join('-');
+}
+export const normalizarCodigo = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+export const codigoValido = (c) => { const n = normalizarCodigo(c); return n.length === 24 && [...n].every((x) => ALFABETO.includes(x)); };
+
+async function chaveAes(segredo, sal, iter) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(segredo), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: sal, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+// Embrulha a chave mestra com um segredo (senha ou código normalizado). Formato guardado/levado no backup: {sal, iv, ct, iter}.
+export async function embrulharMestra(mestra, segredo, iter = ITERACOES) {
+  const sal = aleatorio(16); const iv = aleatorio(12);
+  const k = await chaveAes(segredo, sal, iter);
+  return { sal: b64(sal), iv: b64(iv), iter, ct: b64(new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, mestra))) };
+}
+export async function desembrulharMestra(emb, segredo) {
+  if (!emb) return null;
+  try {
+    const k = await chaveAes(segredo, deB64(emb.sal), emb.iter || ITERACOES);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(emb.iv) }, k, deB64(emb.ct)));
+  } catch { return null; }
+}
+// Embrulho pelo código, guardado no registro (e levado em cada backup).
+export const embrulhoRecuperacao = () => (registro && registro.rec) || null;
+export const embrulhoSenha = () => (registro && registro.ms) || null;
+
+async function abrirMestraComSenha(senha) {
+  if (!registro) return;
+  if (registro.ms) { mestraMemoria = await desembrulharMestra(registro.ms, senha); if (mestraMemoria) return; }
+  // Cadastro antigo (antes da chave de recuperação): cria a chave mestra agora; o código fica pendente em Perfil › Segurança.
+  mestraMemoria = aleatorio(32);
+  await gravarRegistro({ ...registro, v: 2, ms: await embrulharMestra(mestraMemoria, senha), rec: null, rec_confirmada: false });
+}
+
+// Gera um código NOVO (o anterior deixa de abrir backups futuros; os antigos continuam abrindo com o código antigo).
+export async function gerarNovoCodigo() {
+  if (!mestraMemoria) throw new Error('Desbloqueie o app com a senha antes.');
+  const codigo = gerarCodigo();
+  await gravarRegistro({ ...registro, rec: await embrulharMestra(mestraMemoria, normalizarCodigo(codigo)), rec_confirmada: false });
+  return codigo;
+}
+export async function confirmarCodigoGuardado() { if (registro) await gravarRegistro({ ...registro, rec_confirmada: true }); }
+
+// "Esqueci a senha": o código abre a chave mestra deste aparelho e libera criar uma senha nova.
+export async function entrarComCodigo(codigo) {
+  if (!codigoValido(codigo)) throw new Error('Confira o código: são 24 letras e números (ex.: ABCD-EFGH-…).');
+  const espera = esperaRestante();
+  if (espera > 0) throw new Error(`Muitas tentativas. Aguarde ${espera}s.`);
+  const m = registro && registro.rec ? await desembrulharMestra(registro.rec, normalizarCodigo(codigo)) : null;
+  if (!m) { registrarFalha(); throw new Error(registro && !registro.rec ? 'Este aparelho ainda não tem chave de recuperação. Restaure um backup com o código.' : 'Código de recuperação incorreto.'); }
+  zerarFalhas();
+  mestraMemoria = m;
+  return true;
+}
+// Depois de entrar com o código: cria a senha nova (mantém a chave mestra e o código).
+export async function redefinirSenhaComCodigo(nova) {
+  if (!mestraMemoria) throw new Error('Entre com o código de recuperação primeiro.');
+  const e = validarNovaSenha(nova);
+  if (e) throw new Error(e);
+  await criarSenha(nova);
+}
+// Restauração num aparelho novo: adota a chave mestra e o embrulho do código vindos do backup (o mesmo código continua valendo).
+let adotarRec;
+export function adotarMestra(mestra, rec) { mestraMemoria = mestra; adotarRec = rec || null; }
+// O embrulho do código precisa ser o da MESMA chave mestra: sem código no backup, fica pendente (gerar em Segurança).
+export async function aplicarRecAdotado() {
+  if (adotarRec === undefined || !registro) return;
+  await gravarRegistro({ ...registro, rec: adotarRec, rec_confirmada: !!adotarRec });
+  adotarRec = undefined;
+}
+
+// ---- Apagar dados e redefinir o app ----
+// Apaga o banco, a senha, a biometria, a chave de recuperação e as preferências deste aparelho. Volta à tela de boas-vindas.
+export async function apagarTudo() {
+  try { if (globalThis.__PERSISTENCIA_BANCO && globalThis.__PERSISTENCIA_BANCO.apagar) await globalThis.__PERSISTENCIA_BANCO.apagar(); } catch { /* segue */ }
+  try { await kvLimparTudo(); } catch { /* segue */ }
+  try { Object.keys(localStorage).filter((k) => k.startsWith('sf') || k.startsWith('dagda')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignora */ }
+  try { sessionStorage.clear(); } catch { /* ignora */ }
+  location.replace(location.pathname + location.search);
 }

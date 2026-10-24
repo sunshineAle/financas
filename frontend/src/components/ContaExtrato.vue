@@ -81,8 +81,8 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
 .linha { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 36px; align-items: center; gap: 10px; padding: 10px 0 10px 4px; min-height: 56px; border-radius: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; }
 .linha:hover, .linha:focus-visible { background: var(--cor-realce); outline: none; }
 .textos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.descricao { font-size: 15px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; line-height: 1.25; }
-.secundario { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; }
+.descricao { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; line-height: 1.3; }
+.secundario { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conta { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .chip { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--cor-borda); flex: none; }
 .valor { font-family: var(--fonte-display); font-weight: 600; font-size: 15px; white-space: nowrap; text-align: right; }

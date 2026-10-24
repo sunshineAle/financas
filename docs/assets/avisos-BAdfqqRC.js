@@ -1,1 +1,0 @@
-import{r}from"./reactivity.esm-bundler-Af9mGndF.js";const e=r([]);let u=0;function v(s,{rota:a=null,tipo:o="info",duracao:t=4500}={}){if(e.value.some(n=>n.texto===s))return;const i=++u;e.value.push({id:i,texto:s,rota:a,tipo:o}),setTimeout(()=>l(i),t)}function l(s){e.value=e.value.filter(a=>a.id!==s)}export{e as a,v as b,l as d};

@@ -104,3 +104,10 @@ export function resolverIconeCategoria(valor, tipo = 'saida') {
 
 /** Sempre devolve uma chave válida do tipo (cai em "Geral"). */
 export const chaveFinalCategoria = (valor, tipo = 'saida') => resolverIconeCategoria(valor, tipo) || GERAL[tipoCat(tipo)];
+
+// Ícones das metas (anotação 34): cada emoji gravado na meta aponta para um ícone do set novo em linha.
+export const META_V2 = {
+  '🛡️': 'cat-saida-seguros', '🏖️': 'cat-saida-viagem', '✈️': 'cat-saida-viagem', '🚗': 'cat-saida-manutencao-carro', '🏠': 'cat-saida-casa-decoracao',
+  '🎓': 'cat-saida-faculdade', '💍': 'cat-saida-shows-eventos', '🩺': 'cat-saida-consulta', '🎁': 'cat-saida-presentes', '💼': 'cat-entrada-freelance',
+  '📱': 'cat-saida-celular', '🐷': 'cat-entrada-rendimentos', '🌴': 'cat-saida-hobbies', '🎯': 'cat-saida-geral', '💰': 'cat-entrada-bonus', '🌟': 'cat-entrada-premio',
+};

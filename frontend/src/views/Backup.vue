@@ -1,26 +1,24 @@
 <script setup>
-// Backup e segurança: gerar .sfin (baixar, salvar na pasta da nuvem, compartilhar), lembretes, restaurar,
-// risco de limpeza de cache, bloqueio do app e índices do Bacen. Formato: CONTRATO-SFIN.md.
+// Dados e backup (anotação 34): MESMA estrutura do Restaurar do login. Fazer backup e Restaurar usam os dois botões
+// "Deste aparelho" e "Conectar nuvem" (só Google Drive, OneDrive e Dropbox; nuvem sem chave fica oculta). Formato: CONTRATO-SFIN.md.
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { Download, FolderUp, Share2, FolderCog, ShieldCheck, TriangleAlert, Undo2, RefreshCw, Lock, KeyRound } from 'lucide-vue-next';
+import { ShieldCheck, TriangleAlert, Undo2, CloudUpload, Unlink } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
-import BarraAcoes from '../components/BarraAcoes.vue';
-import BotaoAcao from '../components/BotaoAcao.vue';
-import BackupNuvem from '../components/BackupNuvem.vue';
-import AlterarSenhaAcesso from '../components/AlterarSenhaAcesso.vue';
+import OrigemBackup from '../components/OrigemBackup.vue';
+import NuvemLogo from '../components/NuvemLogo.vue';
+import AvisoSenha from '../components/AvisoSenha.vue';
 import {
-  configBackup, salvarConfig, INTERVALOS, estadoPasta, suporte, ocupado, textoUltimoBackup, diasDesdeUltimo, backupDevido,
-  baixar, compartilhar, salvarNaPasta, escolherPasta, esquecerPasta, carregarPasta, listarDaPasta,
-  lerArquivo, previa, restaurar, desfazerRestauracao, temCopiaDeSeguranca, recarregarApp,
+  configBackup, salvarConfig, INTERVALOS, suporte, ocupado, textoUltimoBackup, diasDesdeUltimo, backupDevido,
+  baixar, compartilhar, lerArquivo, previa, restaurar, desfazerRestauracao, temCopiaDeSeguranca, recarregarApp,
+  PROVEDORES, estadoNuvem, enviarNuvem, listarBackupsNuvem, abrirBackupNuvem,
 } from '../services/backup.js';
+import { conectarNuvem, desconectarNuvem } from '../services/nuvem/index.js';
 import { estadoArmazenamento, riscoArmazenamento } from '../services/armazenamento.js';
-import { modoPWA, bloquear, minutosAutoBloqueio, definirAutoBloqueio } from '../services/acesso.js';
-import { SERIES, getSerie, atualizar, estadoBacen, ultimaAtualizacao, DATA_SNAPSHOT } from '../services/bacen.js';
 import { avisar } from '../services/avisos.js';
 
-// `embutido`: usada dentro do Perfil e configurações (sem título; Segurança e Índices ficam no Perfil).
-const props = defineProps({ embutido: { type: Boolean, default: false } });
+// `embutido`: usada dentro de Dados e backup (sem título próprio).
+defineProps({ embutido: { type: Boolean, default: false } });
 const route = useRoute();
 const msg = ref(''); const erro = ref('');
 const destacar = computed(() => route.query.fazer === '1' || backupDevido());
@@ -28,36 +26,42 @@ const podeCompartilhar = suporte.compartilhar();
 
 async function executar(fn, ok) {
   erro.value = ''; msg.value = '';
-  try { const nome = await fn(); msg.value = ok(nome); avisar(msg.value, { tipo: 'ok' }); }
-  catch (e) { if (e && e.name === 'AbortError') return; erro.value = (e && e.message) || 'Não foi possível concluir.'; }
+  try { const r = await fn(); if (r === undefined) return; msg.value = ok(r); avisar(msg.value, { tipo: 'ok' }); }
+  catch (e) { if (e && (e.name === 'AbortError' || e.codigo === 'cancelado')) return; erro.value = (e && e.message) || 'Não foi possível concluir.'; }
 }
-const fazerBaixar = () => executar(baixar, (n) => `Arquivo ${n} gerado.`);
-const fazerPasta = () => executar(async () => { if (!estadoPasta.nome) await escolherPasta(); return salvarNaPasta(); }, (n) => `Backup salvo na pasta "${estadoPasta.nome}" (${n}).`);
-const fazerCompartilhar = () => executar(compartilhar, () => 'Backup compartilhado.');
-const trocarPasta = () => executar(escolherPasta, (n) => `Pasta "${n}" vinculada.`);
+// Deste aparelho: no celular abre o "Salvar em" (Drive, OneDrive, Dropbox ou outra pasta); no PC baixa o arquivo.
+const salvarAparelho = () => executar(podeCompartilhar ? compartilhar : baixar, (n) => (podeCompartilhar ? 'Backup pronto para salvar.' : `Arquivo ${n} gerado.`));
+const conectadas = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado() && estadoNuvem[id].conectado));
+const salvarNuvem = (id) => executar(async () => {
+  if (!estadoNuvem[id].conectado || estadoNuvem[id].precisaReconectar) await conectarNuvem(id);
+  configBackup.ultimoDestino = id; salvarConfig();
+  return enviarNuvem(id);
+}, (n) => `Backup enviado ao ${PROVEDORES[id].nome} (${n}).`);
+async function desconectar(id) { await desconectarNuvem(id); if (configBackup.ultimoDestino === id) { configBackup.ultimoDestino = null; salvarConfig(); } }
+const fmt = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
 
-const semCripto = computed(() => !configBackup.criptografar);
 function mudou() { salvarConfig(); }
-const abrirSenha = ref(false);
-const autoMin = ref(minutosAutoBloqueio());
-function mudarAuto() { definirAutoBloqueio(Number(autoMin.value)); }
+const semCripto = computed(() => !configBackup.criptografar);
 
 // ---- restaurar ----
 const arq = ref(null); const senhaArq = ref(''); const pre = ref(null); const modo = ref('substituir');
-const trabalhando = ref(false); const copiaEm = ref(null); const daPasta = ref([]);
-async function escolherArq(ev) {
-  erro.value = ''; pre.value = null; arq.value = null;
-  const f = ev.target.files && ev.target.files[0]; if (!f) return;
-  await abrirArquivo(f);
-}
+const trabalhando = ref(false); const copiaEm = ref(null);
+const listaNuvem = ref([]); const listaDe = ref('');
 async function abrirArquivo(f) {
+  erro.value = ''; pre.value = null; arq.value = null; listaNuvem.value = [];
   try { await aceitarLido(await lerArquivo(f)); } catch (e) { erro.value = e.message; }
 }
 async function aceitarLido(lido) {
-  erro.value = ''; pre.value = null; arq.value = lido;
+  erro.value = ''; pre.value = null; arq.value = lido; senhaArq.value = '';
   if (!lido.cifrado) await verPrevia();
-  document.getElementById('sec-restaurar')?.scrollIntoView({ behavior: 'smooth' });
 }
+const restaurarNuvem = (id) => executar(async () => {
+  if (!estadoNuvem[id].conectado || estadoNuvem[id].precisaReconectar) await conectarNuvem(id);
+  listaNuvem.value = await listarBackupsNuvem(id); listaDe.value = id;
+  if (!listaNuvem.value.length) throw new Error(`Não há backups do app no ${PROVEDORES[id].nome}.`);
+  return undefined;
+}, () => '');
+const escolherDaNuvem = (item) => executar(async () => { const lido = await abrirBackupNuvem(listaDe.value, item); listaNuvem.value = []; await aceitarLido(lido); return undefined; }, () => '');
 async function verPrevia() {
   erro.value = ''; trabalhando.value = true;
   try { pre.value = await previa(arq.value.env, senhaArq.value); } catch (e) { erro.value = e.message; } finally { trabalhando.value = false; }
@@ -71,129 +75,75 @@ async function desfazer() {
   erro.value = ''; trabalhando.value = true;
   try { await desfazerRestauracao(); await recarregarApp(); } catch (e) { erro.value = e.message; } finally { trabalhando.value = false; }
 }
-async function verPasta() {
-  erro.value = '';
-  try { daPasta.value = await listarDaPasta(); if (!daPasta.value.length) erro.value = 'Não há arquivos .sfin nesta pasta.'; } catch (e) { erro.value = e.message; }
-}
-async function usarDaPasta(i) { daPasta.value = []; await abrirArquivo(i.file); }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada', investimentos_conectados: 'investimentos' };
 const resumo = computed(() => pre.value ? Object.entries(pre.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
+const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
 
-// ---- Bacen ----
-const indices = ref([]);
-const fmtData = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-async function carregarIndices() {
-  const out = [];
-  for (const id of ['selic_meta', 'cdi_diaria', 'ipca_mensal', 'ipca_12m']) {
-    const s = await getSerie(id);
-    const u = s.dados[s.dados.length - 1];
-    out.push({ id, nome: s.nome, unidade: s.unidade, valor: u ? u.valor : null, data: u ? u.data : null, origem: s.origem });
-  }
-  indices.value = out;
-}
-async function atualizarAgora() { await atualizar({ forcar: true }); await carregarIndices(); }
-const fmtNum = (v) => v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
-
-onMounted(async () => {
-  await carregarPasta();
-  copiaEm.value = await temCopiaDeSeguranca();
-  await ultimaAtualizacao();
-  await carregarIndices();
-  if (route.query.restaurar === '1') document.getElementById('sec-restaurar')?.scrollIntoView({ behavior: 'smooth' });
-});
+onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
 </script>
 
 <template>
   <div class="pagina" :class="{ embutido }">
-    <h1 v-if="!embutido" class="titulo-pagina">Backup e segurança</h1>
+    <h1 v-if="!embutido" class="titulo-pagina">Dados e backup</h1>
 
     <p v-if="riscoArmazenamento" class="faixa alerta" role="alert"><TriangleAlert :size="18" /><span>{{ riscoArmazenamento }}</span></p>
     <p v-if="erro" class="faixa erro" role="alert"><TriangleAlert :size="18" /><span>{{ erro }}</span></p>
     <p v-if="msg" class="faixa ok"><ShieldCheck :size="18" /><span>{{ msg }}</span></p>
 
-    <CardPadrao titulo="Fazer backup agora" :subtitulo="textoUltimoBackup()">
+    <CardPadrao titulo="Fazer backup" :subtitulo="textoUltimoBackup()">
       <p v-if="destacar && configBackup.intervalo !== 'desligado'" class="dica forte">Hora do backup: já faz {{ Math.floor(diasDesdeUltimo()) }} dia(s).</p>
-      <p class="dica">O backup é um arquivo <b>.sfin</b> com todos os seus dados, {{ semCripto ? 'sem criptografia' : 'cifrado com a sua senha de acesso' }}. Guarde-o numa pasta da sua nuvem (Drive, OneDrive, Proton, Mega).</p>
-      <template #rodape>
-        <BarraAcoes compacto>
-          <BotaoAcao compacto :icone="FolderUp" :rotulo="estadoPasta.nome ? 'Salvar na pasta' : 'Escolher pasta'" tema="investimento" :destaque="destacar" :disabled="!suporte.pasta || ocupado" :titulo="suporte.pasta ? '' : 'Este navegador não permite escolher pasta'" @click="fazerPasta" />
-          <BotaoAcao compacto :icone="Download" rotulo="Baixar arquivo" tema="entrada" :disabled="ocupado" @click="fazerBaixar" />
-          <BotaoAcao v-if="podeCompartilhar" compacto :icone="Share2" rotulo="Compartilhar" tema="meta" :disabled="ocupado" @click="fazerCompartilhar" />
-        </BarraAcoes>
-      </template>
-    </CardPadrao>
-
-    <BackupNuvem @escolhido="aceitarLido" />
-
-    <CardPadrao titulo="Pasta da nuvem">
-      <p v-if="estadoPasta.nome" class="dica">Pasta vinculada: <b>{{ estadoPasta.nome }}</b> <span v-if="estadoPasta.permissao && estadoPasta.permissao !== 'granted'">(o navegador vai pedir permissão no próximo backup)</span></p>
-      <p v-else class="dica">Nenhuma pasta vinculada. Escolha uma pasta que a sua nuvem sincroniza e o app salva os arquivos lá.</p>
-      <div class="linha-botoes">
-        <button v-if="suporte.pasta" type="button" class="b-sec" @click="trocarPasta"><FolderCog :size="16" /> {{ estadoPasta.nome ? 'Trocar pasta' : 'Escolher pasta' }}</button>
-        <button v-if="estadoPasta.nome" type="button" class="b-sec" @click="esquecerPasta">Desvincular</button>
-      </div>
-      <p v-if="!suporte.pasta" class="dica">Este navegador não permite gravar numa pasta. Use "Baixar arquivo" (e mova para a nuvem) ou "Compartilhar".</p>
-    </CardPadrao>
-
-    <CardPadrao titulo="Lembrete e criptografia">
-      <label class="campo-linha"><span>Lembrar de fazer backup</span>
-        <select v-model="configBackup.intervalo" @change="mudou"><option v-for="i in INTERVALOS" :key="i.id" :value="i.id">{{ i.rotulo }}</option></select>
-      </label>
-      <label class="campo-linha"><span>Salvar sozinho na pasta quando der a hora</span>
-        <input v-model="configBackup.automatico" type="checkbox" :disabled="!estadoPasta.nome" @change="mudou" />
-      </label>
-      <label class="campo-linha"><span>Backups mantidos na pasta</span>
-        <select v-model.number="configBackup.manter" @change="mudou"><option :value="5">5</option><option :value="10">10</option><option :value="30">30</option></select>
-      </label>
-      <label class="campo-linha"><span>Cifrar com a senha de acesso</span>
-        <input v-model="configBackup.criptografar" type="checkbox" @change="mudou" />
-      </label>
-      <p v-if="semCripto" class="dica alerta-txt">Sem criptografia, quem tiver o arquivo lê todos os seus dados financeiros. Recomendamos manter ligada.</p>
-      <p class="dica">Quando o app abre (ou volta ao primeiro plano) e passou o prazo, ele avisa. Se houver pasta com permissão, salva sozinho.</p>
+      <OrigemBackup modo="salvar" :ocupado="ocupado || !!estadoNuvem.ocupado" :sub-aparelho="podeCompartilhar ? 'salvar em uma pasta ou app de nuvem' : 'baixar o arquivo .sfin'" @aparelho="salvarAparelho" @nuvem="salvarNuvem" />
+      <ul v-if="conectadas.length" class="conectadas">
+        <li v-for="id in conectadas" :key="id" :data-prov="id">
+          <NuvemLogo :id="id" :tamanho="22" />
+          <span><b>{{ PROVEDORES[id].nome }}</b><small>{{ estadoNuvem[id].ultimoEnvio ? 'último envio ' + fmt(estadoNuvem[id].ultimoEnvio) : 'conectado' }}<template v-if="estadoNuvem[id].ultimoErro"> · erro: {{ estadoNuvem[id].ultimoErro.mensagem }}</template></small></span>
+          <button type="button" class="icone-b" :aria-label="'Enviar agora ao ' + PROVEDORES[id].nome" :disabled="!!estadoNuvem.ocupado" @click="salvarNuvem(id)"><CloudUpload :size="18" /></button>
+          <button type="button" class="icone-b" :aria-label="'Desconectar ' + PROVEDORES[id].nome" @click="desconectar(id)"><Unlink :size="18" /></button>
+        </li>
+      </ul>
     </CardPadrao>
 
     <CardPadrao id="sec-restaurar" titulo="Restaurar backup" subtitulo="Substitui ou mescla com os dados deste aparelho">
-      <label class="campo-col"><span>Arquivo .sfin</span><input type="file" accept=".sfin,application/octet-stream" @change="escolherArq" /></label>
-      <div v-if="estadoPasta.nome" class="linha-botoes"><button type="button" class="b-sec" @click="verPasta">Escolher da pasta "{{ estadoPasta.nome }}"</button></div>
-      <ul v-if="daPasta.length" class="lista-pasta"><li v-for="i in daPasta" :key="i.nome"><button type="button" @click="usarDaPasta(i)">{{ i.nome }}</button></li></ul>
+      <OrigemBackup modo="restaurar" :ocupado="trabalhando || !!estadoNuvem.ocupado" @arquivo="abrirArquivo" @nuvem="restaurarNuvem" />
+      <ul v-if="listaNuvem.length" class="lista-n">
+        <li v-for="i in listaNuvem" :key="i.id"><button type="button" data-backup-item @click="escolherDaNuvem(i)"><span>{{ i.nome }}</span><small>{{ kb(i.tamanho) }}</small></button></li>
+      </ul>
+      <p v-if="arq" class="dica">Arquivo: <b>{{ arq.nome }}</b></p>
       <template v-if="arq && arq.cifrado">
-        <label class="campo-col"><span>Senha usada no backup</span><input v-model="senhaArq" type="password" autocomplete="off" @keyup.enter="verPrevia" /></label>
+        <label class="campo-col"><span>Senha do backup ou código de recuperação</span><input v-model="senhaArq" type="password" autocomplete="off" @keyup.enter="verPrevia" /></label>
         <div class="linha-botoes"><button type="button" class="b-sec" :disabled="!senhaArq || trabalhando" @click="verPrevia">Abrir backup</button></div>
       </template>
       <div v-if="pre" class="previa">
         <b>Este backup contém</b>
         <ul><li v-for="r in resumo" :key="r">{{ r }}</li><li v-if="!resumo.length">Nenhum registro</li></ul>
-        <small>Criado em {{ fmtData(pre.criado_em) }}</small>
+        <small>Criado em {{ fmt(pre.criado_em) }}</small>
         <div class="modo">
           <label><input v-model="modo" type="radio" value="substituir" /> <b>Substituir</b> os dados deste aparelho (guarda uma cópia de segurança antes)</label>
           <label><input v-model="modo" type="radio" value="mesclar" /> <b>Mesclar</b>: junta com o que já existe (vale o registro mais recente)</label>
         </div>
         <button type="button" class="b-prim" :disabled="trabalhando || ocupado" @click="restaurarAgora">{{ trabalhando ? 'Restaurando…' : 'Restaurar agora' }}</button>
       </div>
-      <button v-if="copiaEm" type="button" class="b-sec" :disabled="trabalhando" @click="desfazer"><Undo2 :size="16" /> Desfazer última restauração ({{ fmtData(copiaEm) }})</button>
+      <button v-if="copiaEm" type="button" class="b-sec" :disabled="trabalhando" @click="desfazer"><Undo2 :size="16" /> Desfazer última restauração ({{ fmt(copiaEm) }})</button>
     </CardPadrao>
 
-    <CardPadrao titulo="Armazenamento do aparelho">
-      <p class="dica">Proteção contra limpeza do navegador: <b>{{ estadoArmazenamento.persistente === true ? 'ativa' : estadoArmazenamento.persistente === false ? 'não concedida' : 'indisponível neste navegador' }}</b>.
-        <span v-if="estadoArmazenamento.usoMB != null"> Em uso: {{ estadoArmazenamento.usoMB }} MB.</span></p>
-      <p v-if="estadoArmazenamento.persistente !== true" class="dica">Instale o app na tela inicial (menu do navegador → Instalar) e mantenha backups em dia.</p>
-    </CardPadrao>
-
-    <CardPadrao v-if="modoPWA && !embutido" titulo="Segurança do app">
-      <label class="campo-linha"><span>Bloquear ao ficar fora do app por</span>
-        <select v-model.number="autoMin" @change="mudarAuto"><option :value="0">Nunca</option><option :value="1">1 min</option><option :value="5">5 min</option><option :value="15">15 min</option><option :value="60">1 hora</option></select>
+    <CardPadrao titulo="Lembrete e criptografia">
+      <label class="campo-linha"><span>Lembrar de fazer backup</span>
+        <select v-model="configBackup.intervalo" @change="mudou"><option v-for="i in INTERVALOS" :key="i.id" :value="i.id">{{ i.rotulo }}</option></select>
       </label>
-      <div class="linha-botoes"><button type="button" class="b-sec" @click="bloquear"><Lock :size="16" /> Bloquear agora</button><button type="button" class="b-sec" @click="abrirSenha = true"><KeyRound :size="16" /> Alterar senha de acesso</button></div>
-      <AlterarSenhaAcesso :aberto="abrirSenha" @fechar="abrirSenha = false" />
+      <label v-if="conectadas.length" class="campo-linha"><span>Enviar sozinho à nuvem quando der a hora</span>
+        <input v-model="configBackup.automatico" type="checkbox" @change="mudou" />
+      </label>
+      <label v-if="conectadas.length" class="campo-linha"><span>Backups mantidos na nuvem</span>
+        <select v-model.number="configBackup.manter" @change="mudou"><option :value="5">5</option><option :value="10">10</option><option :value="30">30</option></select>
+      </label>
+      <label class="campo-linha"><span>Cifrar com a senha de acesso</span>
+        <input v-model="configBackup.criptografar" type="checkbox" @change="mudou" />
+      </label>
+      <p v-if="semCripto" class="dica alerta-txt">Sem criptografia, quem tiver o arquivo lê todos os seus dados financeiros. Recomendamos manter ligada.</p>
+      <AvisoSenha v-else />
     </CardPadrao>
 
-    <CardPadrao v-if="!embutido" titulo="Índices do Banco Central" :subtitulo="estadoBacen.ultima ? 'Atualizado em ' + fmtData(estadoBacen.ultima) : 'Valores de reserva (aproximados, de ' + DATA_SNAPSHOT.split('-').reverse().join('/') + ')'">
-      <ul class="indices">
-        <li v-for="i in indices" :key="i.id"><span>{{ i.nome }}</span><b>{{ fmtNum(i.valor) }} <small>{{ i.unidade }}</small></b><em v-if="i.origem === 'snapshot'">snapshot</em></li>
-      </ul>
-      <p v-if="estadoBacen.erro" class="dica">{{ estadoBacen.erro }}</p>
-      <div class="linha-botoes"><button type="button" class="b-sec" :disabled="estadoBacen.atualizando" @click="atualizarAgora"><RefreshCw :size="16" /> {{ estadoBacen.atualizando ? 'Atualizando…' : 'Atualizar agora' }}</button></div>
-    </CardPadrao>
+    <p class="dica rodape-arm">Proteção contra limpeza do navegador: <b>{{ estadoArmazenamento.persistente === true ? 'ativa' : estadoArmazenamento.persistente === false ? 'não concedida' : 'indisponível' }}</b><span v-if="estadoArmazenamento.usoMB != null"> · {{ estadoArmazenamento.usoMB }} MB em uso</span>.<span v-if="estadoArmazenamento.persistente !== true"> Instale o app e mantenha backups em dia.</span></p>
   </div>
 </template>
 
@@ -231,4 +181,16 @@ select, .campo-col input { font-family: var(--fonte-texto); font-size: 14.5px; p
 .indices li span { flex: 1; color: var(--cor-texto-suave); }
 .indices small { font-weight: 400; color: var(--cor-texto-suave); }
 .indices em { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--cor-realce); color: var(--cor-texto-suave); }
+.conectadas { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.conectadas li { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 10px; border-radius: 12px; border: 1px solid var(--cor-borda); }
+.conectadas li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.conectadas b { font-size: 14px; }
+.conectadas small { font-size: 12px; color: var(--cor-texto-suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icone-b { width: 40px; height: 40px; border-radius: 10px; border: none; background: none; color: var(--cor-texto-suave); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.icone-b:hover:not(:disabled) { background: var(--cor-realce); color: var(--cor-texto); }
+.lista-n { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; }
+.lista-n button { width: 100%; display: flex; justify-content: space-between; gap: 8px; text-align: left; min-height: 40px; align-items: center; padding: 0 10px; border-radius: 10px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); font-size: 13.5px; cursor: pointer; }
+.lista-n small { color: var(--cor-texto-suave); }
+.rodape-arm { text-align: center; font-size: 12px; }
+#sec-restaurar :deep(.origem), .previa { margin-bottom: 8px; }
 </style>

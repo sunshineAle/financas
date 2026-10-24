@@ -28,6 +28,7 @@ import TransferirCorretoraModal from '../components/TransferirCorretoraModal.vue
 import ReservasAuto from '../components/ReservasAuto.vue';
 import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Landmark } from 'lucide-vue-next';
 import { resolverChave, CATALOGO, ESCOLHAS } from '../utils/icones.js';
+import { META_V2, iconeCat } from '../utils/iconesCategoria.js';
 import { api, carregarCdi, comCdi, infoCdi, dataHoraBR, moeda, numeroBR } from '../services/investimentos.js';
 
 const router = useRouter();
@@ -125,10 +126,10 @@ const iconesForm = computed(() => {
   const vistos = new Set();
   const lista = [];
   for (const e of reserva.value?.icones_meta || []) {
-    const chave = resolverChave(e, 'meta') || e;
+    const chave = META_V2[e] || resolverChave(e, 'meta') || e;
     if (vistos.has(chave)) continue;
     vistos.add(chave);
-    lista.push({ emoji: e, chave, rotulo: CATALOGO[chave]?.rotulo || '' });
+    lista.push({ emoji: e, chave, rotulo: CATALOGO[chave]?.rotulo || iconeCat(chave)?.label || '' });
   }
   const pos = (c) => { const k = ESCOLHAS.meta.indexOf(c); return k < 0 ? 99 : k; };
   return lista.sort((a, b) => pos(a.chave) - pos(b.chave));

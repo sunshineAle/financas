@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { LogOut, Sun, Moon, SunMoon } from 'lucide-vue-next';
+import { LogOut, Sun, Moon, SunMoon, Settings } from 'lucide-vue-next';
 import BarraRodape from './BarraRodape.vue';
 import AvisoToast from './AvisoToast.vue';
 import LancamentoModal from './LancamentoModal.vue';
@@ -80,10 +80,14 @@ onMounted(async () => {
       </nav>
 
       <div class="rodape-sidebar">
-        <div class="usuario" title="Conta atual">
+        <router-link to="/mais/perfil" class="usuario" :class="{ ativo: route.path === '/mais/perfil' }" title="Perfil">
           <AvatarMini :inicial="inicialDe(usuario)" :tamanho="32" />
           <span class="usuario-nome rotulo-texto">{{ nomeExibido(usuario) }}</span>
-        </div>
+        </router-link>
+        <router-link to="/mais" class="item-nav item-config" :class="{ ativo: route.path === '/mais' || (route.name === 'mais-secao' && route.path !== '/mais/perfil') || route.name === 'manual' }" title="Configurações">
+          <Settings :size="20" :stroke-width="1.8" class="icone-nav" />
+          <span class="rotulo-texto">Configurações</span>
+        </router-link>
         <button type="button" class="botao-tema" @click="alternarTema" :title="ROTULO_TEMA[modoTema]" :aria-label="ROTULO_TEMA[modoTema]">
           <component :is="ICONE_TEMA[modoTema]" :size="20" :stroke-width="1.8" class="icone-nav" />
           <span class="rotulo-texto">{{ ROTULO_TEMA[modoTema] }}</span>
@@ -98,7 +102,7 @@ onMounted(async () => {
     <main class="conteudo">
       <TopoApp v-if="comTopo" :usuario="usuario" />
       <AvisoArmazenamento v-if="route.name === 'dashboard'" />
-      <BotaoVoltar v-if="ehCelular && ehTelaInternaDoMais(route)" para="/mais" />
+      <BotaoVoltar v-if="ehTelaInternaDoMais(route) && (ehCelular || route.name === 'mais-secao' || route.name === 'manual')" para="/mais" :rotulo="ehCelular ? 'Voltar' : 'Configurações'" />
       <div :key="chaveTela" class="tela"><slot /></div>
     </main>
 
@@ -204,7 +208,9 @@ onMounted(async () => {
   border-top: 1px solid var(--cor-borda);
 }
 
-.usuario { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 10px; text-decoration: none; min-width: 0; }
+.usuario { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 10px; text-decoration: none; min-width: 0; color: inherit; }
+.usuario:hover, .usuario.ativo { background: var(--cor-realce); }
+.usuario.ativo .usuario-nome { color: var(--cor-texto); font-weight: 600; }
 .usuario-nome {
   font-size: 13px;
   color: var(--cor-texto-suave);

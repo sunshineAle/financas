@@ -9,6 +9,8 @@ import dividas from '../../../backend/src/routes/dividas.js';
 import categorias from '../../../backend/src/routes/categorias.js';
 import transacoes from '../../../backend/src/routes/transacoes.js';
 import reserva from '../../../backend/src/routes/reserva.js';
+import investimentos from '../../../backend/src/routes/investimentos.js';
+import regras from '../../../backend/src/routes/regras.js';
 import relatorios from '../../../backend/src/routes/relatorios.js';
 import configuracoes from '../../../backend/src/routes/configuracoes.js';
 import cartoes from '../../../backend/src/routes/cartoes.js';
@@ -32,11 +34,13 @@ const montagem = [
   ['/api/open-finance', openFinance],
   ['/api/transacoes', transacoes],
   ['/api/reserva', reserva],
+  ['/api/investimentos', investimentos],
   ['/api/relatorios', relatorios],
   ['/api/configuracoes', configuracoes],
   ['/api/cartoes', cartoes],
   ['/api/importacao', importacao],
   ['/api/custos-fixos', custosFixos],
+  ['/api/regras', regras],
 ];
 if (backup) montagem.push(['/api/backup', backup]);
 
