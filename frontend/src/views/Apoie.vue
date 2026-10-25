@@ -32,7 +32,7 @@ const paragrafos = computed(() => String(TEXTO_INSTITUCIONAL || '').split(/\n\s*
 </template>
 
 <style scoped>
-.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .intro { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 4px 8px; }
 .intro p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--cor-texto); }

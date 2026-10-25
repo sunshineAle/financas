@@ -1,4 +1,5 @@
 <script setup>
+import { iconeDoItem } from '../utils/iconesCategoria.js';
 // Extrato da conta agrupado por data (visão anual: por mês). Linhas no padrão da lista de Transações:
 // ícone da categoria, descrição, categoria, valor com sinal e menu ⋮.
 import { computed } from 'vue';
@@ -41,7 +42,9 @@ const grupos = computed(() => {
 });
 const catDe = (t) => props.categorias.find((c) => c.id === t.categoria_id);
 const nomeCat = (t) => t.categoria_nome || t.categoria_receita || 'Sem categoria';
-const iconeDe = (t) => (t.valor < 0 ? catDe(t)?.icone : null) || '';
+// Anotação 37: ícone do item (escolhido ou reconhecido pela descrição) antes do ícone da categoria; resgate com ícone próprio.
+const iconeDe = (t) => (/^reserva_/.test(String(t.tipo_mov || '')) ? (t.valor > 0 ? 'cat-entrada-resgate' : 'cat-grupo-financas') : '')
+  || t.icone || (t.valor < 0 ? iconeDoItem(t.descricao, 'saida') : null) || (t.valor < 0 ? catDe(t)?.icone : null) || '';
 const corDe = (t) => (t.valor < 0 ? catDe(t)?.cor : '') || '';
 const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
 </script>

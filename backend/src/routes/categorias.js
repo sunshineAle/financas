@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(exigirAutenticacao);
 
 // ---- Categorias de receita (entradas) ----
-const { listarCategoriasReceita, garantirGeralDespesa, ehGeral } = require('../utils/categoriasReceita');
+const { listarCategoriasReceita, garantirGeralDespesa, garantirPadraoDespesa, ehGeral } = require('../utils/categoriasReceita');
 
 router.get('/receitas', (req, res) => res.json(listarCategoriasReceita(req.usuario.id)));
 
@@ -53,6 +53,7 @@ router.delete('/receitas/:id', (req, res) => {
 });
 
 router.get('/', (req, res) => {
+  garantirPadraoDespesa(req.usuario.id);
   garantirGeralDespesa(req.usuario.id);
   const categorias = db
     .prepare('SELECT * FROM categorias_orcamento WHERE usuario_id = ? AND excluido_em IS NULL ORDER BY criado_em ASC, rowid ASC')

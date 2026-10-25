@@ -343,9 +343,8 @@ onMounted(() => { carregar(); carregarFixos(); });
 </template>
 
 <style scoped>
-.pagina { padding: 24px 40px 40px; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; min-height: 60vh; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); min-height: 60vh; }
 .conteudo-mes { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
 .txt-sobrou { font-size: 12.5px; opacity: 0.92; }
 .topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; }

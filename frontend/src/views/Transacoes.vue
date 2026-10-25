@@ -1,4 +1,6 @@
 <script setup>
+import CampoIconeItem from '../components/CampoIconeItem.vue';
+import ReservasAuto from '../components/ReservasAuto.vue';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
@@ -106,8 +108,9 @@ async function confirmarEstorno() {
   await Promise.all([carregar(), carregarApoio()]);
 }
 const podeEstornar = (t) => !t.tipo_mov && !t.ignorada && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
-const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia');
-const rotuloMov = { transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada' };
+const ehReserva = (t) => /^reserva_|^transferencia_corretora$/.test(String(t.tipo_mov || ''));
+const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia') && !ehReserva(t);
+const rotuloMov = { reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada' };
 async function desfazerMov(t) {
   fecharMenu();
   if (!confirm(ehTransf(t) ? 'Desfazer esta transferência? Os saldos das duas contas voltam ao que eram.' : 'Desfazer este estorno? A despesa volta a contar nos totais.')) return;
@@ -203,7 +206,7 @@ async function alternarIgnorar(t) {
 
 function irCartao(t) { router.push({ name: 'cartao-extrato', params: { id: t.cartao_id } }); }
 const editando = ref(null);
-const formEdicao = ref({ tipo: 'saida', valor: '', contaId: '', descricao: '', data: '', categoriaId: '', categoriaReceita: '', subcategoria: '' });
+const formEdicao = ref({ tipo: 'saida', valor: '', contaId: '', descricao: '', data: '', categoriaId: '', categoriaReceita: '', subcategoria: '', icone: '' });
 // Nas lançadas à mão o tipo pode mudar no próprio pop-up; nas do banco ele é fixo
 const edicaoEhSaida = computed(() => (editando.value ? (editando.value.origem === 'manual' ? formEdicao.value.tipo === 'saida' : editando.value.valor < 0) : true));
 watch(() => [formEdicao.value.tipo, formEdicao.value.categoriaId, formEdicao.value.categoriaReceita], ([tp, c, r]) => {
@@ -220,7 +223,7 @@ function abrirEdicao(t) {
     carregarSugestoes(t.categoria_id ?? '', '');
     return;
   }
-  formEdicao.value = { tipo: t.valor < 0 ? 'saida' : 'entrada', valor: Math.abs(t.valor), contaId: t.conta_id, descricao: t.descricao, data: String(t.data).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: t.categoria_receita || '', subcategoria: t.subcategoria || '' };
+  formEdicao.value = { tipo: t.valor < 0 ? 'saida' : 'entrada', valor: Math.abs(t.valor), contaId: t.conta_id, descricao: t.descricao, data: String(t.data).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: t.categoria_receita || '', subcategoria: t.subcategoria || '', icone: t.icone || '' };
   carregarSugestoes(t.categoria_id ?? '', t.categoria_id ? '' : (t.categoria_receita || ''));
 }
 // Ao corrigir a categoria, sugere guardar a correção como regra ("Padaria do José" → Mercado).
@@ -259,7 +262,7 @@ async function salvarEdicao() {
     await Promise.all([carregar(), carregarApoio()]);
     return;
   }
-  const corpo = { subcategoria: f.subcategoria };
+  const corpo = { subcategoria: f.subcategoria, icone: f.icone || '' };
   if (t.origem === 'manual') {
     Object.assign(corpo, { descricao: f.descricao, data: f.data, tipo: f.tipo, valor: Number(f.valor), contaId: f.contaId });
   }
@@ -352,6 +355,8 @@ const REGEX_FATURA = /pagamento\s+(de\s+)?fatura|pgto\.?\s+fatura/i;
 const REGEX_TRANSF = /transfer[eê]ncia\s+(entre\s+contas|interna|propria|própria)/i;
 function infoDe(t) {
   if (ehTransf(t)) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  // Anotação 38: Guardar/Resgatar (Caixinha, Porquinho, CDB) e transferência para corretora: dinheiro do usuário mudando de lugar.
+  if (ehReserva(t)) return { chave: 'neutra-reserva', nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
   if (t.tipo_mov) return { chave: 'neutra-estorno', nome: 'Estornos', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (REGEX_FATURA.test(t.descricao || '')) return { chave: 'neutra-fatura', nome: 'Pagamento de fatura', cor: null, icone: null, neutra: true, tipoNeutro: 'fatura' };
   if (REGEX_TRANSF.test(t.descricao || '')) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
@@ -422,6 +427,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 
 <template>
   <div class="pagina">
+    <ReservasAuto @decidido="carregar" />
     <CabecalhoPagina titulo="Transações" cor="var(--entrada-cobalto-medio)">
     <template #corpo>
     <div v-deslizar-mes class="area-mes">
@@ -536,7 +542,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
       <button type="button" @click="abrirEdicao(menu.t)">Editar</button>
       <button v-if="!menu.t.cartao && !menu.t.tipo_mov" type="button" @click="alternarIgnorar(menu.t)">{{ menu.t.ignorada ? 'Reativar' : 'Ignorar' }}</button>
       <button v-if="podeEstornar(menu.t)" type="button" @click="abrirEstorno(menu.t)">Estornar / devolver</button>
-      <button v-if="menu.t.tipo_mov" type="button" class="perigo" @click="desfazerMov(menu.t)">{{ ehTransf(menu.t) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
+      <button v-if="menu.t.tipo_mov && !ehReserva(menu.t)" type="button" class="perigo" @click="desfazerMov(menu.t)">{{ ehTransf(menu.t) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
       <button v-else-if="menu.t.origem === 'manual'" type="button" class="perigo" @click="fecharMenu(); apagar(menu.t)">Apagar</button>
     </div>
 
@@ -568,6 +574,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <CampoCategoria v-if="edicaoEhSaida" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
         <CampoCategoria v-else :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
         <CampoTexto v-model="formEdicao.subcategoria" rotulo="Subcategoria" maxlength="80" list="sugestoes-sub" autocomplete="off" placeholder="Ex: Hortifruti, Uber do trabalho" />
+        <CampoIconeItem v-if="!editando.cartao" v-model="formEdicao.icone" :tipo="formEdicao.tipo" :descricao="formEdicao.descricao" />
       </template>
     </FormularioModal>
     <datalist id="sugestoes-sub"><option v-for="s in sugestoesSub" :key="s" :value="s"></option></datalist>
@@ -591,10 +598,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 <style scoped>
 .pagina {
   --txt-entrada: var(--entrada-royal-claro); --txt-saida: var(--saida-carmim-claro);
-  padding: 24px 40px 40px; max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;
+  padding: 0 0 var(--espaco-fim); max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao);
 }
 :global(:root[data-theme='light']) .pagina { --txt-entrada: var(--entrada-royal-medio); --txt-saida: var(--saida-carmim-medio); }
-@media (max-width: 768px) { .pagina { padding: 16px 16px 28px; gap: 14px; } }
 
 .area-mes { display: flex; flex-direction: column; gap: 16px; min-width: 0; touch-action: pan-y; }
 

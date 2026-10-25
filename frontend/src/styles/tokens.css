@@ -211,3 +211,15 @@ body {
 .tema-meta { --tema-degrade: var(--degrade-meta-ativo); --tema-cor: var(--cor-meta); --tema-fundo: var(--cor-meta-fundo); }
 .tema-investimento { --tema-degrade: var(--degrade-investimento-ativo); --tema-cor: var(--cor-investimento); --tema-fundo: var(--cor-investimento-fundo); }
 .tema-neutro { --tema-degrade: var(--degrade-neutro); --tema-cor: var(--cor-primaria); --tema-fundo: var(--cor-realce); }
+
+/* ==========================================================================
+   ESPAÇAMENTO ÚNICO (anotação 36): uma margem lateral e uma escala vertical para todas as páginas.
+   ========================================================================== */
+:root {
+  --margem-tela: 32px;      /* borda da tela -> cards (PC) */
+  --espaco-topo: 20px;      /* topo -> primeiro elemento */
+  --espaco-secao: 12px;     /* entre título, filtro/abas e cards */
+  --espaco-fim: 32px;       /* fim da página */
+}
+@media (max-width: 900px) { :root { --margem-tela: 16px; --espaco-topo: 12px; } }
+@media (max-width: 600px) { :root { --margem-tela: 12px; --espaco-topo: 8px; --espaco-secao: 10px; --espaco-fim: 24px; } }

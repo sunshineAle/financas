@@ -10,6 +10,7 @@ import Orbe from '../components/Orbe.vue';
 import BarraDegrade from '../components/BarraDegrade.vue';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
 import TopoValor from '../components/TopoValor.vue';
+import BotaoOlho from '../components/BotaoOlho.vue';
 import BarraAcoes from '../components/BarraAcoes.vue';
 import BotaoAcao from '../components/BotaoAcao.vue';
 import DashNumero from '../components/DashNumero.vue';
@@ -191,7 +192,10 @@ onMounted(async () => {
     <section class="palco" aria-label="Saldo do período">
       <div class="palco-textos">
         <span class="pequena">{{ saudacao }}<template v-if="primeiroNome">, {{ primeiroNome }}</template></span>
-        <strong class="palco-valor" :class="{ negativo: saldoDoMes < 0 }"><DashNumero :valor="saldoDoMes" /></strong>
+        <span class="linha-valor">
+          <strong class="palco-valor" :class="{ negativo: saldoDoMes < 0 }"><DashNumero :valor="saldoDoMes" /></strong>
+          <BotaoOlho class="olho-valor" :tamanho="36" />
+        </span>
         <span class="palco-rotulo">{{ rotuloSaldoPeriodo }} <span class="periodo">· {{ rotuloPeriodo }}</span></span>
       </div>
       <div class="palco-orbe" :style="{ transform: `translate3d(0, ${deslocamento.toFixed(1)}px, 0)` }">
@@ -378,6 +382,9 @@ onMounted(async () => {
 .periodo::first-letter { text-transform: uppercase; }
 .palco-valor { font-family: var(--fonte-display); font-size: clamp(32px, 9vw, 46px); line-height: 1.1; margin-top: 2px; overflow-wrap: anywhere; }
 .palco-valor.negativo { color: var(--cor-saida); }
+/* olho de ocultar valores junto do valor principal (anotação 35); fica à direita sem deslocar o número do centro */
+.linha-valor { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.olho-valor { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 6px; }
 .palco-orbe { width: 100%; max-width: 420px; will-change: transform; padding-bottom: 4px; margin-top: 4px; }
 .legenda-orbe { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; font-size: 13px; color: var(--cor-texto-suave); }
 .legenda-orbe li { display: inline-flex; align-items: center; gap: 7px; }

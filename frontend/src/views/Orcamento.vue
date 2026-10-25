@@ -317,8 +317,7 @@ onMounted(carregarCategorias);
 </template>
 
 <style scoped>
-.pagina { padding: 24px 40px 40px; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .conteudo { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .topo { border-radius: 22px; }
 .nota { margin: 0; font-size: 13px; color: var(--cor-texto-suave); }

@@ -18,7 +18,10 @@ await carregarAcesso();
 const { mostrarAcesso } = await import('./gate.js');
 await mostrarAcesso();
 // Todo acesso começa pela página Início, seja qual for a última rota (o router lê o hash ao iniciar).
-location.hash = '#/';
+// Exceção: "Ver detalhes" do aviso de versão, tocado na tela de entrada, abre Sobre o app.
+let rotaInicial = '#/';
+try { const r = sessionStorage.getItem('sf:abrir-rota'); if (r) { rotaInicial = '#' + r; sessionStorage.removeItem('sf:abrir-rota'); } } catch { /* ignora */ }
+location.hash = rotaInicial;
 
 await import('../../src/main.js');
 const [{ iniciarArmazenamento }, { iniciarLembrete }, { iniciarBacen }, { iniciarAutoBloqueio }] = await Promise.all([
@@ -31,6 +34,7 @@ iniciarAutoBloqueio();
 iniciarArmazenamento();
 iniciarLembrete();
 iniciarBacen();
+import('../../src/services/feedback.js').then((m) => m.iniciarFilaFeedback()).catch(() => {});
 
 // Alertas locais (vencimentos, orçamento, backup): alimentam o sino e, se permitido, as notificações do sistema.
 import('../../src/services/notificacoes.js').then((m) => m.carregarAvisos()).catch(() => { /* ainda sem dados */ });

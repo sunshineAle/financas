@@ -238,7 +238,7 @@ onMounted(async () => {
 .tela { display: contents; }
 
 .conteudo {
-  padding: 32px 40px;
+  padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
   overflow-x: hidden;
 }
 
@@ -247,13 +247,13 @@ onMounted(async () => {
    toggle manual mesmo dentro dessas faixas. */
 @media (max-width: 900px) {
   .conteudo {
-    padding: 24px 20px;
+    padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
   }
 }
 
 @media (max-width: 480px) {
   .conteudo {
-    padding: 16px;
+    padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
   }
 }
 

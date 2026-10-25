@@ -320,9 +320,8 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
 </template>
 
 <style scoped>
-.pagina { padding: 28px 40px 40px; max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .pagina.embutido { max-width: 1040px; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
 .rotulo { font-size: 13px; color: var(--cor-texto-suave); }
 .nota { font-size: 13px; color: var(--cor-texto-suave); margin: 0; }
 .icone-topo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: var(--cor-card); border: 1px solid var(--cor-card-borda); color: var(--cor-texto-suave); cursor: pointer; }

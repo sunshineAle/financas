@@ -307,6 +307,8 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const { contaId, descricao, valor, tipo, data, categoriaId, categoriaReceita } = req.body || {};
   const subcategoria = String(req.body?.subcategoria || '').trim().slice(0, 80) || null;
+  // Anotação 37: ícone do item na própria transação (chave do set, ex.: 'cat-saida-uber-taxi'); vazio = usa o da categoria.
+  const icone = /^cat-[a-z0-9-]{2,60}$/.test(String(req.body?.icone || '')) ? String(req.body.icone) : null;
   if (tipo === 'entrada' && categoriaReceita && !nomesCategoriasReceita(req.usuario.id).includes(categoriaReceita)) {
     return res.status(400).json({ erro: 'Categoria de entrada inválida.' });
   }
@@ -361,7 +363,7 @@ router.post('/', (req, res) => {
     novoId = dados.inserir('transacoes', {
       conta_id: conta.id, usuario_id: req.usuario.id, categoria_id: categoria ? categoria.id : null, descricao: texto,
       valor: valorGravado, data: dia, categorizacao_automatica: automatica, origem: 'manual',
-      categoria_receita: categoriaReceitaFinal, subcategoria,
+      categoria_receita: categoriaReceitaFinal, subcategoria, icone,
     }).id;
 
     if (conta.origem === 'manual') dados.somar('contas', conta.id, 'saldo', valorGravado);
@@ -501,6 +503,8 @@ router.put('/:id', (req, res) => {
   }
   if (!ehEntrada) categoriaReceita = null;
   const subcategoria = corpo.subcategoria === undefined ? t.subcategoria : String(corpo.subcategoria || '').trim().slice(0, 80) || null;
+  // Ícone do item: pode mudar em qualquer transação (manual ou do banco). '' = volta a usar o da categoria.
+  const icone = corpo.icone === undefined ? t.icone : (/^cat-[a-z0-9-]{2,60}$/.test(String(corpo.icone || '')) ? String(corpo.icone) : null);
 
   let categoriaId = t.categoria_id;
   let automatica = t.categorizacao_automatica;
@@ -530,7 +534,7 @@ router.put('/:id', (req, res) => {
     }
     dados.atualizar('transacoes', t.id, {
       descricao, data, valor, conta_id: contaId, categoria_id: categoriaId, categorizacao_automatica: automatica,
-      categoria_receita: categoriaReceita, subcategoria,
+      categoria_receita: categoriaReceita, subcategoria, icone,
     });
   });
 

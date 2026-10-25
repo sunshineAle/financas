@@ -155,6 +155,12 @@ const TABELAS = {
       // `vinculo` é o UUID compartilhado pelo par. ignorada = 2 quer dizer "fora dos totais, mas o saldo da conta continua valendo".
       'tipo_mov TEXT',
       'vinculo TEXT',
+      // Anotação 37: ícone do ITEM na própria transação (chave do set v2, ex.: 'cat-saida-uber-taxi'); vazio = usa o da categoria.
+      'icone TEXT',
+      // Anotação 38: rótulo do movimento ("Resgate · Reserva de Liberdade") e a decisão tomada na revisão
+      // ('vinculado' | 'externo' | 'comum' | 'recusado'), para a sugestão não voltar.
+      'rotulo_mov TEXT',
+      'revisao TEXT',
     ],
     fk: { conta_id: 'contas', usuario_id: 'usuarios', categoria_id: 'categorias_orcamento' },
     exporta: true,

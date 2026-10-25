@@ -17,6 +17,7 @@ import Apoie from './views/Apoie.vue';
 import Importar from './views/Importar.vue';
 import CustosFixos from './views/CustosFixos.vue';
 import Regras from './views/Regras.vue';
+import { registrarTela } from './services/feedback.js';
 
 const router = createRouter({
   // A versão de demonstração (sem servidor) navega em memória, sem depender da URL.
@@ -55,6 +56,7 @@ router.beforeEach((to) => {
 });
 
 router.afterEach((to) => {
+  registrarTela(to);
   const t = to.meta && to.meta.titulo;
   document.title = t ? `${t} · Dagda Capital` : 'Dagda Capital';
 });

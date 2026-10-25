@@ -16,7 +16,7 @@ function interno(svg) {
 }
 
 export const ICONES_CATEGORIA = LISTA_BRUTA.map((i) => ({
-  chave: i.file, tipo: i.tipo, secao: i.secao, label: i.label, busca: i.busca || '',
+  chave: i.file, tipo: i.tipo, secao: i.secao, label: i.label, busca: i.busca || '', grupo: !!i.grupo,
   outline: interno(i.outline), filled: interno(i.filled || i.outline),
   _label: normalizarBusca(i.label), _busca: normalizarBusca(i.busca), _secao: normalizarBusca(i.secao),
 }));
@@ -33,6 +33,7 @@ export function secoesDoTipo(tipo, texto = '') {
   const termos = normalizarBusca(texto).split(' ').filter(Boolean);
   const mapa = new Map();
   for (const i of doTipo(tipo)) {
+    if (i.grupo) continue; // os ícones de CATEGORIA ficam no bloco próprio (gruposDoTipo)
     if (termos.length && !termos.every((t) => i._label.includes(t) || i._busca.includes(t) || i._secao.includes(t))) continue;
     if (!mapa.has(i.secao)) mapa.set(i.secao, []);
     mapa.get(i.secao).push(i);
@@ -40,8 +41,22 @@ export function secoesDoTipo(tipo, texto = '') {
   return [...mapa].map(([secao, itens]) => ({ secao, itens }));
 }
 
+/** Ícones de CATEGORIA (anotação 37): um por seção, silhueta genérica. Filtra pela busca, como as seções. */
+export function gruposDoTipo(tipo, texto = '') {
+  const termos = normalizarBusca(texto).split(' ').filter(Boolean);
+  return doTipo(tipo).filter((i) => i.grupo && (!termos.length || termos.every((t) => i._label.includes(t) || i._busca.includes(t) || i._secao.includes(t))));
+}
+/** Ícone de categoria da seção de um item (ex.: 'cat-saida-uber-taxi' -> 'cat-grupo-transporte'); null se não houver. */
+export function grupoDoItem(chave) {
+  const i = POR_CHAVE.get(chave);
+  if (!i) return null;
+  if (i.grupo) return i.chave;
+  const g = ICONES_CATEGORIA.find((x) => x.grupo && x.tipo === i.tipo && x.secao === i.secao);
+  return g ? g.chave : null;
+}
+
 /** Ícone sugerido para o nome digitado ("Uber" → Uber/táxi, "ração" → Ração, "Netflix" → Cinema/streaming). Sem match = null. */
-export function sugerirIcone(nome, tipo = 'saida') {
+export function sugerirIcone(nome, tipo = 'saida', opcoes = {}) {
   const n = normalizarBusca(nome);
   if (n.length < 2) return null;
   const palavras = n.split(' ').filter((p) => p.length >= 2);
@@ -63,9 +78,25 @@ export function sugerirIcone(nome, tipo = 'saida') {
       // o nome digitado contém o rótulo inteiro ("Conta de luz" ~ Luz)
       if (!s && i._label.length >= 3 && n.includes(i._label)) s = 50;
     }
+    if (s && i.grupo) s += 8;
+    if (s && i.grupo && opcoes.semGrupo) s = 0; // nome de categoria ("Casa", "Residência", "Transporte") -> ícone de categoria
     if (s && (!melhor || s > melhor.s || (s === melhor.s && i._label.length < melhor.i._label.length))) melhor = { s, i };
   }
+  if (opcoes.retornarNota) return melhor;
   return melhor && melhor.s >= 35 ? melhor.i : null;
+}
+
+// Ícone do ITEM reconhecido pela descrição da transação ("Uber *Trip" → Uber/táxi; "Posto Shell" → Combustível; "iFood" → Delivery).
+// Só com correspondência forte (palavra do rótulo ou da busca), nunca ícone de categoria nem "Geral". Memorizado por descrição.
+const memoItem = new Map();
+export function iconeDoItem(descricao, tipo = 'saida') {
+  const k = tipo + '|' + String(descricao || '');
+  if (memoItem.has(k)) return memoItem.get(k);
+  const m = sugerirIcone(descricao, tipo, { semGrupo: true, retornarNota: true });
+  const r = m && m.s >= 55 && !/-geral$/.test(m.i.chave) ? m.i.chave : null;
+  if (memoItem.size > 2000) memoItem.clear();
+  memoItem.set(k, r);
+  return r;
 }
 
 // Emojis que o usuário já tem salvos → ícone novo (por tipo).
@@ -82,7 +113,7 @@ const LEGADO = {
 };
 // Chaves do catálogo antigo (lucide) → ícone novo.
 const CHAVES_ANTIGAS = {
-  mercado: 'mercado', restaurante: 'restaurante', moradia: 'aluguel', carro: 'manutencao-carro', combustivel: 'combustivel', farmacia: 'farmacia', saude: 'consulta',
+  mercado: 'mercado', restaurante: 'restaurante', moradia: 'aluguel', residencia: 'aluguel', carro: 'manutencao-carro', combustivel: 'combustivel', farmacia: 'farmacia', saude: 'consulta',
   educacao: 'curso', lazer: 'jogos', vestuario: 'roupas', viagem: 'viagem', presente: 'presentes', pet: 'pets', celular: 'celular', 'contas-casa': 'luz', cinema: 'cinema-streaming',
   beleza: 'beleza', academia: 'academia', bar: 'bares', impostos: 'impostos', compras: 'compras-online', outros: 'geral', 'saida-generica': 'geral',
   salario: 'salario', freela: 'freelance', rendimentos: 'rendimentos', 'outras-entradas': 'geral',

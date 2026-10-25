@@ -58,8 +58,7 @@ onMounted(carregar);
 </template>
 
 <style scoped>
-.pagina { padding: 24px 40px 40px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 h1 { margin: 0; font: 700 22px var(--fonte-display); }
 .nota { margin: 0; font-size: 13px; color: var(--cor-texto-suave); }
 .lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }

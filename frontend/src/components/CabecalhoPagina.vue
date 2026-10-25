@@ -17,6 +17,7 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import SeletorMes from './SeletorMes.vue';
 import { ROTAS_COM_TOPO } from '../config/menu.js';
+import { ehCelular } from '../services/layout.js';
 defineProps({
   titulo: { type: String, default: '' },
   semMes: { type: Boolean, default: false },
@@ -27,7 +28,8 @@ defineProps({
 });
 // Nas telas com TopoApp (exceto Início) o título aparece CENTRALIZADO no topo, entre a foto e o sino; aqui fica só para leitores de tela.
 const route = useRoute();
-const noTopo = computed(() => route.name !== 'dashboard' && ROTAS_COM_TOPO.includes(route.name));
+// No celular o título fica centralizado no topo (TopoApp). Em tela grande, nas páginas com filtro mensal, ele fica aqui, ao lado do filtro.
+const noTopo = computed(() => route.name !== 'dashboard' && ROTAS_COM_TOPO.includes(route.name) && ehCelular.value);
 </script>
 
 <template>
@@ -52,15 +54,15 @@ const noTopo = computed(() => route.name !== 'dashboard' && ROTAS_COM_TOPO.inclu
 .bloco-mes {
   --cor-card: color-mix(in srgb, var(--mes-fundo, var(--cor-fundo-elevado)) 55%, var(--cor-fundo));
   background: var(--mes-fundo, var(--cor-fundo-elevado)); border-radius: var(--raio-card, 16px);
-  padding: var(--espaco-card, 16px); display: flex; flex-direction: column; gap: 16px; min-width: 0;
+  padding: var(--espaco-card, 16px); display: flex; flex-direction: column; gap: var(--espaco-secao, 12px); min-width: 0;
 }
-@media (max-width: 480px) { .bloco-mes { padding: 12px; gap: 14px; } }
+@media (max-width: 600px) { .bloco-mes { padding: 8px; gap: var(--espaco-secao, 10px); } }
 </style>
 
 <style scoped>
 .cabecalho-pagina { display: flex; flex-direction: column; gap: 0; width: 100%; min-width: 0; }
-.cabecalho-pagina:not(.com-bloco) { gap: 16px; }
-.faixa { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; }
+.cabecalho-pagina:not(.com-bloco) { gap: var(--espaco-secao, 12px); }
+.faixa { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .linha-titulo { display: flex; align-items: center; gap: 10px; min-height: 36px; }
 .esq { display: flex; align-items: center; flex: 0 0 auto; }
 .esq:empty { display: none; }

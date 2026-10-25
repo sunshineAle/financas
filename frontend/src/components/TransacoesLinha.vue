@@ -6,6 +6,7 @@ import { computed } from 'vue';
 import { CreditCard } from 'lucide-vue-next';
 import IconeCategoria from './IconeCategoria.vue';
 import IconeBanco from './IconeBanco.vue';
+import { iconeDoItem } from '../utils/iconesCategoria.js';
 
 const props = defineProps({
   t: { type: Object, required: true },
@@ -17,7 +18,16 @@ defineEmits(['abrir', 'menu']);
 const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const ehSaida = computed(() => props.t.valor < 0);
 const classeValor = computed(() => (props.info.neutra ? 'neutro' : ehSaida.value ? 'negativo' : 'positivo'));
-const iconeValor = computed(() => (props.info.neutra ? (props.info.tipoNeutro === 'fatura' ? 'fatura-fechada' : 'transferir') : (props.info.icone || '')));
+// Ordem (anotação 37): ícone do ITEM escolhido na transação → ícone do item reconhecido pela descrição → ícone da categoria.
+// A cor é sempre a da categoria, para a lista continuar agrupada visualmente. Resgate/Guardar têm ícone próprio, em cor neutra.
+const iconeValor = computed(() => {
+  const n = props.info;
+  if (n.neutra) {
+    if (n.tipoNeutro === 'reserva') return props.t.valor > 0 ? 'cat-entrada-resgate' : 'cat-grupo-financas';
+    return n.tipoNeutro === 'fatura' ? 'fatura-fechada' : 'transferir';
+  }
+  return props.t.icone || (ehSaida.value ? iconeDoItem(props.t.descricao, 'saida') : null) || n.icone || '';
+});
 const dataCurta = computed(() => { const [, m, d] = String(props.t.data).slice(0, 10).split('-'); return `${d}/${m}`; });
 const sub = computed(() => props.t.subcategoria);
 </script>
@@ -35,7 +45,8 @@ const sub = computed(() => props.t.subcategoria);
         <span v-if="t.cartao" class="chip-mini"><CreditCard :size="11" :stroke-width="2.2" />cartão</span>
         <span v-else-if="t.origem === 'conectada'" class="chip-mini">banco</span>
         <span v-if="mostrarData" class="ponto">·</span><span v-if="mostrarData">{{ dataCurta }}</span>
-        <span v-if="t.tipo_mov" class="chip-mini">{{ String(t.tipo_mov).startsWith('transferencia') ? 'transferência' : t.tipo_mov === 'estornada' ? 'estornada' : 'estorno' }}</span>
+        <span v-if="info.tipoNeutro === 'reserva'" class="chip-mini">{{ t.valor > 0 ? 'resgate' : 'guardar' }}</span>
+        <span v-else-if="t.tipo_mov" class="chip-mini">{{ String(t.tipo_mov).startsWith('transferencia') ? 'transferência' : t.tipo_mov === 'estornada' ? 'estornada' : 'estorno' }}</span>
         <span v-else-if="t.ignorada" class="chip-mini">ignorada</span>
       </span>
     </span>

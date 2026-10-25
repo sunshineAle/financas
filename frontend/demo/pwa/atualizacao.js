@@ -1,6 +1,7 @@
 // Registro do service worker + aviso "Nova versão disponível — atualizar" (skipWaiting controlado).
 // Fora de views: o aviso é um modal central simples, com as cores por tokens do app.
 import { aviso } from '../../src/services/atualizacao.js';
+import { carregarNovidades } from '../../src/services/novidades.js';
 // Modal central pequeno. "Agora não" fecha, mas o convite volta sempre que a tela de acesso reaparece (reavisar), até atualizar.
 const FUNDO = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.55)';
 const CAIXA = 'width:100%;max-width:320px;display:flex;flex-direction:column;gap:8px;padding:20px 18px 16px;border-radius:16px;background:var(--cor-fundo-elevado,#fff);color:var(--cor-texto,#1a1a1a);border:1px solid var(--cor-borda,#ddd);box-shadow:0 16px 48px rgba(0,0,0,.35);font:400 14px/1.45 var(--fonte-texto,system-ui,sans-serif);text-align:center';
@@ -31,7 +32,26 @@ function mostrarAviso(worker) {
   depois.textContent = 'Agora não';
   depois.style.cssText = BOTAO_SEC;
   depois.addEventListener('click', () => fundo.remove());
-  caixa.append(titulo, texto, botao, depois);
+  // Resumo curto da versão nova (changelog.json) + "Ver detalhes" (abre Sobre o app).
+  const resumo = document.createElement('span');
+  resumo.style.cssText = 'font-size:13.5px;color:var(--cor-texto,#1a1a1a);display:none';
+  const detalhes = document.createElement('button');
+  detalhes.type = 'button';
+  detalhes.textContent = 'Ver detalhes';
+  detalhes.style.cssText = 'display:none;align-self:center;min-height:32px;padding:0 8px;border:none;background:none;color:var(--cor-primaria,#3446c4);font:600 13.5px var(--fonte-texto,system-ui,sans-serif);text-decoration:underline;cursor:pointer';
+  detalhes.addEventListener('click', () => {
+    fundo.remove();
+    if (document.querySelector('.tela-acesso')) { try { sessionStorage.setItem('sf:abrir-rota', '/mais/sobre?novidades=1'); } catch { /* ignora */ } }
+    else location.hash = '#/mais/sobre?novidades=1';
+  });
+  carregarNovidades().then((lista) => {
+    const n = lista && lista[0];
+    if (!n || !n.resumo) return;
+    resumo.textContent = n.resumo; resumo.style.display = 'block';
+    texto.textContent = 'Seus dados continuam no aparelho.';
+    detalhes.style.display = 'inline-block';
+  }).catch(() => {});
+  caixa.append(titulo, resumo, texto, detalhes, botao, depois);
   fundo.appendChild(caixa);
   document.body.appendChild(fundo);
 }

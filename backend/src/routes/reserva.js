@@ -10,6 +10,7 @@ const router = express.Router();
 const { TIPOS_INVESTIMENTO, TIPOS_LIQUIDEZ_RAPIDA, MSG_SO_LIQUIDEZ_RAPIDA, liquidezPadrao, rendimentoCdi } = require('../utils/carteira');
 const carteira = require('../utils/carteiraDb');
 const { detectarReservaAutomatica } = require('../utils/reservasAuto');
+const { NOME_RESGATES, garantirCategoriaReceita } = require('../utils/categoriasReceita');
 
 // CDI diário (% ao dia útil, série 12 do Bacen) enviado pela tela (?cdiDiario=0.0545), que lê o cache do Bacen no aparelho.
 function lerCdi(req) {
@@ -476,7 +477,7 @@ router.get('/auto/pendentes', (req, res) => {
     .prepare(
       `SELECT t.id, t.descricao, t.valor, t.data, t.conta_id, c.nome AS conta_nome
        FROM transacoes t LEFT JOIN contas c ON c.id = t.conta_id
-       WHERE t.usuario_id = ? AND t.excluido_em IS NULL AND t.data >= ? AND t.ignorada = 0 AND t.tipo_mov IS NULL
+       WHERE t.usuario_id = ? AND t.excluido_em IS NULL AND t.data >= ? AND t.ignorada = 0 AND t.tipo_mov IS NULL AND t.revisao IS NULL
          AND t.id NOT IN (SELECT transacao_id FROM faturas_pagas WHERE transacao_id IS NOT NULL AND excluido_em IS NULL)
        ORDER BY t.data DESC, t.rowid DESC`
     )
@@ -489,7 +490,12 @@ router.get('/auto/pendentes', (req, res) => {
     if ((d.sentido === 'guardar' && t.valor >= 0) || (d.sentido === 'resgatar' && t.valor <= 0)) continue;
     pendentes.push({ transacao: { ...t, data: String(t.data).slice(0, 10) }, deteccao: d });
   }
-  res.json({ pendentes });
+  // Quanto já foi GUARDADO em cada meta (aportes − resgates registrados): serve para separar o rendimento dentro do resgate.
+  const reserva = buscarOuCriarReserva(req.usuario.id);
+  const guardado = {};
+  db.prepare('SELECT meta_id, SUM(valor) AS total FROM historico_aportes WHERE reserva_id = ? AND excluido_em IS NULL AND meta_id IS NOT NULL GROUP BY meta_id')
+    .all(reserva.id).forEach((r) => { guardado[r.meta_id] = Math.round((r.total || 0) * 100) / 100; });
+  res.json({ pendentes, guardado });
 });
 
 // Decide uma sugestão. acao 'vincular' (metaId): atualiza a meta (e o rendimento, pelo CDI, na leitura); acao 'recusar':
@@ -504,7 +510,8 @@ router.post('/auto/decidir', (req, res) => {
   }
   const det = detectarReservaAutomatica(t.descricao);
   if (!det) return res.status(400).json({ erro: 'Esta transação não parece uma reserva automática.' });
-  if (acao !== 'vincular' && acao !== 'recusar') return res.status(400).json({ erro: 'Escolha vincular ou recusar.' });
+  if (!['vincular', 'recusar', 'externo', 'comum'].includes(acao)) return res.status(400).json({ erro: 'Escolha uma opção.' });
+  if ((acao === 'externo' || acao === 'comum') && det.sentido !== 'resgatar') return res.status(400).json({ erro: 'Essa opção vale só para resgates.' });
 
   try {
     dados.transacao(() => {
@@ -512,8 +519,17 @@ router.post('/auto/decidir', (req, res) => {
       // Fora do orçamento nos dois casos (ignorada = 2: o saldo da conta continua valendo, os totais e categorias não contam)
       if (acao === 'recusar') {
         carteira.tirarDosTotais(t.id, 'reserva_recusada');
+        dados.atualizar('transacoes', t.id, { revisao: 'recusado' });
         return;
       }
+      // Resgate de dinheiro que veio de FORA do app (FGTS, PIS/PASEP, previdência...): é entrada, na categoria própria.
+      if (acao === 'externo') {
+        const nome = garantirCategoriaReceita(req.usuario.id, NOME_RESGATES, 'cat-entrada-resgate');
+        dados.atualizar('transacoes', t.id, { categoria_receita: nome, revisao: 'externo' });
+        return;
+      }
+      // O usuário decide deixar como entrada comum: o app não insiste.
+      if (acao === 'comum') { dados.atualizar('transacoes', t.id, { revisao: 'comum' }); return; }
       const meta = db
         .prepare('SELECT * FROM metas_reserva WHERE id = ? AND reserva_id = ? AND excluido_em IS NULL')
         .get(String(metaId || ''), reserva.id);
@@ -524,12 +540,34 @@ router.post('/auto/decidir', (req, res) => {
         e.status = 400;
         throw e;
       }
-      const mov = det.sentido === 'guardar' ? Math.abs(t.valor) : -Math.abs(t.valor);
+      // Resgate = dinheiro que já era do usuário mudando de lugar (fora das Entradas). Só o RENDIMENTO dentro dele é entrada:
+      // separa sozinho pelo que foi guardado na meta, ou usa o valor informado pelo usuário (`rendimento`).
+      const total = Math.abs(t.valor);
+      let rend = 0;
+      if (det.sentido === 'resgatar') {
+        const g = db.prepare('SELECT SUM(valor) AS s FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND excluido_em IS NULL').get(reserva.id, meta.id);
+        const guardadoMeta = Math.max(0, (g && g.s) || 0);
+        const pedido = req.body && req.body.rendimento;
+        rend = pedido === undefined || pedido === null || pedido === '' ? (guardadoMeta > 0 ? Math.max(0, total - guardadoMeta) : 0) : Number(pedido);
+        if (!(rend >= 0) || rend >= total) { const e = new Error('O rendimento precisa ser menor que o valor do resgate.'); e.status = 400; throw e; }
+        rend = Math.round(rend * 100) / 100;
+      }
+      const principal = Math.round((total - rend) * 100) / 100;
+      const mov = det.sentido === 'guardar' ? total : -principal;
       carteira.tirarDosTotais(t.id, 'reserva_vinculada');
+      dados.atualizar('transacoes', t.id, { revisao: 'vinculado', rotulo_mov: `${det.sentido === 'guardar' ? 'Guardar' : 'Resgate'} · ${meta.nome}` });
       carteira.lancarAporte(req.usuario.id, reserva, {
         movimento: mov, tipo: det.tipoInvestimento, operacao: mov < 0 ? 'resgate' : 'aporte', ativoNome: det.ativo, rotuloTipo: det.ativo,
-        descricao: det.rotulo + ' (extrato)', dia, contaId: null, metaId: meta.id, transacaoId: t.id,
+        descricao: det.rotulo + ' (extrato)', dia, contaId: null, metaId: meta.id, transacaoId: t.id, semChecagem: true,
       });
+      if (rend > 0) {
+        // Linha separada, em verde: "Rendimento · meta". Não mexe no saldo da conta (o extrato já trouxe o valor inteiro).
+        const nomeRend = garantirCategoriaReceita(req.usuario.id, 'Rendimentos', 'cat-entrada-rendimentos');
+        dados.inserir('transacoes', {
+          conta_id: t.conta_id, usuario_id: t.usuario_id, descricao: `Rendimento · ${meta.nome}`, valor: rend, data: t.data,
+          origem: 'derivada', categoria_receita: nomeRend, vinculo: t.id, revisao: 'vinculado', icone: 'cat-entrada-rendimentos',
+        });
+      }
     });
   } catch (e) {
     if (e.status) return res.status(e.status).json({ erro: e.message });

@@ -605,8 +605,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.pagina { padding: 24px 40px 40px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .nota { font-size: 13px; color: var(--cor-texto-suave); margin: 0; }
 button { font-family: var(--fonte-texto); font-weight: 600; font-size: 14px; padding: 10px 16px; border-radius: 12px; border: none; background: var(--cor-primaria); color: var(--cor-sobre-cor); cursor: pointer; min-height: 44px; }
 .botao-secundario { background: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto); }

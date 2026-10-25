@@ -6,7 +6,7 @@
 import { ref, computed, watch } from 'vue';
 import { Search, Sparkles } from 'lucide-vue-next';
 import IconeCat from './IconeCat.vue';
-import { secoesDoTipo, sugerirIcone, iconeCat, GERAL, tipoCat, resolverIconeCategoria } from '../utils/iconesCategoria.js';
+import { secoesDoTipo, gruposDoTipo, sugerirIcone, iconeCat, GERAL, tipoCat, resolverIconeCategoria } from '../utils/iconesCategoria.js';
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -24,6 +24,8 @@ const sugestao = computed(() => sugerirIcone(props.nome, t.value));
 const atual = computed(() => resolverIconeCategoria(props.modelValue, t.value));
 const atualInfo = computed(() => iconeCat(atual.value || GERAL[t.value]));
 const secoes = computed(() => secoesDoTipo(t.value, busca.value));
+// Anotação 37: primeiro os ícones de CATEGORIA (um por seção); abaixo, "Mais ícones" (itens), para quem cria uma categoria própria.
+const grupos = computed(() => gruposDoTipo(t.value, busca.value));
 
 function seguirSugestao() {
   const alvo = sugestao.value ? sugestao.value.chave : GERAL[t.value];
@@ -59,7 +61,17 @@ const texto = computed(() => {
         <input v-model="busca" type="search" inputmode="search" placeholder="Buscar ícone (ex.: uber, ração, luz)" autocomplete="off" aria-label="Buscar ícone" @keydown.enter.prevent />
       </label>
       <div class="grade-secoes" role="radiogroup" aria-label="Ícones de categoria">
-        <p v-if="!secoes.length" class="vazio">Nenhum ícone com esse nome. Tente outra palavra.</p>
+        <p v-if="!secoes.length && !grupos.length" class="vazio">Nenhum ícone com esse nome. Tente outra palavra.</p>
+        <section v-if="grupos.length" class="bloco-grupos" data-icones-categoria>
+          <h4>Ícones de categoria</h4>
+          <div class="grade">
+            <button v-for="i in grupos" :key="i.chave" type="button" role="radio" :aria-checked="atual === i.chave" :class="['ic', { ativo: atual === i.chave }]" :title="i.label" :aria-label="i.label" @click="escolher(i)">
+              <IconeCat :chave="i.chave" :tamanho="24" :preenchido="atual === i.chave" />
+              <span class="rot">{{ i.label }}</span>
+            </button>
+          </div>
+        </section>
+        <h3 v-if="grupos.length && secoes.length" class="mais-icones">Mais ícones</h3>
         <section v-for="s in secoes" :key="s.secao">
           <h4>{{ s.secao }}</h4>
           <div class="grade">
@@ -94,5 +106,6 @@ h4 { margin: 0 0 6px; font: 700 11px var(--fonte-texto); letter-spacing: .04em; 
 .ic:focus-visible, .trocar:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tema-cor, var(--cor-primaria)) 35%, transparent); }
 .rot { font: 500 10.5px/1.15 var(--fonte-texto); text-align: center; color: var(--cor-texto-suave); overflow-wrap: anywhere; }
 .ic.ativo .rot { color: inherit; }
+.mais-icones { margin: 4px 0 -4px; padding-top: 8px; border-top: 1px solid var(--cor-borda); font: 700 12px var(--fonte-texto); color: var(--cor-texto); }
 .vazio { margin: 6px; font-size: 13px; color: var(--cor-texto-suave); }
 </style>

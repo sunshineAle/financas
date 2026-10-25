@@ -21,7 +21,7 @@ export async function semearDados(chamar, db) {
   await post('/api/contas', { nome: 'Carteira', tipo: 'dinheiro', saldo: 120, icone: '👛' });
 
   const cats = {};
-  for (const [nome, teto, icone] of [['Moradia', 1600, 'cat-saida-aluguel'], ['Mercado', 900, 'cat-saida-mercado'], ['Transporte', 350, 'cat-saida-uber-taxi'], ['Lazer', 400, 'cat-saida-jogos'], ['Saúde', 300, 'cat-saida-farmacia']]) {
+  for (const [nome, teto, icone] of [['Casa', 1600, 'cat-grupo-casa'], ['Alimentação', 900, 'cat-grupo-alimentacao'], ['Transporte', 350, 'cat-grupo-transporte'], ['Lazer', 400, 'cat-grupo-lazer'], ['Saúde', 300, 'cat-grupo-saude']]) {
     cats[nome] = await post('/api/categorias', { nome, tetoMensal: teto, icone });
   }
 
@@ -30,9 +30,9 @@ export async function semearDados(chamar, db) {
     const variacao = m * 17;
     const lista = [
       ['entrada', 'Salário', 4200, dia(m, 5), null, 'Salário'],
-      ['saida', 'Aluguel (Moradia)', 1500, dia(m, 8), cats.Moradia.id],
-      ['saida', 'Mercado Extra', 310 + variacao, dia(m, 10), cats.Mercado.id],
-      ['saida', 'Mercado do mês', 280 + variacao, dia(m, 22), cats.Mercado.id],
+      ['saida', 'Aluguel (Moradia)', 1500, dia(m, 8), cats.Casa.id],
+      ['saida', 'Mercado Extra', 310 + variacao, dia(m, 10), cats['Alimentação'].id],
+      ['saida', 'Mercado do mês', 280 + variacao, dia(m, 22), cats['Alimentação'].id],
       ['saida', 'Uber e ônibus', 140 + variacao / 2, dia(m, 12), cats.Transporte.id],
       ['saida', 'Cinema e jantar', 120 + variacao, dia(m, 16), cats.Lazer.id],
       ['saida', 'Farmácia', 65, dia(m, 18), cats['Saúde'].id],

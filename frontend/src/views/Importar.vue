@@ -372,8 +372,7 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
 </template>
 
 <style scoped>
-.pagina { padding: 24px 40px 40px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 480px) { .pagina { padding: 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .topo { display: flex; align-items: center; gap: 8px; }
 .voltar { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); display: grid; place-items: center; cursor: pointer; }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 20px; margin: 0; flex: 1; }

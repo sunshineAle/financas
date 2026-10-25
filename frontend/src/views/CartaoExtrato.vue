@@ -431,7 +431,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.pagina { display: flex; flex-direction: column; gap: 16px; max-width: 760px; margin: 0 auto; width: 100%; font-family: var(--fonte-texto); color: var(--cor-texto); }
+.pagina { display: flex; flex-direction: column; gap: var(--espaco-secao); max-width: 760px; margin: 0 auto; width: 100%; font-family: var(--fonte-texto); color: var(--cor-texto); }
 .area-mes { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .identidade { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
 .nome-cartao { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin: 0; font-family: var(--fonte-display); font-size: 20px; min-width: 0; overflow-wrap: anywhere; }

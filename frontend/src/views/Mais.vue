@@ -91,8 +91,7 @@ async function sair() {
 </template>
 
 <style scoped>
-.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-@media (max-width: 480px) { .pagina { padding: 20px 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .grupo { display: flex; flex-direction: column; gap: 8px; }
 .grupo h2 { margin: 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cor-texto-suave); }

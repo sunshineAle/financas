@@ -154,7 +154,7 @@ async function excluir() {
 </template>
 
 <style scoped>
-.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .erro { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--cor-grave-fundo); color: var(--cor-grave); font-size: 14px; }
 .proj { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

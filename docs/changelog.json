@@ -1,0 +1,30 @@
+[
+  {
+    "versao": "Onda 7",
+    "data": "2026-10-25",
+    "resumo": "Topo mais limpo: sua foto agora junta perfil e notificações. Telas com mais espaço, ícones novos para as categorias e um jeito de enviar sugestões direto do app.",
+    "itens": [
+      "No celular, a foto do perfil fica no canto direito e mostra quantos avisos novos você tem. Tocando nela, aparecem os avisos e os atalhos para Perfil e Configurações.",
+      "O olho de esconder valores fica ao lado do valor principal de cada tela.",
+      "As telas usam melhor a largura do celular, com menos espaço sobrando nas bordas e no topo.",
+      "No computador, o nome da página fica ao lado do seletor de meses.",
+      "Cada categoria de despesa ganhou um ícone próprio (Casa, Alimentação, Transporte, Saúde…). Os ícones de cada gasto (Uber, mercado, combustível) passam a aparecer na própria transação.",
+      "Resgates da Caixinha, do Porquinho ou de CDB não contam mais como entrada: o app pergunta se é dinheiro que você já tinha guardado. Só o rendimento conta como entrada.",
+      "Em Sobre o app, toque na versão para ver o que mudou em cada atualização.",
+      "Novo: Enviar feedback, em Sobre o app, para contar um erro, uma dúvida ou uma ideia."
+    ]
+  },
+  {
+    "versao": "Onda 6",
+    "data": "2026-10-24",
+    "resumo": "Código de recuperação para nunca perder o acesso, entrada mais rápida com PIN e biometria e backup mais simples.",
+    "itens": [
+      "No cadastro, o app gera um código de recuperação. Ele substitui a senha se você esquecê-la e abre os seus backups.",
+      "Entrada rápida: o teclado do PIN já aparece e a biometria é chamada sozinha.",
+      "Backup e restauração com os mesmos dois botões: Deste aparelho ou Conectar nuvem.",
+      "Novo: Apagar dados e redefinir o app, em Dados e backup.",
+      "Formulários de Guardar, Rendimento e Resgatar mais simples, com preço médio e lucro ou prejuízo calculados.",
+      "Corrigido o erro \"Rota não existe\" ao guardar um investimento."
+    ]
+  }
+]

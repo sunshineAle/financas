@@ -7,7 +7,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
   Pencil, KeyRound, ShieldCheck, Lock, CalendarClock, Tags, Gauge as GaugeIcon, ListChecks, FileUp, BookOpen, Heart, RotateCcw, RefreshCw, Bell,
-  ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff, Gauge, Info, Users, User, Wallet, DatabaseBackup, SlidersHorizontal, Trash2,
+  ChevronRight, ChevronDown, MessageSquare, Sun, Moon, SunMoon, Zap, ZapOff, Gauge, Info, Users, User, Wallet, DatabaseBackup, SlidersHorizontal, Trash2,
 } from 'lucide-vue-next';
 import FormularioModal from '../components/FormularioModal.vue';
 import CardPadrao from '../components/CardPadrao.vue';
@@ -19,6 +19,8 @@ import DesbloqueioBiometrico from '../components/DesbloqueioBiometrico.vue';
 import ApagarDadosModal from '../components/ApagarDadosModal.vue';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import Modal from '../components/Modal.vue';
+import FeedbackModal from '../components/FeedbackModal.vue';
+import { carregarNovidades, dataCurta } from '../services/novidades.js';
 import PlanoReserva from '../components/PlanoReserva.vue';
 import Backup from './Backup.vue';
 import { destino } from '../config/destino.js';
@@ -172,6 +174,13 @@ async function carregarDatas() { dataBacen.value = await atualizacaoBacen(); dat
 onMounted(carregarDatas);
 async function atualizarIndices() { await atualizarBacen({ forcar: true }); await carregarDatas(); avisar('Índices do Bacen atualizados.', { tipo: 'ok' }); }
 const apagarAberto = ref(false);
+// ---- Novidades da versão e feedback (anotação 40) ----
+const versaoAberta = ref(route.query.novidades === '1');
+const novidades = ref([]);
+const abertasAnt = ref([]);
+const alternarAnt = (v) => { abertasAnt.value = abertasAnt.value.includes(v) ? abertasAnt.value.filter((x) => x !== v) : [...abertasAnt.value, v]; };
+onMounted(async () => { novidades.value = await carregarNovidades(); });
+const feedbackAberto = ref(false);
 const versao = ref('—');
 onMounted(async () => { versao.value = await textoVersao(); });
 // ---- Chave de recuperação (Segurança): gerar uma nova pede a senha ----
@@ -347,11 +356,35 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
       <CardPadrao>
         <div class="sobre-topo">
           <b>Dagda Capital</b>
-          <small>{{ destino.rotulo }} · {{ versao }}</small>
+          <small>{{ destino.rotulo }}</small>
+        </div>
+        <!-- Versão tocável: expande para baixo com as novidades (anotação 40) -->
+        <button type="button" class="linha atalho versao" :aria-expanded="versaoAberta" data-versao @click="versaoAberta = !versaoAberta">
+          <span class="quadro"><Info :size="20" :stroke-width="1.8" /></span>
+          <span class="texto"><b>Versão</b><small>{{ versao }}<template v-if="novidades[0]"> · {{ novidades[0].versao }}</template></small></span>
+          <ChevronDown :size="18" :stroke-width="1.8" class="seta gira" :class="{ aberta: versaoAberta }" />
+        </button>
+        <div v-if="versaoAberta" class="novidades" data-novidades>
+          <template v-if="novidades.length">
+            <section v-for="(n, i) in novidades" :key="n.versao" class="nov">
+              <button v-if="i > 0" type="button" class="nov-cab" :aria-expanded="abertasAnt.includes(n.versao)" @click="alternarAnt(n.versao)">
+                <b>{{ n.versao }}</b><small>{{ dataCurta(n.data) }}</small><ChevronDown :size="16" :stroke-width="1.8" class="gira" :class="{ aberta: abertasAnt.includes(n.versao) }" />
+              </button>
+              <div v-else class="nov-cab atual"><b>{{ n.versao }} · atual</b><small>{{ dataCurta(n.data) }}</small></div>
+              <template v-if="i === 0 || abertasAnt.includes(n.versao)">
+                <p class="nov-resumo">{{ n.resumo }}</p>
+                <ul><li v-for="(t, k) in n.itens" :key="k">{{ t }}</li></ul>
+              </template>
+            </section>
+          </template>
+          <p v-else class="nota">Sem as novidades agora (sem internet). Tente de novo mais tarde.</p>
         </div>
         <div class="linhas">
           <button type="button" class="linha atalho" @click="router.push('/manual')">
             <span class="quadro"><BookOpen :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Manual / Tutorial</b><small>passo a passo do sistema</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
+          </button>
+          <button type="button" class="linha atalho" data-feedback @click="feedbackAberto = true">
+            <span class="quadro"><MessageSquare :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Enviar feedback</b><small>erro, dúvida, sugestão ou elogio</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
           </button>
           <button type="button" class="linha atalho" @click="router.push('/apoie')">
             <span class="quadro"><Heart :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Apoie o desenvolvedor</b><small>projeto independente e gratuito</small></span><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
@@ -376,6 +409,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
     </FormularioModal>
     <AlterarSenhaAcesso :aberto="modalAcesso" @fechar="modalAcesso = false" />
     <ApagarDadosModal v-model:aberto="apagarAberto" />
+    <FeedbackModal v-model:aberto="feedbackAberto" />
     <Modal :aberto="modalRec" titulo="Chave de recuperação" @fechar="modalRec = false">
       <template v-if="!codigoRec">
         <p class="nota">O código atual não pode ser mostrado de novo (ele não fica guardado em texto). Gere um novo: os backups feitos a partir de agora abrem com o código novo; os antigos, com o código da época ou com a senha.</p>
@@ -388,7 +422,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
 </template>
 
 <style scoped>
-.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .secao { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 56px; }
 .secao > h2 { margin: 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cor-texto-suave); }
@@ -427,4 +461,16 @@ select { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px sol
 .link-mini:disabled { opacity: 0.5; }
 .perigo .quadro { background: color-mix(in srgb, var(--cor-grave, #c0283c) 12%, transparent); color: var(--cor-grave, #c0283c); }
 .perigo b { color: var(--cor-grave, #c0283c); }
+.gira { transition: transform var(--anim-padrao, .2s) ease; color: var(--cor-texto-suave); flex-shrink: 0; }
+.gira.aberta { transform: rotate(180deg); }
+.novidades { display: flex; flex-direction: column; gap: 10px; padding: 4px 6px 8px 60px; }
+.nov { display: flex; flex-direction: column; gap: 4px; }
+.nov-cab { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0; border: none; background: none; color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
+.nov-cab b { font-size: 14px; }
+.nov-cab small { font-size: 12px; color: var(--cor-texto-suave); flex: 1; }
+.nov-cab.atual { cursor: default; }
+.nov-resumo { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.nov ul { margin: 2px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--cor-texto-suave); }
+@media (prefers-reduced-motion: reduce) { .gira { transition: none; } }
+:global(html[data-reduzir-movimento='1']) .gira { transition: none; }
 </style>

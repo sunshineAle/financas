@@ -448,8 +448,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .cartao-fantasma { width: 100%; max-width: 380px; aspect-ratio: 1.586 / 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 20px; border: 2px dashed var(--cor-borda); background: var(--cor-card); color: var(--cor-texto-suave); font: 600 15px var(--fonte-texto); cursor: pointer; padding: 16px; text-align: center; }
 .cartao-fantasma:hover, .cartao-fantasma:focus-visible { border-color: var(--cor-saida); color: var(--cor-texto); outline: none; }
 .cartao-fantasma .mais { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-saida-fundo); color: var(--cor-saida); }
-.pagina { padding: 8px 40px 40px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 768px) { .pagina { padding: 16px 16px 24px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .corpo { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .total-pilha { display: flex; flex-direction: column; gap: 2px; padding: 2px 2px 6px; }
 .total-pilha strong { font-family: var(--fonte-display); font-size: 26px; }

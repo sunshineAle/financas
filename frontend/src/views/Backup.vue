@@ -148,8 +148,7 @@ onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
 </template>
 
 <style scoped>
-.pagina { padding: 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 480px) { .pagina { padding: 20px 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 .pagina.embutido { padding: 0; max-width: none; margin: 0; }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .faixa { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; border: 1px solid var(--cor-borda); background: var(--cor-fundo-elevado); }

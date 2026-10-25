@@ -34,6 +34,11 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin) return;
+  // Versão e novidades: rede primeiro (o aviso de versão mostra o resumo da versão NOVA); offline, o que estiver guardado.
+  if (/\/(version|changelog)\.json$/.test(url.pathname)) {
+    e.respondWith(fetch(req).then((r) => { if (r && r.ok) { const c2 = r.clone(); caches.open(CACHE).then((c) => c.put(req, c2)); } return r; }).catch(() => caches.match(req)));
+    return;
+  }
   // Navegação: devolve a página do app (funciona offline).
   if (req.mode === 'navigate') {
     e.respondWith(caches.match('./index.html').then((r) => r || fetch(req)).catch(() => caches.match('./index.html')));

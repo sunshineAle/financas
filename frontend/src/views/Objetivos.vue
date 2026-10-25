@@ -28,6 +28,5 @@ const emDetalhe = computed(() => !!(metaAberta.value || ativoAberto.value));
 </template>
 
 <style scoped>
-.pagina { padding: 40px; max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 480px) { .pagina { padding: 20px 16px; } }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao); }
 </style>

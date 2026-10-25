@@ -89,7 +89,7 @@ const alternar = (id) => { aberta.value = aberta.value === id ? '' : id; };
 </template>
 
 <style scoped>
-.pagina { padding: 8px 0 40px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.pagina { padding: 0 0 var(--espaco-fim); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; text-align: center; }
 .intro { margin: 0 0 6px; text-align: center; color: var(--cor-texto-suave); font-size: 13.5px; }
 .secao { background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: var(--raio-padrao); padding: 6px; }

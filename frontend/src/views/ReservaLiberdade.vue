@@ -581,7 +581,7 @@ onMounted(carregarConectados);
 </template>
 
 <style scoped>
-.pagina { display: flex; flex-direction: column; gap: 16px; max-width: 860px; min-width: 0; }
+.pagina { display: flex; flex-direction: column; gap: var(--espaco-secao); max-width: 860px; min-width: 0; }
 .pagina.embutido { padding: 0; max-width: none; margin: 0; }
 .titulo-pagina { font-family: var(--fonte-display); font-size: 22px; margin: 0; }
 .nota, .nota-inline { font-size: 12px; color: var(--cor-texto-suave); margin: 0; }

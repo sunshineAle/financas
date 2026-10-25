@@ -1,4 +1,5 @@
 <script setup>
+import CampoIconeItem from './CampoIconeItem.vue';
 // Janela de lançamento padrão, montada UMA vez no AppLayout. Abre sobre a página atual (services/lancamento.js) já preenchida
 // com o contexto (conta, cartão ou categoria) e, ao salvar, a pessoa continua onde estava.
 //   Conta: Despesa e Entrada · Cartão: só Despesa/Compra · Categoria: tipo e categoria já escolhidos · Transferência: entre contas próprias.
@@ -20,7 +21,7 @@ import { escolher } from '../services/mes.js';
 
 const route = useRoute();
 const hojeISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
-const vazio = () => ({ tipo: 'saida', descricao: '', valor: 0, data: hojeISO(), contaId: '', categoriaId: '', pagamento: 'conta', cartaoId: '', parcelas: 1, categoriaReceita: '', subcategoria: '', dividaId: '', valorParcela: 0 });
+const vazio = () => ({ tipo: 'saida', descricao: '', valor: 0, data: hojeISO(), contaId: '', categoriaId: '', pagamento: 'conta', cartaoId: '', parcelas: 1, categoriaReceita: '', subcategoria: '', dividaId: '', valorParcela: 0, icone: '' });
 const f = ref(vazio());
 const contas = ref([]);
 const cartoesManuais = ref([]);
@@ -165,6 +166,7 @@ async function salvar() {
         categoriaId: x.tipo === 'saida' && x.categoriaId !== '' ? x.categoriaId : null,
         categoriaReceita: x.tipo === 'entrada' && x.categoriaReceita ? x.categoriaReceita : null,
         subcategoria: x.subcategoria || null,
+        icone: x.icone || null,
         ...(x.tipo === 'saida' && x.dividaId ? { dividaId: x.dividaId, valorParcela: Number(x.valorParcela) || undefined } : {}),
       }),
     });
@@ -239,6 +241,7 @@ function transferenciaFeita(t) {
     <CampoCategoria v-if="f.tipo === 'saida'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Categoria de despesa" automatica="Automática" dica="Automática usa suas regras e o nome da descrição; sem correspondência vai para “Geral”." />
     <CampoCategoria v-else v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Categoria de entrada" automatica="Automática" dica="Automática usa suas regras; sem correspondência vai para “Geral”." />
     <CampoTexto v-if="!usaCartao" v-model="f.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" list="sugestoes-sub-lanc" autocomplete="off" placeholder="Ex: Presente da mãe, Uber do trabalho" />
+    <CampoIconeItem v-if="!usaCartao" v-model="f.icone" :tipo="f.tipo" :descricao="f.descricao" />
     <datalist id="sugestoes-sub-lanc"><option v-for="s in sugestoesSub" :key="s" :value="s"></option></datalist>
   </FormularioModal>
 
