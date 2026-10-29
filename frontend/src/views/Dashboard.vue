@@ -17,6 +17,9 @@ import DashNumero from '../components/DashNumero.vue';
 import DashRosca from '../components/DashRosca.vue';
 import Valor from '../components/Valor.vue';
 import PrevisaoSaldo from '../components/PrevisaoSaldo.vue';
+import LinhaTransacao from '../components/LinhaTransacao.vue';
+import { infoTransacao } from '../utils/infoTransacao.js';
+import PatrimonioDetalhe from '../components/PatrimonioDetalhe.vue';
 import { moedaTotal } from '../services/privacidade.js';
 import { periodo, anoInteiro, rotuloPeriodo, intervaloTxt } from '../services/mes.js';
 import { corReceita, PALETA_RECEITA } from '../utils/coresReceita.js';
@@ -67,8 +70,17 @@ const valorReserva = computed(() => reserva.value?.total || 0);
 const saldoContas = computed(() => dados.value?.totalContas || 0);
 const totalDividas = computed(() => dados.value?.totalDividas || 0);
 const totalFaturasAbertas = computed(() => dados.value?.totalFaturasAbertas || 0);
-// Patrimônio líquido = contas + Reserva de Liberdade − faturas abertas − dívidas (mesma conta do backend: routes/dashboard.js)
-const patrimonio = computed(() => Math.round((saldoContas.value + valorReserva.value - totalFaturasAbertas.value - totalDividas.value) * 100) / 100);
+// Patrimônio líquido = contas + Reserva de Liberdade − faturas abertas − dívidas. Vem pronto do backend (cálculo único em
+// routes/patrimonio.js, o mesmo da janela de detalhe); a conta local fica só de reserva para respostas antigas.
+const patrimonio = computed(() => (typeof dados.value?.patrimonioLiquido === 'number'
+  ? dados.value.patrimonioLiquido
+  : Math.round((saldoContas.value + valorReserva.value - totalFaturasAbertas.value - totalDividas.value) * 100) / 100));
+// Detalhe do patrimônio (anotação 60): tocar no card abre a janela; os botões de ação dentro do card continuam com a função deles.
+const patrimonioAberto = ref(false);
+function abrirPatrimonio(e) {
+  if (e && e.target && e.target.closest && e.target.closest('button, a, input, select, textarea')) return;
+  patrimonioAberto.value = true;
+}
 
 // --- Categorias -------------------------------------------------------------
 const categorias = computed(() => dados.value?.categoriasMes || []);
@@ -102,33 +114,8 @@ const totalUrgentes = computed(() => urgentes.value.reduce((s, d) => s + d.valor
 const maioresDividas = computed(() => [...(dados.value?.dividasPrioritarias || [])].sort((a, b) => b.valor - a.valor));
 const maiorValorDivida = computed(() => (maioresDividas.value.length ? Math.max(...maioresDividas.value.map((d) => d.valor)) : 1));
 
-// --- Atividade recente (mesma estrutura de linha da lista de Transações) ------------
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-function rotuloData(iso) {
-  const hoje = new Date();
-  const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
-  const f = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  if (iso === f(hoje)) return 'Hoje';
-  if (iso === f(ontem)) return 'Ontem';
-  const [, m, d] = iso.split('-').map(Number);
-  return `${d} ${MESES[m - 1]}`;
-}
-const REGEX_FATURA = /pagamento\s+(de\s+)?fatura|pgto\.?\s+fatura/i;
-const REGEX_TRANSF = /transfer[eê]ncia\s+(entre\s+contas|interna|propria|própria)/i;
-function infoDe(t) {
-  if (REGEX_FATURA.test(t.descricao || '')) return { nome: 'Pagamento de fatura', cor: null, icone: null, neutra: true, fallback: Receipt };
-  if (REGEX_TRANSF.test(t.descricao || '')) return { nome: 'Transferência', cor: null, icone: null, neutra: true, fallback: ArrowLeftRight };
-  if (t.valor < 0) {
-    const idx = categorias.value.findIndex((c) => c.id === t.categoria_id);
-    const cat = categorias.value[idx];
-    if (!t.categoria_id || !cat) return { nome: t.categoria_nome || 'Sem categoria', cor: null, icone: null, fallback: Tag };
-    return { nome: cat.nome, cor: corDespesa(cat, Math.max(idx, 0)), icone: cat.icone || null, fallback: Tag };
-  }
-  const nomeR = t.categoria_receita;
-  if (!nomeR) return { nome: 'Sem categoria', cor: null, icone: null, fallback: ArrowDown };
-  const inf = infoReceitas.value.find((c) => c.nome === nomeR);
-  return { nome: nomeR, cor: corReceita(nomeR, inf?.cor || null), icone: inf?.icone || null, fallback: ArrowDown };
-}
+// --- Atividade recente: mesma linha das outras listas (LinhaTransacao, anotação 53) ------------
+function infoDe(t) { return infoTransacao(t, { categorias: categorias.value, receitas: infoReceitas.value }); }
 
 // --- Parallax do orbe: sobe mais devagar que a página; sem movimento = rola junto -----
 const deslocamento = ref(0);
@@ -216,8 +203,12 @@ onMounted(async () => {
       <div class="grade">
         <!-- 1. Saldo + ações rápidas ----------------------------------------- -->
         <div class="coluna">
+          <div class="card-patrimonio" @click="abrirPatrimonio">
           <TopoValor tema="entrada" :variante="1" rotulo="Patrimônio líquido" :valor="patrimonio"
             :linhas="[{ rotulo: 'Saldo nas contas', valor: saldoContas }, { rotulo: '+ Reserva de Liberdade', valor: valorReserva }, { rotulo: '− Faturas abertas', valor: totalFaturasAbertas }, { rotulo: '− Dívidas', valor: totalDividas }]">
+            <button type="button" class="dica-patrimonio" aria-label="Patrimônio líquido: ver os detalhes" aria-haspopup="dialog" @click.stop="patrimonioAberto = true">
+              Toque para ver os detalhes<ChevronRight :size="14" :stroke-width="2" aria-hidden="true" />
+            </button>
             <template #acoes>
               <BarraAcoes compacto :colunas="4">
                 <BotaoAcao compacto :icone="Plus" rotulo="Adicionar" tema="entrada" destaque :aria-expanded="menuAdd" @click="menuAdd = !menuAdd" />
@@ -227,6 +218,8 @@ onMounted(async () => {
               </BarraAcoes>
             </template>
           </TopoValor>
+          </div>
+          <PatrimonioDetalhe :aberto="patrimonioAberto" @fechar="patrimonioAberto = false" />
           <transition name="desce">
             <div v-if="menuAdd" class="escolha-add">
               <button type="button" class="chip entrada" @click="menuAdd = false; abrirLancamento({ tipo: 'entrada' })"><ArrowDown :size="18" :stroke-width="2" />Lançar entrada</button>
@@ -242,17 +235,8 @@ onMounted(async () => {
         <section class="cartao">
           <div class="cabeca"><h2>Atividade recente</h2><button type="button" class="link" @click="ir('/transacoes')">Ver tudo</button></div>
           <ul v-if="atividade.length" class="lista">
-            <li v-for="t in atividade" :key="t.id" class="linha" tabindex="0" role="button" :aria-label="`Ver ${t.descricao} em Transações`" @click="ir('/transacoes')" @keydown.enter="ir('/transacoes')">
-              <span class="icone-cat" :class="{ neutra: infoDe(t).neutra }" :style="{ '--c': infoDe(t).cor || 'var(--cor-texto-suave)' }" aria-hidden="true">
-                <img v-if="ehImagem(infoDe(t).icone)" :src="infoDe(t).icone" alt="" />
-                <IconeCat v-else-if="infoDe(t).icone" :chave="chaveFinalCategoria(infoDe(t).icone, t.valor < 0 ? 'saida' : 'entrada')" :tamanho="20" />
-                <component :is="infoDe(t).fallback" v-else :size="19" :stroke-width="2" />
-              </span>
-              <span class="textos">
-                <span class="descricao">{{ t.descricao }}</span>
-                <span class="secundario">{{ infoDe(t).nome }}<span class="sep">·</span>{{ rotuloData(t.data) }}{{ t.conta_nome ? ` · ${t.conta_nome}` : '' }}</span>
-              </span>
-              <span class="valor numero-tabular" :class="infoDe(t).neutra ? 'neutro' : t.valor >= 0 ? 'positivo' : 'negativo'">{{ t.valor > 0 ? '+' : '−' }} {{ moeda(Math.abs(t.valor)) }}</span>
+            <li v-for="t in atividade" :key="t.id" class="item-tx">
+              <LinhaTransacao :t="t" :info="infoDe(t)" rotulo-abrir="ver em Transações" @abrir="ir('/transacoes')" />
             </li>
           </ul>
           <p v-else class="nota">Nenhuma movimentação neste período.</p>
@@ -375,6 +359,14 @@ onMounted(async () => {
 <style scoped>
 .pagina { display: flex; flex-direction: column; max-width: 1100px; transition: opacity var(--anim-padrao) ease; }
 .pagina.atualizando { opacity: 0.65; }
+/* Card de patrimônio: tocar abre o detalhe (anotação 60); a dica é discreta, em branco translúcido sobre o degradê */
+.card-patrimonio { cursor: pointer; }
+.dica-patrimonio {
+  display: inline-flex; align-items: center; gap: 2px; align-self: flex-start; margin: 2px 0 0; padding: 4px 0; min-height: 28px;
+  background: none; border: 0; font: inherit; font-size: 0.72rem; color: color-mix(in srgb, var(--cor-sobre-cor) 78%, transparent); cursor: pointer;
+}
+.dica-patrimonio:hover { color: var(--cor-sobre-cor); }
+.dica-patrimonio:focus-visible { outline: 2px solid var(--cor-sobre-cor); outline-offset: 2px; border-radius: 6px; }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
 
 /* Palco do orbe: solto no topo, sem card. O bloco do orbe desce mais devagar que a rolagem (parallax) */

@@ -6,6 +6,8 @@ import { ref, computed, watch } from 'vue';
 import Modal from './Modal.vue';
 import AbasSeletor from './AbasSeletor.vue';
 import CampoValor from './CampoValor.vue';
+import { Flame } from 'lucide-vue-next';
+import { taxaCartao } from '../utils/jurosCartao.js';
 
 const props = defineProps({ aberto: Boolean });
 const emit = defineEmits(['fechar']);
@@ -19,12 +21,15 @@ const metodo = ref('avalanche');
 const dados = ref(null);
 const erro = ref('');
 let seq = 0, timer = null;
+// Referência do rotativo (média Bacen) para o cheque especial / fatura vencida sem taxa cadastrada (anotação 60.5)
+let referencia = null;
 
 async function carregar() {
   const meu = ++seq;
   erro.value = '';
   try {
-    const r = await fetch('/api/dividas/plano', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensal: Number(mensal.value) > 0 ? Number(mensal.value) : undefined }) });
+    if (!referencia) { try { const t = await taxaCartao(); referencia = { rotativo: t?.rotativoMensal || undefined }; } catch { referencia = {}; } }
+    const r = await fetch('/api/dividas/plano', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensal: Number(mensal.value) > 0 ? Number(mensal.value) : undefined, taxasReferencia: referencia }) });
     const j = await r.json();
     if (meu !== seq) return;
     if (!r.ok) { dados.value = null; erro.value = j.erro || 'Não foi possível montar o plano.'; return; }
@@ -38,6 +43,9 @@ const abas = [{ id: 'avalanche', rotulo: 'Avalanche' }, { id: 'bolaDeNeve', rotu
 const plano = computed(() => dados.value?.[metodo.value] || null);
 const outro = computed(() => dados.value?.[metodo.value === 'avalanche' ? 'bolaDeNeve' : 'avalanche'] || null);
 const economia = computed(() => (plano.value && outro.value && !plano.value.inviavel && !outro.value.inviavel ? Math.round((outro.value.juros - plano.value.juros) * 100) / 100 : 0));
+// Juros mais caros (cheque especial e rotativo): selo na lista e uma frase curta por tipo
+const caros = computed(() => (plano.value?.ordem || []).filter((o) => o.caro));
+const frasesCaros = computed(() => [...new Set(caros.value.map((o) => o.caro.frase))]);
 const descricao = computed(() => (metodo.value === 'avalanche' ? 'Paga primeiro a dívida com o maior juros. Costuma gastar menos juros.' : 'Paga primeiro a dívida de menor saldo. Quita mais rápido as pequenas e motiva.'));
 </script>
 
@@ -59,13 +67,18 @@ const descricao = computed(() => (metodo.value === 'avalanche' ? 'Paga primeiro 
           </dl>
           <p v-if="economia > 0" class="nota">Em juros, esse método gasta {{ moeda(economia) }} a menos que o outro.</p>
           <p v-else-if="economia < 0" class="nota">Em juros, esse método gasta {{ moeda(-economia) }} a mais que o outro.</p>
+          <div v-if="caros.length" class="caros" data-juros-caros>
+            <Flame :size="16" aria-hidden="true" />
+            <p><strong>Juros mais caros: {{ caros.map((o) => o.caro.rotulo.toLowerCase()).filter((v, i, a) => a.indexOf(v) === i).join(' e ') }}.</strong> {{ frasesCaros.join(' ') }} <template v-if="metodo === 'avalanche'">Na avalanche eles vêm primeiro porque a ordem segue a taxa.</template><template v-else>Mesmo na bola de neve, vale quitar estes antes se puder.</template></p>
+          </div>
           <h4 class="sub">Ordem de pagamento</h4>
           <ol class="ordem">
-            <li v-for="(o, i) in plano.ordem" :key="o.id">
+            <li v-for="(o, i) in plano.ordem" :key="o.id" :class="{ cara: o.caro }">
               <span class="pos" aria-hidden="true">{{ i + 1 }}</span>
               <span class="info">
                 <strong>{{ o.nome }}</strong>
-                <small>Saldo {{ moeda(o.saldo) }} · juros {{ pct(o.taxa) }} ao mês</small>
+                <span v-if="o.caro" class="selo-caro"><Flame :size="12" aria-hidden="true" /> juros mais caros · {{ o.caro.rotulo }}</span>
+                <small>Saldo {{ moeda(o.saldo) }} · juros {{ pct(o.taxa) }} ao mês<template v-if="o.caro?.taxaEstimada"> (estimado)</template></small>
                 <small>Pago no plano {{ moeda(o.totalPago) }} · juros {{ moeda(o.juros) }} · quita no mês {{ o.mesQuitacao }}</small>
               </span>
             </li>
@@ -95,6 +108,11 @@ const descricao = computed(() => (metodo.value === 'avalanche' ? 'Paga primeiro 
 .info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .info strong { overflow-wrap: anywhere; }
 .info small { font-size: 12px; color: var(--cor-texto-suave); overflow-wrap: anywhere; }
+.caros { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
+.caros p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--cor-texto); }
+.caros :deep(svg) { flex: none; margin-top: 2px; }
+.selo-caro { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
+.ordem li.cara .pos { box-shadow: 0 0 0 2px var(--cor-fundo-elevado, var(--cor-card)), 0 0 0 4px var(--cor-saida); }
 .fechar { width: 100%; min-height: 46px; border-radius: 12px; border: 1px solid var(--cor-borda); background: transparent; color: var(--cor-texto); font-weight: 600; font-size: 14px; cursor: pointer; }
 @media (max-width: 480px) { .resumo { grid-template-columns: 1fr 1fr; } }
 </style>

@@ -349,7 +349,7 @@ onMounted(async () => {
                   <span class="total-grupo numero-tabular">− {{ moeda(g.total) }}</span>
                 </header>
                 <CardPadrao class="cartao-lista" sem-padding>
-                  <CartaoLista :lancamentos="g.itens" :categorias="categorias" :manual="cartao.origem === 'manual'" :cartao-nome="cartao.nome" :cartao-icone="cartao.icone" @editar="abrirEdicaoCompra" @remover="(l) => (removendo = l)" />
+                  <CartaoLista :lancamentos="g.itens" :categorias="categorias" :manual="cartao.origem === 'manual'" :cartao="cartao" :cartao-nome="cartao.nome" :cartao-icone="cartao.icone" @editar="abrirEdicaoCompra" @remover="(l) => (removendo = l)" />
                 </CardPadrao>
               </section>
             </div>
@@ -447,8 +447,8 @@ button.botao-perigo { background: transparent; border: 1px solid var(--cor-grave
 .titulo-grupo { display: flex; justify-content: space-between; align-items: baseline; padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--cor-texto-suave); }
 .total-grupo { font-size: 12px; font-weight: 600; color: var(--cor-saida-texto, var(--cor-saida)); }
 .cartao-lista { padding-block: 4px; }
-.cartao-lista :deep(.linha) { margin: 0 6px; }
-.cartao-lista :deep(.linha + .linha) { border-top: 1px solid var(--cor-borda); border-radius: 0 0 14px 14px; }
+.cartao-lista :deep(.linha-tx) { margin: 0 6px; }
+.cartao-lista :deep([role='listitem'] + [role='listitem']) { border-top: 1px solid var(--cor-borda); }
 
 .formulario { display: flex; flex-direction: column; gap: 14px; }
 .tres-colunas { display: grid; gap: 14px; grid-template-columns: 1fr 100px 1fr; }

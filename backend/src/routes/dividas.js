@@ -4,6 +4,7 @@ const dados = require('../dados');
 const { exigirAutenticacao } = require('../middleware/auth');
 const faturas = require('../utils/faturas');
 const util = require('../utils/dividas');
+const rotasCartoes = require('./cartoes');
 
 const router = express.Router();
 router.use(exigirAutenticacao);
@@ -165,13 +166,12 @@ function jurosMaisCaros(usuarioId, ref = {}) {
   const taxaCheque = taxaRef(ref.cheque, TAXA_CHEQUE_PADRAO);
   const taxaRotativo = taxaRef(ref.rotativo, TAXA_ROTATIVO_PADRAO);
   const caros = [];
-  db.prepare("SELECT id, nome, saldo FROM contas WHERE usuario_id = ? AND excluido_em IS NULL AND saldo < 0 AND COALESCE(tipo, 'corrente') NOT IN ('investimento', 'corretora', 'cartao')")
+  db.prepare("SELECT id, nome, saldo FROM contas WHERE usuario_id = ? AND excluido_em IS NULL AND saldo < 0 AND COALESCE(tipo, 'corrente') = 'corrente'")
     .all(usuarioId).forEach((c) => {
       caros.push({ id: `cheque:${c.id}`, tipo: 'cheque', rotulo: 'Cheque especial', nome: `Cheque especial · ${c.nome}`, contaId: c.id,
         saldo: r2(-c.saldo), taxa: taxaCheque, taxaEstimada: true, frase: FRASE_CARO.cheque });
     });
-  let vencidas = [];
-  try { vencidas = require('./cartoes').faturasVencidas(usuarioId); } catch { vencidas = []; }
+  const vencidas = rotasCartoes.faturasVencidas(usuarioId);
   vencidas.forEach((f) => {
     const [a, m] = f.chave.split('-');
     caros.push({ id: `rotativo:${f.cartaoId}:${f.chave}`, tipo: 'rotativo', rotulo: 'Rotativo do cartão', nome: `Fatura ${f.cartao} ${m}/${a} vencida`, cartaoId: f.cartaoId,

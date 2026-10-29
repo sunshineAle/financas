@@ -1,33 +1,63 @@
 <script setup>
-// Lista de compras do cartão no MESMO padrão da lista de Transações: ícone da categoria, título,
-// "data · categoria · cartão", parcela, valor e menu ⋮.
-import IconeCategoria from './IconeCategoria.vue';
-import MenuPontos from './MenuPontos.vue';
-import IconeBanco from './IconeBanco.vue';
+// Lista de compras do cartão com a LinhaTransacao (anotação 53), a mesma de Transações: ícone do item com selo do
+// cartão, pílula "Crédito" com a bandeira, categoria, parcela embaixo do valor e menu ⋮. Tocar na linha edita a compra
+// (cartão manual). Usada no extrato do cartão (CartaoExtrato.vue) e na lista da tela Cartões (Cartoes.vue).
+import { computed } from 'vue';
+import LinhaTransacao from './LinhaTransacao.vue';
+import { infoTransacao } from '../utils/infoTransacao.js';
 
 const props = defineProps({
   lancamentos: { type: Array, default: () => [] },
   categorias: { type: Array, default: () => [] },
   manual: { type: Boolean, default: false },
+  // Cartão da lista (nome, icone, cor, bandeira, tipoCredito). Sem ele, usa cartaoNome/cartaoIcone.
+  cartao: { type: Object, default: null },
   cartaoNome: { type: String, default: '' },
   cartaoIcone: { type: String, default: '' },
 });
 const emit = defineEmits(['editar', 'remover']);
 
-const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const dm = (iso) => { const [, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}`; };
-const cat = (l) => props.categorias.find((c) => c.id === l.categoriaId) || null;
+// Compra do cartão no formato de /api/transacoes (o que a LinhaTransacao lê).
+const linhas = computed(() => props.lancamentos.map((l) => {
+  const k = props.cartao || {};
+  const t = {
+    id: l.id,
+    cartao: true,
+    descricao: l.descricao,
+    valor: -(Number(l.valor) || 0),
+    data: l.dataCompra,
+    conta_nome: k.nome || props.cartaoNome,
+    conta_icone: k.icone || props.cartaoIcone || null,
+    conta_cor: k.cor || null,
+    cartao_bandeira: k.bandeira || null,
+    cartao_tipo_credito: k.tipoCredito || k.tipo_credito || null,
+    meio: l.meio || null,
+    rotulo_parcela: l.rotuloParcela || null,
+    total_parcelas: l.totalParcelas,
+    parcela_numero: l.parcelaNumero,
+    categoria_id: l.categoriaId,
+    subcategoria: l.subcategoria || null,
+    icone: l.icone || null,
+    recorrente: !!l.recorrente,
+  };
+  // Valor negativo na fatura = estorno/crédito: cor neutra, como em Transações (anotação 38).
+  const info = t.valor > 0 ? { nome: 'Estorno', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' } : infoTransacao(t, { categorias: props.categorias });
+  return { l, t, info };
+}));
 </script>
 
 <template>
-  <ul class="lista">
-    <li v-for="l in lancamentos" :key="l.id" class="linha">
-      <IconeCategoria :valor="cat(l)?.icone" tipo="saida" :tamanho="40" />
-      <div class="textos">
-        <span class="desc">{{ l.descricao }}</span>
-        <span class="meta">
-          <span>{{ dm(l.dataCompra) }}</span>
-          <span v-if="cat(l)">· {{ cat(l).nome }}<template v-if="l.subcategoria"> · {{ l.subcategoria }}</template></span>
+  <div class="lista" role="list">
+    <div v-for="x in linhas" :key="x.t.id" role="listitem">
+      <LinhaTransacao :t="x.t" :info="x.info" :clicavel="manual" rotulo-abrir="editar a compra" @abrir="emit('editar', x.l)">
+        <template #menu>
+          <button v-if="manual" type="button" @click="emit('editar', x.l)">Editar</button>
+          <button type="button" class="perigo" @click="emit('remover', x.l)">Remover</button>
+        </template>
+      </LinhaTransacao>
+    </div>
+  </div>
+</template></span>
           <span v-if="cartaoNome" class="cart">· <IconeBanco :icone="cartaoIcone" :nome="cartaoNome" padrao="💳" :tamanho="13" /> {{ cartaoNome }}</span>
           <span v-if="l.totalParcelas > 1">· total {{ moeda(l.valorTotalCompra) }}</span>
         </span>
@@ -43,21 +73,5 @@ const cat = (l) => props.categorias.find((c) => c.id === l.categoriaId) || null;
 </template>
 
 <style scoped>
-.lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.linha { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; align-items: center; gap: 4px 12px; padding: 10px 4px 10px 6px; min-height: 56px; border-radius: 14px; transition: background var(--anim-rapida) ease; }
-.linha:hover { background: var(--cor-realce); }
-.textos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.desc { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.meta { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; white-space: nowrap; overflow: hidden; }
-.cart { display: inline-flex; align-items: center; gap: 4px; }
-.parcela { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--cor-borda); color: var(--cor-texto-suave); white-space: nowrap; }
-.valor { font-family: var(--fonte-display); font-size: 15px; font-weight: 600; color: var(--cor-saida-texto); white-space: nowrap; text-align: right; }
-@media (max-width: 480px) {
-  .cart { display: none; }
-  .linha { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
-  .parcela { grid-column: 2; grid-row: 2; justify-self: start; }
-  .textos { grid-column: 2; }
-  .valor { grid-column: 3; grid-row: 1; }
-  .linha > :last-child { grid-column: 4; grid-row: 1; }
-}
+.lista { display: flex; flex-direction: column; min-width: 0; }
 </style>

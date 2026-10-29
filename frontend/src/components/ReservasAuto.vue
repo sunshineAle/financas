@@ -8,8 +8,8 @@
 // Aparece em Objetivos e no topo de Transações (a revisar). Sem `metas`, busca sozinho.
 import { ref, computed, onMounted, watch } from 'vue';
 import CardPadrao from './CardPadrao.vue';
-import IconeCat from './IconeCat.vue';
-import { api, comCdi, moeda, dataBR } from '../services/investimentos.js';
+import LinhaTransacao from './LinhaTransacao.vue';
+import { api, comCdi } from '../services/investimentos.js';
 
 const props = defineProps({ metas: { type: Array, default: null }, versao: { type: Number, default: 0 } });
 const emit = defineEmits(['decidido']);
@@ -68,10 +68,8 @@ async function decidir(p, acao) {
   <CardPadrao v-if="pendentes.length" tema="meta" class="auto tema-meta" titulo="A revisar: guardar e resgatar" subtitulo="Movimentos do extrato que parecem dinheiro guardado, não gasto nem entrada." data-reservas-auto>
     <ul class="lista">
       <li v-for="p in pendentes" :key="p.transacao.id">
-        <span class="icone" aria-hidden="true"><IconeCat :chave="p.deteccao.sentido === 'resgatar' ? 'cat-entrada-resgate' : 'cat-grupo-financas'" :tamanho="20" /></span>
+        <LinhaTransacao class="linha-revisar" :t="{ ...p.transacao, a_revisar: true }" :info="{ nome: p.deteccao.rotulo, neutra: true, tipoNeutro: 'reserva' }" :clicavel="false" />
         <div class="corpo">
-          <strong>{{ p.transacao.descricao }}</strong>
-          <small>{{ dataBR(p.transacao.data) }} · {{ p.transacao.conta_nome }} · {{ moeda(Math.abs(p.transacao.valor)) }}</small>
           <p v-if="p.deteccao.sentido === 'resgatar'" class="explica">Isto parece um resgate da sua {{ p.deteccao.ativo }}. É dinheiro que você já tinha guardado, então não conta como entrada.</p>
           <p class="pergunta">{{ p.deteccao.sentido === 'guardar' ? 'Guardar' : 'Resgatar' }} {{ p.deteccao.ativo }} {{ p.deteccao.sentido === 'guardar' ? 'em' : 'de' }} qual meta?</p>
           <div class="acoes">
@@ -100,10 +98,11 @@ async function decidir(p, acao) {
 
 <style scoped>
 .lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.lista li { display: flex; gap: 12px; align-items: flex-start; }
-.icone { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-meta-fundo); color: var(--cor-meta); }
-.corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.lista li { display: flex; flex-direction: column; gap: 2px; }
+.linha-revisar { margin: 0 -6px; }
+.corpo { flex: 1; min-width: 0; padding-left: 54px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .corpo small, .nota { color: var(--cor-texto-suave); font-size: 12px; }
+@media (max-width: 480px) { .corpo { padding-left: 0; } }
 .nota { margin: 10px 0 0; }
 .pergunta { margin: 6px 0 4px; font-size: 13px; }
 .acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

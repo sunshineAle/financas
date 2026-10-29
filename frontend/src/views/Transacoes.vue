@@ -23,7 +23,7 @@ import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
 import { avisar } from '../services/avisos.js';
 import { abrirLancamento, lancamentoSalvo, avisoLancamento } from '../services/lancamento.js';
-import TransacoesLinha from '../components/TransacoesLinha.vue';
+import LinhaTransacao from '../components/LinhaTransacao.vue';
 import { periodo, anoInteiro, ano, escolher, MESES, MESES_CURTOS } from '../services/mes.js';
 import { corDespesa } from '../utils/coresDespesa.js';
 import { corReceita } from '../utils/coresReceita.js';
@@ -534,7 +534,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
               <span v-if="g.total !== 0" class="total-grupo numero-tabular" :class="g.total < 0 ? 'neg' : 'pos'">{{ g.total < 0 ? '−' : '+' }} {{ moeda(Math.abs(g.total)) }}</span>
             </header>
             <CardPadrao class="cartao-lista" sem-padding>
-              <TransacoesLinha v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" @abrir="abrirEdicao" @menu="abrirMenu" />
+              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
             </CardPadrao>
           </section>
         </template>
@@ -573,7 +573,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
                   <ChevronDown :size="18" :stroke-width="2" class="seta-cat" :class="{ aberta: abertas[g.chave] }" />
                 </button>
                 <div v-if="abertas[g.chave]" class="cat-itens">
-                  <TransacoesLinha v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" mostrar-data @abrir="abrirEdicao" @menu="abrirMenu" />
+                  <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
                 </div>
               </div>
             </CardPadrao>
@@ -668,9 +668,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .total-grupo { font-size: 12px; font-weight: 600; }
 .pos { color: var(--txt-entrada); }
 .neg { color: var(--txt-saida); }
-.cartao-lista :deep(.linha) { margin: 0 6px; }
+.cartao-lista :deep(.linha-tx) { margin: 0 6px; }
 .cartao-lista { padding-block: 4px; }
-.cartao-lista :deep(.linha + .linha) { border-top: 1px solid var(--cor-borda); border-radius: 0 0 14px 14px; }
+.cartao-lista :deep(.linha-tx + .linha-tx) { border-top: 1px solid var(--cor-borda); border-radius: 0 0 14px 14px; }
 
 .cartao-mes { display: flex; flex-direction: column; gap: 10px; text-align: left; color: var(--cor-texto); font-weight: 500; }
 .mes-topo { display: flex; align-items: center; gap: 10px; }
