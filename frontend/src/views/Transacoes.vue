@@ -504,7 +504,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
       </CardPadrao>
 
       <p v-if="resumo.quantidadeCartao" class="nota-cartao">
-        {{ resumo.quantidadeCartao }} compra(s) no cartão de crédito ({{ moeda(resumo.cartao) }}) aparecem na lista. A compra conta como gasto no mês da fatura em que foi lançada, esteja a fatura paga ou não; pagar a fatura depois não conta como gasto de novo.
+        {{ resumo.quantidadeCartao }} compra(s) no cartão de crédito ({{ moeda(resumo.cartao) }}) aparecem na lista. As compras no cartão contam na data da compra. Pagar a fatura não conta como gasto de novo.
       </p>
 
       <p v-if="aviso" class="aviso-ok">
