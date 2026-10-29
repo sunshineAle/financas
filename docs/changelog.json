@@ -1,5 +1,24 @@
 [
   {
+    "versao": "0.9",
+    "data": "2026-10-29",
+    "resumo": "Comece com o saldo certo: saldo inicial em contas, metas, investimentos e cartões. Patrimônio com Ativos e Passivos no Início, tipos de crédito, transações com o banco e o meio de pagamento, e telas mais limpas.",
+    "itens": [
+      "Saldo inicial: informe o saldo de hoje das contas, o que já tem guardado nas metas, a posição dos investimentos e a fatura já em aberto dos cartões. Isso não conta como entrada nem saída.",
+      "Ajustar saldo: no menu da conta, informe o saldo real e o app corrige a diferença.",
+      "Metas ligadas à caixinha do banco: na importação, o app reconhece a caixinha pelo nome e lança Guardar ou Resgatar sozinho.",
+      "Toque no Patrimônio do Início para ver Ativos e Passivos, com cheque especial e compras parceladas futuras à parte.",
+      "Cartões agora têm tipo (cartão de crédito, cartão de loja ou crediário), bandeira e juros. Na quitação, o app destaca primeiro os juros mais caros.",
+      "Cada transação mostra o banco ou cartão de onde saiu e o meio de pagamento (Pix, crédito, débito, boleto).",
+      "Na importação da fatura, estornos, pagamentos adiantados e cashback agora entram como crédito, e o total confere com o do banco.",
+      "No celular, o topo ficou igual em todas as páginas. No computador, o menu lateral abre ao passar o mouse e a foto abre o painel do perfil.",
+      "Telas mais limpas: as explicações foram para o pequeno \"?\" ao lado do título de cada seção.",
+      "O mês agora muda pelo filtro (não mais deslizando o dedo); embaixo do mês aparece só o ano.",
+      "Início do mês financeiro fica em Minhas finanças e vai junto no backup.",
+      "Ao sair do app, a tela fica coberta para não mostrar valores na lista de apps abertos."
+    ]
+  },
+  {
     "versao": "0.8",
     "data": "2026-10-29",
     "resumo": "Escolha quando o seu mês começa (por exemplo, no dia do salário) e veja quanto vai ter nas contas nos próximos meses. Novo Custo de vida, com os gastos essenciais, e o Quanto guardar para a Reserva de Liberdade.",

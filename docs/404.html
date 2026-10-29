@@ -25,12 +25,38 @@
         document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
       } catch (e) {}
     </script>
-    <script type="module" crossorigin src="/financas/assets/index-B6IUUn59.js"></script>
+    <style>
+      /* Privacidade ao sair do app (anotações 46 e 59): camada OPACA e sólida, já no HTML desde o início (só alterna uma
+         classe), para aparecer na hora em que o sistema tira a miniatura de "apps recentes". O desfoque é só transição. */
+      #sf-privacidade{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:#141413}
+      html[data-theme=light] #sf-privacidade{background:#f6f5f1}
+      html.sf-oculto #sf-privacidade{display:flex}
+      #sf-privacidade span{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#7a3cf0,#4a12b0 35%,#1f4a90 65%,#0f6275);font:500 38px/1 Optima,Candara,Georgia,serif;color:#fff}
+    </style>
+    <script>
+      // Liga a camada o mais cedo possível: blur da janela (abre os recentes ou a barra de notificações), aba escondida,
+      // pagehide e freeze. Some ao voltar (focus/visível/pageshow/resume). Funciona também antes do app carregar.
+      (function () {
+        var h = document.documentElement;
+        function cobrir() { h.classList.add('sf-oculto'); }
+        function descobrir() { if (document.visibilityState !== 'hidden') h.classList.remove('sf-oculto'); }
+        window.__sfPrivacidade = { cobrir: cobrir, descobrir: descobrir };
+        window.addEventListener('blur', cobrir);
+        window.addEventListener('focus', descobrir);
+        window.addEventListener('pagehide', cobrir);
+        window.addEventListener('pageshow', descobrir);
+        document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') cobrir(); else descobrir(); });
+        document.addEventListener('freeze', cobrir);
+        document.addEventListener('resume', descobrir);
+      })();
+    </script>
+    <script type="module" crossorigin src="/financas/assets/index-CotJA8o0.js"></script>
     <link rel="modulepreload" crossorigin href="/financas/assets/preload-helper-B1tnf050.js">
     <link rel="modulepreload" crossorigin href="/financas/assets/_commonjsHelpers-IkB594pC.js">
     <link rel="modulepreload" crossorigin href="/financas/assets/idb-qiV6c4F-.js">
   </head>
   <body>
+    <div id="sf-privacidade" aria-hidden="true"><span>D</span></div>
     <div id="app"><div id="splash" style="position:fixed;inset:0;display:grid;place-items:center;background:#141413"><div style="width:min(38vw,180px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#7a3cf0,#4a12b0 35%,#1f4a90 65%,#0f6275);box-shadow:0 20px 40px -16px rgba(94,24,216,.55),inset 0 -10px 22px rgba(255,255,255,.1);animation:sfsp 1.6s ease-in-out infinite alternate"><span style="font:500 min(20vw,92px)/1 Optima,Candara,Georgia,serif;color:#fff">D</span></div></div><style>@keyframes sfsp{from{transform:scale(.96);opacity:.85}to{transform:scale(1);opacity:1}}</style></div>
     <script src="./config.js"></script>
   </body>
