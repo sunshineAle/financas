@@ -25,6 +25,8 @@ function criarAdaptador() {
     }
     pragma(texto) { this.bd.exec(`PRAGMA ${texto}`); }
     exec(sql) { this.bd.exec(sql); }
+    // Função SQL própria (ex.: mes_fin): node:sqlite usa bd.function(nome, fn), como o better-sqlite3.
+    function(nome, fn) { this.bd.function(nome, fn); }
     close() { this.bd.close(); }
     prepare(sql) {
       const st = this.bd.prepare(sql);

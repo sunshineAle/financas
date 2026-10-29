@@ -1,4 +1,5 @@
-// Regras de categorização: lista, criação (com "aplicar nas antigas"), ativar/desativar e exclusão.
+// Regras de categorização: lista, criação (com "aplicar nas antigas"), edição/pausa, exclusão e "desfazer" (restaurar).
+// Anotação 48: a regra também guarda subcategoria e ícone do item, gravados nas transações que ela categoriza.
 const express = require('express');
 const db = require('../db');
 const dados = require('../dados');
@@ -50,6 +51,8 @@ function ler(usuarioId, corpo, atual = null) {
     d.categoria_id = null;
   }
   if (c.ativa !== undefined) d.ativa = c.ativa ? 1 : 0;
+  if (c.subcategoria !== undefined) d.subcategoria = String(c.subcategoria || '').trim().slice(0, 80) || null;
+  if (c.icone !== undefined) d.icone = /^cat-[a-z0-9-]{2,60}$/.test(String(c.icone || '')) ? String(c.icone) : null; // mesma regra do ícone da transação
   return { dados: d };
 }
 
@@ -68,8 +71,35 @@ function paraSaida(r) {
     id: r.id, tipo: r.tipo, padrao: r.padrao, valorMin: r.valor_min, valorMax: r.valor_max,
     contaId: r.conta_id || null, contaNome: conta ? conta.nome : null,
     categoriaId: r.categoria_id || null, categoriaReceita: r.categoria_receita || null, categoriaNome, categoriaIcone,
+    subcategoria: r.subcategoria || '', icone: r.icone || '',
     ativa: !!r.ativa, aplicacoes: r.aplicacoes || 0,
   };
+}
+
+// Aplica a regra às antigas (categoria) e completa subcategoria/ícone das que casam e ainda não têm (não sobrescreve escolha do usuário).
+function aplicar(usuarioId, regra) {
+  const aplicadas = R.aplicarNasAntigas(usuarioId, regra);
+  if (!regra.subcategoria && !regra.icone) return aplicadas;
+  const ehSaida = regra.tipo !== 'entrada';
+  dados.transacao(() => {
+    const txs = db.prepare(`SELECT id, conta_id, descricao, valor, subcategoria, icone FROM transacoes
+      WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND tipo_mov IS NULL AND ${ehSaida ? 'valor < 0' : 'valor > 0'}`).all(usuarioId);
+    for (const t of txs) {
+      if (!R.casa(regra, { descricao: t.descricao, valor: t.valor, contaId: t.conta_id })) continue;
+      const campos = {};
+      if (regra.subcategoria && !t.subcategoria) campos.subcategoria = regra.subcategoria;
+      if (regra.icone && !t.icone) campos.icone = regra.icone;
+      if (Object.keys(campos).length) dados.atualizar('transacoes', t.id, campos);
+    }
+    if (ehSaida && regra.subcategoria) {
+      const lcs = db.prepare('SELECT id, descricao, valor, subcategoria FROM lancamentos_cartao WHERE usuario_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL').all(usuarioId);
+      for (const l of lcs) {
+        if (l.subcategoria || !R.casa(regra, { descricao: l.descricao, valor: l.valor, contaId: null })) continue;
+        dados.atualizar('lancamentos_cartao', l.id, { subcategoria: regra.subcategoria });
+      }
+    }
+  });
+  return aplicadas;
 }
 
 router.get('/', (req, res) => {
@@ -95,7 +125,7 @@ router.post('/', (req, res) => {
   let regra; let aplicadas = 0;
   dados.transacao(() => {
     regra = dados.inserir('regras_categorias', { usuario_id: req.usuario.id, ativa: 1, aplicacoes: 0, ...l.dados });
-    if (req.body && req.body.aplicarAntigas) aplicadas = R.aplicarNasAntigas(req.usuario.id, regra);
+    if (req.body && req.body.aplicarAntigas) aplicadas = aplicar(req.usuario.id, regra);
   });
   res.status(201).json({ regra: paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(regra.id)), aplicadas });
 });
@@ -112,13 +142,15 @@ router.put('/:id', (req, res) => {
   const l = ler(req.usuario.id, req.body, atual);
   if (l.erro) return res.status(400).json({ erro: l.erro });
   dados.atualizar('regras_categorias', atual.id, l.dados);
-  res.json(paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(atual.id)));
+  const nova = db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(atual.id);
+  const aplicadas = req.body && req.body.aplicarAntigas && nova.ativa ? aplicar(req.usuario.id, nova) : 0;
+  res.json({ ...paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(atual.id)), aplicadas });
 });
 
 router.post('/:id/aplicar', (req, res) => {
   const atual = achar(req, res);
   if (!atual) return;
-  res.json({ aplicadas: R.aplicarNasAntigas(req.usuario.id, atual) });
+  res.json({ aplicadas: aplicar(req.usuario.id, atual) });
 });
 
 router.delete('/:id', (req, res) => {
@@ -126,6 +158,14 @@ router.delete('/:id', (req, res) => {
   if (!atual) return;
   dados.excluir('regras_categorias', atual.id);
   res.json({ ok: true });
+});
+
+// "Desfazer" da exclusão (toast da tela de regras).
+router.post('/:id/restaurar', (req, res) => {
+  const r = db.prepare('SELECT * FROM regras_categorias WHERE id = ? AND usuario_id = ? AND excluido_em IS NOT NULL').get(req.params.id, req.usuario.id);
+  if (!r) return res.status(404).json({ erro: 'Regra não encontrada.' });
+  dados.restaurar('regras_categorias', r.id);
+  res.json(paraSaida(db.prepare('SELECT * FROM regras_categorias WHERE id = ?').get(r.id)));
 });
 
 module.exports = router;

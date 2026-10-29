@@ -73,6 +73,33 @@ function faturaAlvo(cartao, linhas, meta, escolhida) {
   return { chave: base, detectada, vizinhas, datas: base ? faturas.datasDaFatura(base, cartao.dia_fechamento, cartao.dia_vencimento) : null };
 }
 
+// "Impressão digital" do arquivo: as linhas lidas (data, |valor|, descrição normalizada), em ordem. Não depende do nome
+// do arquivo nem da inversão de sinais; o mesmo extrato baixado de novo dá a mesma impressão.
+function impressaoDoArquivo(formato, linhas) {
+  const base = linhas.map((l) => `${l.data}|${Math.abs(Number(l.valor) || 0).toFixed(2)}|${T.normalizar(l.descricao)}`).sort().join('\n');
+  return `v1:${formato}:${linhas.length}:${T.hash(base)}${T.hash(base.split('').reverse().join(''))}`;
+}
+
+// Importação ATIVA (não desfeita) do mesmo arquivo no mesmo destino. Importações antigas, sem impressão, são reconhecidas
+// pelo nome do arquivo + quantidade de linhas.
+function importacaoAnterior(usuarioId, dest, impressao, nomeArquivo, qtdLinhas) {
+  const destinoSql = dest.tipo === 'conta' ? 'm.conta_id = ?' : 'm.cartao_id = ?';
+  const destinoId = dest.tipo === 'conta' ? dest.conta.id : dest.cartao.id;
+  let m = db.prepare(
+    `SELECT m.* FROM importacoes m JOIN importacao_itens i ON i.importacao_id = m.id AND i.tabela = 'arquivo' AND i.registro_id = ? AND i.excluido_em IS NULL
+     WHERE m.usuario_id = ? AND m.excluido_em IS NULL AND m.desfeita_em IS NULL AND ${destinoSql} ORDER BY m.criado_em DESC LIMIT 1`
+  ).get(impressao, usuarioId, destinoId);
+  if (!m && nomeArquivo) {
+    m = db.prepare(
+      `SELECT m.* FROM importacoes m WHERE m.usuario_id = ? AND m.excluido_em IS NULL AND m.desfeita_em IS NULL AND ${destinoSql}
+       AND m.arquivo_nome = ? AND m.qtd_total = ? AND NOT EXISTS (SELECT 1 FROM importacao_itens i WHERE i.importacao_id = m.id AND i.tabela = 'arquivo' AND i.excluido_em IS NULL)
+       ORDER BY m.criado_em DESC LIMIT 1`
+    ).get(usuarioId, destinoId, String(nomeArquivo).slice(0, 200), qtdLinhas);
+  }
+  if (!m) return null;
+  return { id: m.id, em: m.criado_em, arquivo: m.arquivo_nome, novas: m.qtd_novas, atualizadas: m.qtd_atualizadas };
+}
+
 function analisar(usuarioId, corpo) {
   const dest = destinoDe(usuarioId, corpo.destino);
   const leitura = lerEntrada(corpo, perfisDoUsuario(usuarioId));
@@ -99,6 +126,7 @@ function analisar(usuarioId, corpo) {
     resultado = classificarFatura(usuarioId, dest.cartao, linhas, periodo, infoFatura.chave, corpo);
   }
   const lista = resultado.linhas;
+  const impressao = impressaoDoArquivo(leitura.formato, linhas);
   const contagem = {};
   lista.forEach((l) => { contagem[l.status] = (contagem[l.status] || 0) + 1; });
   const total = lista.filter((l) => !l.status.startsWith('fora')).length;
@@ -109,7 +137,9 @@ function analisar(usuarioId, corpo) {
     dica: leitura.banco ? leitura.banco.dica : '',
     periodoArquivo: { inicio: periodoArquivo.inicio, fim: periodoArquivo.fim },
     periodo,
-    fatura: infoFatura,
+    fatura: infoFatura ? { ...infoFatura, totalArquivo: resultado.totalArquivo } : null,
+    impressao,
+    importacaoAnterior: importacaoAnterior(usuarioId, dest, impressao, corpo.nomeArquivo, lista.length),
     saldoExtrato: leitura.meta.saldo !== undefined && leitura.meta.saldo !== null ? { valor: leitura.meta.saldo, data: leitura.meta.saldoData || periodoArquivo.fim } : null,
     sinalAuto: sinal.sinalAuto, sinalInvertido: sinal.sinalInvertido, sinalFixo: !!(leitura.meta.sinalNormalizado || leitura.formato === 'ofx'),
     perfilAplicado: leitura.perfilAplicado || null,

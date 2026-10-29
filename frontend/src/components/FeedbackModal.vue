@@ -21,7 +21,7 @@ async function enviar() {
   try {
     const r = await enviarFeedback(f.value);
     aberto.value = false;
-    avisar(r === 'enviado' ? 'Recebido, obrigado!' : 'Será enviado quando houver internet.', { tipo: r === 'enviado' ? 'ok' : 'info' });
+    avisar(r === 'enviado' ? 'Recebido, obrigado!' : r === 'na-fila' ? 'Será enviado quando houver internet.' : 'Não foi possível enviar agora. Vamos tentar de novo depois.', { tipo: r === 'enviado' ? 'ok' : 'info' });
   } catch (e) { erro.value = e.message || 'Não foi possível enviar agora. Vamos tentar de novo depois.'; }
   finally { enviando.value = false; }
 }

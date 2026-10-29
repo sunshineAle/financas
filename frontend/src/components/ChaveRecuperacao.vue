@@ -4,7 +4,7 @@
 import { ref } from 'vue';
 import { Copy, Download, Printer, KeyRound } from 'lucide-vue-next';
 
-const props = defineProps({ codigo: { type: String, required: true }, rotuloContinuar: { type: String, default: 'Continuar' } });
+const props = defineProps({ codigo: { type: String, required: true }, rotuloContinuar: { type: String, default: 'Continuar' }, somenteVer: { type: Boolean, default: false } });
 const emit = defineEmits(['guardado']);
 const confirmou = ref(false);
 const copiado = ref(false);
@@ -26,7 +26,7 @@ function imprimir() {
 </script>
 
 <template>
-  <div class="chave" data-chave-recuperacao>
+  <div class="chave-rec" data-chave-recuperacao>
     <p class="explica"><KeyRound :size="16" :stroke-width="2" /> Anote este <b>código de recuperação</b>. Ele substitui a senha: abre o app e os backups e permite criar uma senha nova.</p>
     <output class="codigo" :aria-label="'Código de recuperação: ' + codigo"><span v-for="(g, i) in codigo.split('-')" :key="i">{{ g }}<i v-if="i < 5" aria-hidden="true">-</i></span></output>
     <div class="acoes">
@@ -35,18 +35,21 @@ function imprimir() {
       <button type="button" @click="imprimir"><Printer :size="16" :stroke-width="2" /> Imprimir</button>
     </div>
     <p class="alerta">Sem a senha e sem a chave de recuperação, ninguém consegue recuperar os dados.</p>
-    <label class="confirma"><input v-model="confirmou" type="checkbox" /> Guardei o código em local seguro</label>
-    <button type="button" class="continuar" :disabled="!confirmou" @click="emit('guardado')">{{ rotuloContinuar }}</button>
+    <template v-if="!somenteVer">
+      <label class="confirma"><input v-model="confirmou" type="checkbox" /> Guardei a chave em local seguro</label>
+      <button type="button" class="continuar" :disabled="!confirmou" @click="emit('guardado')">{{ rotuloContinuar }}</button>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.chave { display: flex; flex-direction: column; gap: 12px; }
+/* "chave-rec" (não "chave"): o Perfil tem um .chave (interruptor) com escopo que vazava para a raiz deste componente (anotação 49). */
+.chave-rec { display: flex; flex-direction: column; gap: 12px; width: 100%; min-width: 0; }
 .explica { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--cor-texto-suave); }
 .explica svg { vertical-align: -3px; color: var(--cor-primaria); }
-.codigo { display: block; text-align: center; font: 600 clamp(16px, 4.6vw, 20px)/1.5 ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.06em; padding: 14px 10px; border-radius: 12px; border: 1px dashed var(--cor-borda); background: var(--cor-fundo-elevado); color: var(--cor-texto); user-select: all; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 2px; }
+.codigo { display: grid; grid-template-columns: repeat(3, auto); justify-content: center; gap: 6px 16px; text-align: center; font: 600 clamp(17px, 5vw, 21px)/1.4 ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.08em; padding: 14px 10px; border-radius: 12px; border: 1px dashed var(--cor-borda); background: var(--cor-fundo-elevado); color: var(--cor-texto); user-select: all; }
 .codigo span { white-space: nowrap; }
-.codigo i { font-style: normal; opacity: 0.45; }
+.codigo i { display: none; } /* em blocos de 4, 3 por linha (anotação 49); copiar leva com os hífens */
 .acoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .acoes button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 600 13.5px var(--fonte-texto); cursor: pointer; padding: 0 6px; }
 .acoes button:hover { background: var(--cor-realce); }

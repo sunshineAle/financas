@@ -1,6 +1,24 @@
 [
   {
-    "versao": "Onda 7",
+    "versao": "0.8",
+    "data": "2026-10-29",
+    "resumo": "Escolha quando o seu mês começa (por exemplo, no dia do salário) e veja quanto vai ter nas contas nos próximos meses. Novo Custo de vida, com os gastos essenciais, e o Quanto guardar para a Reserva de Liberdade.",
+    "itens": [
+      "Início do mês financeiro em Configurações: dia 1, um dia fixo ou o 5º dia útil. O salário e as compras até o próximo pagamento ficam no mesmo mês.",
+      "Cada compra conta numa data só: a da compra. Pagar a fatura não conta como gasto de novo.",
+      "Novo no Início: Dinheiro nas contas, com a previsão do saldo para os próximos meses. Se o saldo for ficar negativo, o app avisa e leva ao plano de quitação.",
+      "Custos fixos virou Custo de vida, com duas abas: Fixos (valor igual todo mês) e Essenciais (luz, água, mercado…), que o app estima pela média dos últimos 6 meses e marca como Pago ou Pendente.",
+      "O plano da Reserva virou Quanto guardar: a meta usa o seu custo de vida e avisa quando ele muda.",
+      "Filtro de meses mais baixo. Toque no mês para trocar o ano.",
+      "Regras de categorização: arraste para pausar ou excluir e toque para editar. Ao categorizar uma transação, o app sugere criar a regra.",
+      "Chave de recuperação: agora dá para ver a chave atual (com a sua senha) e gerar uma nova com segurança.",
+      "Importar de novo uma fatura depois de desfazer volta a funcionar, e o total importado confere com o do banco.",
+      "Ao sair do app, a tela fica desfocada para não mostrar valores na lista de apps abertos.",
+      "O aviso de nova versão mostra o resumo do que mudou."
+    ]
+  },
+  {
+    "versao": "0.7",
     "data": "2026-10-25",
     "resumo": "Topo mais limpo: sua foto agora junta perfil e notificações. Telas com mais espaço, ícones novos para as categorias e um jeito de enviar sugestões direto do app.",
     "itens": [
@@ -15,7 +33,7 @@
     ]
   },
   {
-    "versao": "Onda 6",
+    "versao": "0.6",
     "data": "2026-10-24",
     "resumo": "Código de recuperação para nunca perder o acesso, entrada mais rápida com PIN e biometria e backup mais simples.",
     "itens": [

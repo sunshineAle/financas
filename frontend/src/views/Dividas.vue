@@ -298,7 +298,8 @@ async function acordoSalvo(d) {
 }
 
 // ----- Plano para todas as dívidas (avalanche × bola de neve) -----
-const planoAberto = ref(false);
+// /dividas?plano=1 (atalho do aviso da previsão do saldo, anotação 51) já abre o plano.
+const planoAberto = ref(router.currentRoute.value.query.plano === '1');
 
 // ----- Acordo quebrado: a dívida volta ao valor original + encargos -----
 const quebrarAlvo = ref(null);

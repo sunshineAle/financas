@@ -12,9 +12,9 @@
 // recebe o slot `corpo`. Sem `ligada` a aba aparece "solta", com contorno e linha de base, como antes).
 // Aba DISCRETA: fundo = var(--mes-fundo) (padrão var(--cor-fundo-elevado), a mesma cor do bloco), sem degradê nem sombra.
 // Mostra só 1-2 meses de cada lado, sumindo em transparência. Variáveis expostas: --mes-cor (destaque), --mes-fundo.
-import { ref, computed, onBeforeUnmount } from 'vue';
-import { ChevronLeft, ChevronRight, CalendarRange, CalendarDays, RotateCcw } from 'lucide-vue-next';
-import { ano, mesNum, anoInteiro, ehAtual, rotuloPeriodo, MESES_CURTOS, mover, voltarAtual, alternarAno } from '../services/mes.js';
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
+import { ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Check } from 'lucide-vue-next';
+import { ano, mesNum, anoInteiro, ehAtual, rotuloPeriodo, MESES_CURTOS, mover, voltarAtual, trocarAno, anoAtual, intervaloTxt } from '../services/mes.js';
 
 const props = defineProps({
   cor: { type: String, default: 'var(--cor-primaria)' },
@@ -46,6 +46,14 @@ const itens = computed(() => {
 const passosPrevia = computed(() => Math.max(-alcance.value, Math.min(alcance.value, -Math.round(dx.value / passoPx))));
 const aba = computed(() => rotulo(passosPrevia.value));
 const mostrarAno = computed(() => (anoInteiro.value ? 'ano inteiro' : aba.value.ano ?? ano.value));
+// Seletor de ano (anotação 47): tocar no mês selecionado abre os anos com dados (+ o seguinte); troca o ano e mantém o mês.
+const menuAno = ref(false);
+const anos = ref([anoAtual - 1, anoAtual, anoAtual + 1]);
+onMounted(async () => {
+  try { const r = await fetch('/api/transacoes/anos', { credentials: 'include' }); if (r.ok) { const j = await r.json(); if (j.anos && j.anos.length) anos.value = j.anos; } } catch { /* mantém o padrão */ }
+});
+function escolherAno(a) { trocarAno(a); menuAno.value = false; }
+function abrirAnos() { if (engolirClique) return; menuAno.value = !menuAno.value; }
 
 function medir() {
   const el = viewport.value?.querySelector('.item');
@@ -120,35 +128,39 @@ function tecla(e) {
           <b>{{ it.topo }}</b><small v-if="it.baixo">{{ it.baixo }}</small>
         </button>
       </div>
-      <div class="aba" aria-live="polite" :aria-label="rotuloPeriodo">
-        <b class="aba-mes">{{ aba.topo }}</b>
-        <small class="aba-ano">{{ mostrarAno }}</small>
-      </div>
+      <button type="button" class="aba" aria-live="polite" :aria-label="`${rotuloPeriodo}. Tocar para escolher o ano`" :aria-expanded="menuAno" data-aba-mes @click="abrirAnos" @pointerdown.stop>
+        <b class="aba-mes">{{ aba.topo }}<ChevronDown :size="12" :stroke-width="2.4" class="aba-seta" /></b>
+        <small class="aba-ano">{{ intervaloTxt && !passosPrevia ? intervaloTxt : mostrarAno }}</small>
+      </button>
       <i class="base" aria-hidden="true"></i>
     </div>
 
     <button v-if="!semSetas" type="button" class="seta setas-pc" :aria-label="anoInteiro ? 'Próximo ano' : 'Próximo mês'" @click="irPara(1)"><ChevronRight :size="18" :stroke-width="2" /></button>
 
+    <!-- O botão "Ano" saiu (anotação 47): a visão anual consolidada fica em Relatórios (Mês | Ano). -->
     <div v-if="!semAtalhos" class="atalhos">
-      <button type="button" class="atalho" :class="{ ligado: anoInteiro }" :aria-pressed="anoInteiro" :aria-label="anoInteiro ? 'Voltar a ver por mês' : 'Ano inteiro'" :title="anoInteiro ? 'Ver por mês' : 'Ano inteiro'" @click="alternarAno">
-        <component :is="anoInteiro ? CalendarDays : CalendarRange" :size="16" :stroke-width="2" /><span>{{ anoInteiro ? 'Meses' : 'Ano' }}</span>
-      </button>
       <transition name="atalho-anim">
         <button v-if="!ehAtual" type="button" class="atalho hoje" aria-label="Voltar ao mês atual" title="Voltar ao mês atual" @click="voltarAtual">
           <RotateCcw :size="16" :stroke-width="2" /><span>Hoje</span>
         </button>
       </transition>
     </div>
+    <div v-if="menuAno" class="menu-ano" role="listbox" aria-label="Escolher o ano" data-menu-ano>
+      <button v-for="a in anos" :key="a" type="button" role="option" :aria-selected="a === ano" :class="{ ativo: a === ano }" @click="escolherAno(a)">
+        {{ a }}<small v-if="a === anoAtual">atual</small><Check v-if="a === ano" :size="14" :stroke-width="2.4" />
+      </button>
+    </div>
+    <div v-if="menuAno" class="menu-fundo" @click="menuAno = false"></div>
   </div>
 </template>
 
 
 <style scoped>
 .mes-fileira {
-  --item-w: 66px; --aba-w: 92px; --alt: 56px; --raio: 16px;
-  display: flex; align-items: flex-end; gap: 6px; width: 100%; max-width: 100%; min-width: 0;
+  --item-w: 62px; --aba-w: 100px; --alt: 46px; --raio: 14px;
+  position: relative; display: flex; align-items: flex-end; gap: 6px; width: 100%; max-width: 100%; min-width: 0;
 }
-.mes-fileira.compacto { --alt: 46px; --item-w: 58px; --aba-w: 82px; --raio: 14px; }
+.mes-fileira.compacto { --alt: 44px; --item-w: 56px; --aba-w: 92px; --raio: 13px; }
 @media (min-width: 769px) { .mes-fileira { --item-w: 80px; --aba-w: 116px; } .mes-fileira.compacto { --item-w: 70px; --aba-w: 100px; } }
 
 .fileira-mes-viewport {
@@ -182,7 +194,7 @@ function tecla(e) {
 /* ABA DE FICHÁRIO — larga, fixa no centro, discreta: mesma cor do bloco; só o texto usa o destaque do tema */
 .aba {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: var(--aba-w); height: var(--alt);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; border: 0; cursor: pointer; font: inherit;
   border-radius: var(--raio) var(--raio) 0 0; background: var(--mes-fundo, var(--cor-fundo-elevado)); color: var(--mes-cor);
 }
 .solta .aba { border: 1px solid var(--cor-borda); border-bottom: 0; height: calc(var(--alt) - 2px); bottom: 2px; }
@@ -190,7 +202,7 @@ function tecla(e) {
 .ligada .aba::before, .ligada .aba::after { content: ''; position: absolute; bottom: 0; width: 12px; height: 12px; pointer-events: none; }
 .ligada .aba::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--mes-fundo, var(--cor-fundo-elevado)) 12px); }
 .ligada .aba::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--mes-fundo, var(--cor-fundo-elevado)) 12px); }
-.aba-mes { font-family: var(--fonte-display); font-size: 17px; font-weight: 600; letter-spacing: 0.06em; line-height: 1.1; }
+.aba-mes { display: inline-flex; align-items: center; gap: 2px; font-family: var(--fonte-display); font-size: 16px; font-weight: 600; letter-spacing: 0.06em; line-height: 1.1; }
 .aba-ano { font-family: var(--fonte-texto); font-size: 10px; opacity: 0.7; line-height: 1; letter-spacing: 0.04em; }
 .ano-modo .aba-mes { font-size: 18px; letter-spacing: 0; }
 .ano-modo .aba-ano { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -213,4 +225,15 @@ function tecla(e) {
 .atalho-anim-enter-active, .atalho-anim-leave-active { transition: opacity var(--anim-rapida) ease, transform var(--anim-padrao) var(--anim-curva); }
 .atalho-anim-enter-from, .atalho-anim-leave-to { opacity: 0; transform: scale(0.85); }
 @media (prefers-reduced-motion: reduce) { .trilho.anima { transition: none; } }
+.aba-seta { opacity: 0.6; }
+.aba:focus-visible { outline: 2px solid color-mix(in srgb, var(--mes-cor) 55%, transparent); outline-offset: -2px; }
+.seta { width: 40px; height: 40px; }
+.atalho { min-height: 40px; }
+.menu-ano { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); z-index: 30; min-width: 150px; max-height: 260px; overflow-y: auto; padding: 6px; border-radius: 14px; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); box-shadow: 0 16px 36px -14px rgba(0, 0, 0, .45); display: flex; flex-direction: column; gap: 2px; }
+.menu-ano button { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: none; border-radius: 10px; background: none; color: var(--cor-texto); font: 600 15px var(--fonte-texto); cursor: pointer; text-align: left; }
+.menu-ano button:hover { background: var(--cor-realce); }
+.menu-ano button.ativo { color: var(--mes-cor); background: color-mix(in srgb, var(--mes-cor) 10%, transparent); }
+.menu-ano small { font-size: 11px; font-weight: 500; color: var(--cor-texto-suave); }
+.menu-ano svg { margin-left: auto; }
+.menu-fundo { position: fixed; inset: 0; z-index: 29; }
 </style>

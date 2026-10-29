@@ -5,7 +5,7 @@ const T = require('./texto');
 const faturas = require('../utils/faturas');
 const integ = require('./integracoes');
 const { destinoDe, ErroImportacao } = require('./motor');
-const { faturasEmAberto, dentroDaTolerancia } = require('./classificar');
+const { faturasEmAberto, dentroDaTolerancia, restosDeImportacaoDesfeita } = require('./classificar');
 
 const arred = faturas.arredondar;
 const ACOES_GRAVAM = ['importar', 'criar', 'transferencia'];
@@ -64,9 +64,24 @@ function confirmar(usuarioId, corpo) {
       formato, arquivo_nome: String(corpo.nomeArquivo || '').slice(0, 200) || null, banco: corpo.banco || null,
       periodo_inicio: periodo.inicio || null, periodo_fim: periodo.fim || null, fatura: corpo.fatura || null, qtd_total: linhas.length,
     });
+    // "Impressão digital" do arquivo: fica como item da importação e some quando ela é desfeita (ver motor.importacaoAnterior)
+    const impressao = typeof corpo.impressao === 'string' && /^[a-z0-9:]{6,80}$/.test(corpo.impressao) ? corpo.impressao : null;
+    if (impressao) registrar(importacao.id, 'arquivo', impressao, formato, 'impressao', { nome: corpo.nomeArquivo || null });
     const ctx = { usuarioId, formato, importacao, resultado, opcoes, fatura: corpo.fatura || null };
+    const restos = removerRestos(usuarioId, dest);
+    if (restos) resultado.avisos.push(`${restos} lançamento(s) que tinham sobrado de importações desfeitas foram removidos.`);
     if (dest.tipo === 'conta') gravarConta(ctx, dest.conta, linhas, corpo);
-    else gravarFatura(ctx, dest.cartao, linhas);
+    else {
+      gravarFatura(ctx, dest.cartao, linhas);
+      if (ctx.fatura) {
+        const totalApp = totalDaFatura(dest.cartao, ctx.fatura);
+        const totalArquivo = arred(linhas.filter((l) => l.status !== 'fora_periodo' && l.status !== 'pagamento_recebido').reduce((t, l) => t - (Number(l.valor) || 0), 0));
+        resultado.fatura = { chave: ctx.fatura, totalApp, totalArquivo };
+        if (Math.abs(totalApp - totalArquivo) > 0.009) {
+          resultado.avisos.push(`A fatura ${ctx.fatura.split('-').reverse().join('/')} soma ${totalApp.toFixed(2).replace('.', ',')} no app e ${totalArquivo.toFixed(2).replace('.', ',')} no arquivo: confira linhas descartadas e lançamentos feitos à mão nessa fatura.`);
+        }
+      }
+    }
     dados.atualizar('importacoes', importacao.id, {
       qtd_novas: resultado.novas, qtd_atualizadas: resultado.atualizadas, qtd_ignoradas: resultado.ignoradas,
     });
@@ -80,6 +95,46 @@ function confirmar(usuarioId, corpo) {
     }
   });
   return { importacaoId: importacao.id, ...resultado };
+}
+
+// Total de uma fatura do cartão como o app mostra (soma de todas as parcelas e créditos que caem nela).
+function totalDaFatura(cartao, chave) {
+  const itens = db.prepare('SELECT data_compra, parcela_numero, valor FROM lancamentos_cartao WHERE cartao_id = ? AND excluido_em IS NULL').all(cartao.id);
+  return arred(itens.filter((l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero) === chave).reduce((t, l) => t + l.valor, 0));
+}
+
+// Exclusão suave de uma transação importada, devolvendo saldo da conta e gasto da categoria.
+function removerTransacao(t) {
+  const conta = db.prepare('SELECT * FROM contas WHERE id = ? AND excluido_em IS NULL').get(t.conta_id);
+  if (t.ignorada !== 1) somarSaldo(conta, -t.valor);
+  if (t.categoria_id && t.valor < 0 && t.ignorada === 0) dados.somar('categorias_orcamento', t.categoria_id, 'gasto_atual', -Math.abs(t.valor));
+  dados.excluirOnde('faturas_pagas', 'transacao_id = ?', [t.id]);
+  dados.excluir('transacoes', t.id);
+}
+
+// Lançamentos de cartão: exclui a compra inteira (todas as parcelas da mesma compra_id) e os créditos-espelho de um
+// estorno feito depois no app (mesmo vínculo). Devolve quantos excluiu.
+function removerCompraCartao(l) {
+  let n = dados.excluirOnde('lancamentos_cartao', 'compra_id = ? AND cartao_id = ?', [l.compra_id, l.cartao_id]);
+  if (l.vinculo && l.tipo_mov === 'estornada') n += dados.excluirOnde('lancamentos_cartao', "vinculo = ? AND tipo_mov = 'estorno' AND id NOT IN (SELECT registro_id FROM importacao_itens WHERE excluido_em IS NULL AND acao = 'inserido')", [l.vinculo]);
+  return n;
+}
+
+// Restos de importações desfeitas no mesmo destino (registros que deveriam ter saído e continuam ativos).
+function removerRestos(usuarioId, dest) {
+  let n = 0;
+  if (dest.tipo === 'fatura') {
+    restosDeImportacaoDesfeita('lancamentos_cartao', usuarioId).forEach((id) => {
+      const l = dados.buscar('lancamentos_cartao', id);
+      if (l && l.cartao_id === dest.cartao.id && dados.excluir('lancamentos_cartao', l.id)) n++;
+    });
+  } else {
+    restosDeImportacaoDesfeita('transacoes', usuarioId).forEach((id) => {
+      const t = dados.buscar('transacoes', id);
+      if (t && t.conta_id === dest.conta.id && !t.tipo_mov) { removerTransacao(t); n++; }
+    });
+  }
+  return n;
 }
 
 // ------------------------------------------------------------------------------------------- conta
@@ -141,12 +196,17 @@ function gravarConta(ctx, conta, linhas, corpo) {
 
     if (l.status === 'pagamento_fatura' && l.fatura && l.fatura.cartaoId && l.fatura.chave) {
       const f = emAberto.find((x) => x.cartaoId === String(l.fatura.cartaoId) && x.chave === l.fatura.chave);
-      if (f && valor < 0 && dentroDaTolerancia(f.total, valor)) {
-        const fp = dados.inserir('faturas_pagas', { cartao_id: f.cartaoId, fatura: f.chave, conta_id: conta.id, transacao_id: t.id, valor: f.total, data: l.data });
+      if (f && valor < 0) {
+        // 'valor' = o que saiu da conta. Diferença pequena a menos = desconto; diferença maior fica só como aviso
+        // (a fatura no app pode estar incompleta). O importante é a saída não contar como gasto em dobro.
+        const pago = Math.abs(valor);
+        const tol = dentroDaTolerancia(f.total, valor);
+        const fp = dados.inserir('faturas_pagas', { cartao_id: f.cartaoId, fatura: f.chave, conta_id: conta.id, transacao_id: t.id, valor: pago, desconto: tol && f.total > pago ? arred(f.total - pago) : 0, data: l.data });
         registrar(importacao.id, 'faturas_pagas', fp.id, formato, 'inserido', null);
         resultado.faturasPagas++;
+        if (!tol) resultado.avisos.push(`"${l.descricao}": pagou ${pago.toFixed(2).replace('.', ',')} e a fatura ${f.chave} soma ${f.total.toFixed(2).replace('.', ',')} no app. Confira a fatura (importe a fatura do cartão para conferir).`);
         const i = emAberto.indexOf(f); emAberto.splice(i, 1);
-      } else resultado.avisos.push(`"${l.descricao}": a fatura escolhida não está mais em aberto com esse valor; ficou como saída comum.`);
+      } else resultado.avisos.push(`"${l.descricao}": a fatura escolhida não está mais em aberto; ficou como saída comum.`);
     }
   }
 
@@ -287,23 +347,21 @@ function desfazer(usuarioId, importacaoId) {
         if (t.vinculo && /^transferencia/.test(t.tipo_mov || '') && E && E.desfazerPar) { try { E.desfazerPar(usuarioId, t.vinculo); } catch (e) { /* segue */ } }
         t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND excluido_em IS NULL').get(it.registro_id);
         if (!t) { removidos++; continue; }
-        const conta = db.prepare('SELECT * FROM contas WHERE id = ? AND excluido_em IS NULL').get(t.conta_id);
-        if (t.ignorada !== 1) somarSaldo(conta, -t.valor);
-        if (t.categoria_id && t.valor < 0 && t.ignorada === 0) dados.somar('categorias_orcamento', t.categoria_id, 'gasto_atual', -Math.abs(t.valor));
-        dados.excluirOnde('faturas_pagas', 'transacao_id = ?', [t.id]);
-        dados.excluir('transacoes', t.id);
+        removerTransacao(t);
         removidos++;
       } else if (it.tabela === 'faturas_pagas') {
         if (dados.buscar('faturas_pagas', it.registro_id)) { dados.excluir('faturas_pagas', it.registro_id); removidos++; }
       } else if (it.tabela === 'lancamentos_cartao') {
         const l = dados.buscar('lancamentos_cartao', it.registro_id);
         if (!l) continue;
-        if (it.acao === 'inserido') { dados.excluir('lancamentos_cartao', l.id); removidos++; }
+        if (it.acao === 'inserido') removidos += removerCompraCartao(l);
         else if (it.acao === 'atualizado' && antes) { dados.atualizar('lancamentos_cartao', l.id, { valor: antes.valor }); revertidos++; }
         else if (it.acao === 'anulado') {
           dados.atualizarOnde('lancamentos_cartao', 'vinculo = ?', [antes && antes.vinculo ? antes.vinculo : l.vinculo], { tipo_mov: null, vinculo: null });
           revertidos++;
         }
+      } else if (it.tabela === 'arquivo') {
+        dados.excluir('importacao_itens', it.id); // a impressão do arquivo sai junto: o mesmo arquivo pode entrar de novo
       } else if (it.tabela === 'contas' && antes && antes.delta) {
         const conta = dados.buscar('contas', it.registro_id);
         if (conta) { dados.somar('contas', conta.id, 'saldo', -antes.delta); revertidos++; }

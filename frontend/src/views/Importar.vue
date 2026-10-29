@@ -44,15 +44,21 @@ const salvarPerfil = ref(true);
 const ajustarSaldo = ref(false);
 const projetar = ref(true);
 const senhaPdf = ref({ aberto: false, valor: '', erro: false, resolver: null });
+// Mesmo arquivo já importado (e não desfeito) neste destino: pergunta antes de seguir
+const anterior = ref(null);
+const substituindo = ref(false);
+const diaMes = (iso) => { try { return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); } catch { return dataBR(iso).slice(0, 5); } };
 
 const destinos = computed(() => (tipo.value === 'conta' ? contas.value : cartoes.value));
 const destinoSel = computed(() => destinos.value.find((d) => d.id === destinoId.value) || null);
 const rotuloDestino = computed(() => (destinoSel.value ? (tipo.value === 'fatura' ? 'Cartão ' : '') + destinoSel.value.nome : ''));
 
 async function carregarBase() {
-  const [c, k] = await Promise.all([api('GET', '/api/contas'), api('GET', '/api/cartoes')]);
-  contas.value = c;
-  cartoes.value = k.filter((x) => x.origem === 'manual');
+  // contas e cartões carregam cada um por si: uma lista com erro não esvazia a outra
+  const [c, k] = await Promise.allSettled([api('GET', '/api/contas'), api('GET', '/api/cartoes')]);
+  if (c.status === 'fulfilled') contas.value = c.value;
+  if (k.status === 'fulfilled') cartoes.value = k.value.filter((x) => x.origem === 'manual');
+  if (c.status === 'rejected' && k.status === 'rejected') throw c.reason;
   try { historico.value = await api('GET', '/api/importacao/historico'); } catch { historico.value = []; }
 }
 
@@ -123,6 +129,7 @@ async function analisar(extra = {}) {
       ...corpoArq.value, destino: { tipo: tipo.value, id: destinoId.value }, periodo: periodoPedido(), ...extra,
     });
     if (r.precisaMapeamento) { precisaMapa.value = r; analise.value = null; etapa.value = 3; return; }
+    if (r.importacaoAnterior && etapa.value !== 3) { anterior.value = r.importacaoAnterior; return; }
     precisaMapa.value = null;
     analise.value = r;
     linhas.value = r.linhas.map((l) => ({ ...l, existenteId: l.existente ? l.existente.id : undefined }));
@@ -131,6 +138,19 @@ async function analisar(extra = {}) {
     etapa.value = 3;
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
+// "Substituir": desfaz a importação anterior do mesmo arquivo e lê o arquivo de novo (agora nada dele é duplicado)
+async function substituirAnterior() {
+  const a = anterior.value; if (!a) return;
+  substituindo.value = true; erro.value = '';
+  try {
+    await api('DELETE', `/api/importacao/${a.id}`);
+    anterior.value = null;
+    try { historico.value = await api('GET', '/api/importacao/historico'); } catch { /* segue */ }
+    avisar('Importação anterior desfeita. Confira a pré-visualização.', { tipo: 'ok' });
+    await analisar();
+  } catch (e) { erro.value = e.message; anterior.value = null; } finally { substituindo.value = false; }
+}
+function cancelarSubstituir() { anterior.value = null; }
 function aplicarMapa() {
   const n = (v) => (v === '' || v === null ? undefined : Number(v));
   analisar({ mapeamento: { linhaCabecalho: Number(mapa.value.linhaCabecalho), data: n(mapa.value.data), descricao: n(mapa.value.descricao), valor: n(mapa.value.valor), debito: n(mapa.value.debito), credito: n(mapa.value.credito) } });
@@ -177,7 +197,7 @@ async function confirmar() {
     const a = analise.value;
     resultado.value = await api('POST', '/api/importacao/confirmar', {
       formato: a.formato, nomeArquivo: nomeArq.value, banco: a.banco, destino: { tipo: tipo.value, id: destinoId.value },
-      periodo: a.periodo, fatura: a.fatura ? a.fatura.chave : undefined, saldoExtrato: a.saldoExtrato, mapeamento: a.mapeamento, assinatura: a.assinatura,
+      periodo: a.periodo, fatura: a.fatura ? a.fatura.chave : undefined, impressao: a.impressao, saldoExtrato: a.saldoExtrato, mapeamento: a.mapeamento, assinatura: a.assinatura,
       opcoes: { ajustarSaldo: ajustarSaldo.value, projetarParcelas: projetar.value, salvarPerfil: salvarPerfil.value && a.mapeamento && !a.perfilAplicado && (a.formato === 'csv' || a.formato === 'xlsx') ? { nome: a.banco || 'Meu banco' } : undefined },
       linhas: linhas.value.map((l) => ({ ...l, bruto: undefined })),
     });
@@ -235,6 +255,7 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
         <ul class="hist">
           <li v-for="h in historico.slice(0, 8)" :key="h.id" :class="{ desfeita: h.desfeitaEm }">
             <div><b>{{ h.destino || '—' }}</b> <span class="chip">{{ ROT_FORMATO[h.formato] || h.formato }}</span>
+              <small v-if="h.arquivo" class="arq">{{ h.arquivo }} · importado em {{ diaMes(h.em) }}</small>
               <small>{{ dataBR(h.periodoInicio) }} a {{ dataBR(h.periodoFim) }} · {{ h.novas }} novas<span v-if="h.atualizadas">, {{ h.atualizadas }} atualizadas</span><span v-if="h.desfeitaEm"> · desfeita</span></small></div>
             <button v-if="!h.desfeitaEm" type="button" class="b-sec peq" @click="desfazer(h.id)"><Undo2 :size="15" /> Desfazer</button>
           </li>
@@ -271,6 +292,7 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
         <p class="dica">Duplicidade conferida só dentro de {{ dataBR(analise.periodo.inicio) }} a {{ dataBR(analise.periodo.fim) }} (parcelas: ±5 dias).</p>
         <p v-if="analise.leituraGenerica" class="faixa alerta"><TriangleAlert :size="18" /><span>Leitura genérica de PDF: confira as linhas marcadas e os valores antes de confirmar.</span></p>
         <p v-if="!analise.sinalFixo && tipo === 'fatura'" class="dica">Compras são tratadas como saídas. <button type="button" class="link" @click="inverter">Inverter sinais</button> se estiver ao contrário.</p>
+        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalArquivo !== undefined" class="periodo">Total da fatura no arquivo: <b>{{ moeda(analise.fatura.totalArquivo) }}</b> <small class="dica">(compras, IOF e encargos menos estornos; sem o pagamento da fatura anterior)</small></p>
         <p v-if="analise.totalIgnoradasArquivo" class="dica">{{ analise.totalIgnoradasArquivo }} linha(s) do arquivo ignorada(s) (cabeçalhos, totais, rodapé).</p>
         <div class="resumo">
           <div><small>A gravar</small><b>{{ totais.qtd }}</b></div>
@@ -337,6 +359,7 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
           <li v-if="resultado.transferencias"><b>{{ resultado.transferencias }}</b> transferência(s) entre contas próprias</li>
           <li v-if="resultado.faturasPagas"><b>{{ resultado.faturasPagas }}</b> fatura(s) marcada(s) como paga(s)</li>
           <li><b>{{ resultado.ignoradas }}</b> ignorados (duplicados ou descartados)</li>
+          <li v-if="resultado.fatura" data-total-fatura>Fatura de {{ resultado.fatura.chave.split('-').reverse().join('/') }} no app: <b>{{ moeda(resultado.fatura.totalApp) }}</b> · no arquivo: <b>{{ moeda(resultado.fatura.totalArquivo) }}</b></li>
           <li v-if="resultado.saldoAjustado"><Link2 :size="14" /> Saldo da conta acertado ({{ moeda(resultado.saldoAjustado) }})</li>
           <li v-if="resultado.perfilSalvo">Layout "{{ resultado.perfilSalvo }}" lembrado</li>
         </ul>
@@ -360,6 +383,17 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
           <select v-model="editando.categoriaId"><option value="">Sem categoria</option><option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nome }}</option></select></label>
       </div>
       <template #rodape><button type="button" class="b-prim" @click="salvarEdicao">Salvar</button></template>
+    </Modal>
+
+    <Modal :aberto="!!anterior" titulo="Arquivo já importado" @fechar="cancelarSubstituir">
+      <p v-if="anterior" class="pergunta-subst">Este arquivo já foi importado em {{ diaMes(anterior.em) }}. Substituir a importação anterior?</p>
+      <p class="dica">Substituir desfaz a importação anterior ({{ anterior ? anterior.novas : 0 }} lançamento(s)) e importa o arquivo de novo. Cancelar não muda nada.</p>
+      <template #rodape>
+        <div class="linha-botoes" style="justify-content:flex-end;margin-top:0">
+          <button type="button" class="b-sec" :disabled="substituindo" @click="cancelarSubstituir">Cancelar</button>
+          <button type="button" class="b-prim" :disabled="substituindo" @click="substituirAnterior">{{ substituindo ? 'Substituindo…' : 'Substituir' }}</button>
+        </div>
+      </template>
     </Modal>
 
     <Modal :aberto="senhaPdf.aberto" titulo="PDF protegido por senha" @fechar="enviarSenha(false)">
@@ -431,6 +465,8 @@ select, input[type='text'], input[type='number'], input[type='date'], input[type
 .hist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
 .hist li div { display: flex; flex-direction: column; gap: 2px; }
 .hist small { color: var(--cor-texto-suave); }
+.hist small.arq { overflow-wrap: anywhere; }
+.pergunta-subst { margin: 0 0 8px; font-size: 15px; font-weight: 600; line-height: 1.45; }
 .hist li.desfeita { opacity: 0.55; }
 .res { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; }
 .tabela-rolagem { overflow-x: auto; margin-bottom: 8px; }

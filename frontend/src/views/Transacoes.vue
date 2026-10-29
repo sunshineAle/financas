@@ -21,6 +21,7 @@ import BarraDegrade from '../components/BarraDegrade.vue';
 import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, Filter, Landmark, CreditCard } from 'lucide-vue-next';
 import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
+import { avisar } from '../services/avisos.js';
 import { abrirLancamento, lancamentoSalvo, avisoLancamento } from '../services/lancamento.js';
 import TransacoesLinha from '../components/TransacoesLinha.vue';
 import { periodo, anoInteiro, ano, escolher, MESES, MESES_CURTOS } from '../services/mes.js';
@@ -226,25 +227,76 @@ function abrirEdicao(t) {
   formEdicao.value = { tipo: t.valor < 0 ? 'saida' : 'entrada', valor: Math.abs(t.valor), contaId: t.conta_id, descricao: t.descricao, data: String(t.data).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: t.categoria_receita || '', subcategoria: t.subcategoria || '', icone: t.icone || '' };
   carregarSugestoes(t.categoria_id ?? '', t.categoria_id ? '' : (t.categoria_receita || ''));
 }
-// Ao corrigir a categoria, sugere guardar a correção como regra ("Padaria do José" → Mercado).
-const sugestaoRegra = ref(null); // { texto, inicial }
+// Anotação 52 — ao corrigir a categoria, sugere guardar a correção como regra num aviso no rodapé:
+// "Criar regra: 'IFD*' → Restaurante?" [Criar regra] [Agora não]. Tocar no texto abre a janela da regra antes de salvar.
+// Não sugere se já há regra para o trecho ou se o usuário recusou 2 vezes o mesmo trecho (localStorage).
+const sugestaoRegra = ref(null); // { inicial } — usado quando o texto do aviso abre a janela
 const regraAberta = ref(false);
-function sugerirRegra(t, f) {
+const CHAVE_RECUSAS = 'dagda.regras.recusas';
+const normRegra = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+function lerRecusas() { try { return JSON.parse(localStorage.getItem(CHAVE_RECUSAS) || '{}') || {}; } catch { return {}; } }
+function recusar(trecho) {
+  try { const r = lerRecusas(); const k = normRegra(trecho); r[k] = (r[k] || 0) + 1; localStorage.setItem(CHAVE_RECUSAS, JSON.stringify(r)); } catch { /* sem armazenamento: só não lembra */ }
+}
+// Nome do estabelecimento sem números, datas e códigos: "IFD*BRASIL 1234" → "IFD*", "UBER *TRIP 1234" → "UBER", "PADARIA DO JOSE 0012" → "PADARIA DO JOSE".
+function trechoRegra(nome) {
+  const limpo = String(nome || '').replace(/\s*\(\d+\/\d+\)\s*$/, '').trim();
+  const pal = [];
+  for (const tok of limpo.split(/\s+/)) {
+    if (!tok) continue;
+    const estrela = tok.indexOf('*');
+    if (estrela > 0) { const base = tok.slice(0, estrela + 1); if (!/\d/.test(base)) pal.push(base); break; } // "IFD*BRASIL" → "IFD*"
+    if (estrela === 0) break; // "*TRIP": código do adquirente
+    if (/\d/.test(tok) || /^[-–·|:#/.]+$/.test(tok)) break; // número, data, código
+    pal.push(tok.replace(/[-–·|:,;.]+$/, ''));
+    if (pal.length >= 3) break;
+  }
+  const t = pal.join(' ').trim();
+  return t.replace(/\*/g, '').length >= 2 ? t : '';
+}
+async function sugerirRegra(t, f) {
   const ehSaida = t.cartao ? true : (t.origem === 'manual' ? f.tipo === 'saida' : t.valor < 0);
   const antes = ehSaida ? (t.categoria_id || '') : (t.categoria_receita || '');
   const depois = ehSaida ? String(f.categoriaId || '') : (f.categoriaReceita || '');
   if (!depois || depois === antes) return;
   const nomeTx = String(t.cartao ? t.descricao_base : t.descricao).replace(/\s*\(\d+\/\d+\)\s*$/, '').trim();
-  if (nomeTx.length < 2) return;
+  const trecho = trechoRegra(nomeTx);
+  if (!trecho) return;
+  if ((lerRecusas()[normRegra(trecho)] || 0) >= 2) return;
+  const tipo = ehSaida ? 'saida' : 'entrada';
+  let n = 0;
+  try {
+    const rr = await pedir('/api/regras');
+    const regras = rr.ok ? await rr.json() : [];
+    const nome = normRegra(nomeTx);
+    if (regras.some((r) => r.tipo === tipo && (normRegra(r.padrao) === normRegra(trecho) || nome.includes(normRegra(r.padrao))))) return;
+    const q = new URLSearchParams({ tipo, padrao: trecho, ...(ehSaida ? { categoriaId: depois } : { categoriaReceita: depois }) });
+    const rp = await pedir(`/api/regras/previa?${q}`);
+    if (rp.ok) n = (await rp.json()).quantidade || 0;
+  } catch { return; }
   const nomeCat = ehSaida ? (categorias.value.find((c) => c.id === depois) || {}).nome : depois;
-  sugestaoRegra.value = {
-    texto: `Sempre que o nome tiver “${nomeTx}”, usar ${nomeCat}?`,
-    inicial: { tipo: ehSaida ? 'saida' : 'entrada', padrao: nomeTx, categoriaId: ehSaida ? depois : '', categoriaReceita: ehSaida ? '' : depois, valor: Math.abs(t.cartao ? t.valor_total_compra : t.valor), contaId: t.cartao ? '' : t.conta_id },
-  };
+  const extras = { subcategoria: f.subcategoria || '', icone: t.cartao ? '' : (f.icone || '') };
+  const inicial = { tipo, padrao: trecho, categoriaId: ehSaida ? depois : '', categoriaReceita: ehSaida ? '' : depois, ...extras, valor: Math.abs(t.cartao ? t.valor_total_compra : t.valor) };
+  avisar(`Criar regra: “${trecho}” → ${nomeCat}?`, {
+    tipo: 'regra', grupo: 'sugestao-regra', duracao: 6000,
+    detalhe: n ? `e aplicar a ${n === 1 ? 'outra transação' : `outras ${n}`}` : 'Toque no texto para ajustar antes de salvar',
+    aoTocar: () => { sugestaoRegra.value = { inicial }; regraAberta.value = true; },
+    acoes: [
+      { rotulo: 'Agora não', acao: () => recusar(trecho) },
+      { rotulo: 'Criar regra', primaria: true, acao: () => criarRegraDireto(inicial, n > 0) },
+    ],
+  });
+}
+async function criarRegraDireto(i, aplicarAntigas) {
+  const corpo = { tipo: i.tipo, padrao: i.padrao, subcategoria: i.subcategoria, icone: i.icone, aplicarAntigas, ...(i.tipo === 'saida' ? { categoriaId: i.categoriaId } : { categoriaReceita: i.categoriaReceita }) };
+  const r = await pedir('/api/regras', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { avisar(d.erro || 'Não foi possível criar a regra.', { tipo: 'alerta', grupo: 'sugestao-regra' }); return; }
+  await regraCriada(d);
 }
 async function regraCriada({ aplicadas }) {
   regraAberta.value = false; sugestaoRegra.value = null;
-  aviso.value = { texto: aplicadas ? `Regra criada. ${aplicadas} lançamento(s) antigo(s) movido(s) para a categoria.` : 'Regra criada: os próximos lançamentos já entram na categoria certa.' };
+  avisar(aplicadas ? `Regra criada · ${aplicadas} ${aplicadas === 1 ? 'transação movida' : 'transações movidas'}` : 'Regra criada: as próximas já entram na categoria certa', { tipo: 'ok', grupo: 'sugestao-regra', rota: '/regras' });
   await Promise.all([carregar(), carregarApoio()]);
 }
 async function salvarEdicao() {
@@ -460,12 +512,6 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <a v-if="aviso.cartaoId" href="#" @click.prevent="router.push({ name: 'cartao-extrato', params: { id: aviso.cartaoId } })">Ver na fatura</a>
         <a v-if="aviso.desfazer" href="#" @click.prevent="desfazerAviso">Desfazer</a>
         <button type="button" class="botao-icone" aria-label="Fechar aviso" @click="aviso = null">Fechar</button>
-      </p>
-
-      <p v-if="sugestaoRegra" class="aviso-ok sugestao-regra" role="status">
-        {{ sugestaoRegra.texto }}
-        <button type="button" class="botao-icone" @click="regraAberta = true">Criar regra</button>
-        <button type="button" class="botao-icone" @click="sugestaoRegra = null">Agora não</button>
       </p>
 
       <AbasSeletor v-model="visao" :abas="[{ id: 'data', rotulo: 'Por data' }, { id: 'categoria', rotulo: 'Por categoria' }]" tema="neutro" bloco />

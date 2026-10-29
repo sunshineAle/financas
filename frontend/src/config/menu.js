@@ -40,7 +40,7 @@ export const GRUPOS = [
     itens: [
       { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
       { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
-      { rota: '/custos-fixos', rotulo: 'Custos fixos', icone: CalendarClock },
+      { rota: '/custos-fixos', rotulo: 'Custo de vida', icone: CalendarClock },
       { rota: '/importar', rotulo: 'Importar extrato', rotuloCurto: 'Importar', icone: FileUp },
       // Perfil fica só no rodapé do menu (avatar + nome) e Configurações logo abaixo dele; o Manual fica em Sobre o app.
       { rota: '/apoie', rotulo: 'Apoie o desenvolvedor', rotuloCurto: 'Apoie', icone: Heart },

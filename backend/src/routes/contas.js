@@ -16,9 +16,9 @@ router.get('/', (req, res) => {
       `SELECT contas.*, conexoes_pluggy.ultima_sincronizacao, conexoes_pluggy.status AS status_conexao,
          (SELECT MAX(data) FROM transacoes WHERE conta_id = contas.id AND excluido_em IS NULL) AS ultima_transacao,
          (SELECT COALESCE(SUM(valor), 0) FROM transacoes WHERE conta_id = contas.id AND valor > 0 AND excluido_em IS NULL
-            AND ignorada = 0 AND strftime('%Y-%m', data) = strftime('%Y-%m', 'now', 'localtime')) AS entradas_mes,
+            AND ignorada = 0 AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS entradas_mes,
          (SELECT COALESCE(-SUM(valor), 0) FROM transacoes WHERE conta_id = contas.id AND valor < 0 AND excluido_em IS NULL
-            AND ignorada = 0 AND strftime('%Y-%m', data) = strftime('%Y-%m', 'now', 'localtime')) AS saidas_mes
+            AND ignorada = 0 AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS saidas_mes
        FROM contas
        LEFT JOIN conexoes_pluggy ON conexoes_pluggy.id = contas.conexao_id AND conexoes_pluggy.excluido_em IS NULL
        WHERE contas.usuario_id = ? AND contas.excluido_em IS NULL

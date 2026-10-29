@@ -41,10 +41,18 @@ function Database() {
     }
   };
 
+  const funcoes = {};
+  const reabrir = () => {
+    try { banco.exec('PRAGMA foreign_keys = ON'); } catch (e) { /* ok */ }
+    Object.entries(funcoes).forEach(([n, f]) => { try { banco.create_function(n, f); } catch (e) { /* ok */ } });
+  };
   const api = {
     veioSalvo,
     pragma(texto) { try { banco.exec('PRAGMA ' + texto); } catch (e) { /* ignora */ } },
     exec(sql) { banco.exec(sql); },
+    // Funções SQL próprias (ex.: mes_fin, anotação 51), como db.function do better-sqlite3.
+    // O export() do sql.js fecha e reabre a conexão e PERDE as funções: por isso ficam guardadas e são registradas de novo.
+    function(nome, fn) { funcoes[nome] = fn; banco.create_function(nome, fn); },
     prepare(sql) {
       return {
         get: (...p) => lerLinhas(sql, p.flat(), false)[0],
@@ -73,17 +81,17 @@ function Database() {
     // Bytes do banco inteiro (arquivo SQLite) — usado pelo backup "banco completo" do PWA.
     exportarBytes() {
       const dados = banco.export();
-      banco.exec('PRAGMA foreign_keys = ON');
+      reabrir();
       return dados;
     },
     salvar() {
       if (gancho) { gancho.agendar(() => api.exportarBytes()); return; }
       try {
-        const dados = banco.export(); // reabre o banco e zera os PRAGMAs
-        banco.exec('PRAGMA foreign_keys = ON');
+        const dados = banco.export(); // reabre o banco e zera os PRAGMAs (e as funções)
+        reabrir();
         localStorage.setItem(CHAVE, paraBase64(dados));
       } catch (e) {
-        try { banco.exec('PRAGMA foreign_keys = ON'); } catch (e2) { /* ok */ }
+        reabrir();
       }
     },
     apagarSalvo() { if (gancho) { gancho.apagar(); return; } try { localStorage.removeItem(CHAVE); } catch (e) { /* ok */ } },

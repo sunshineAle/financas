@@ -26,6 +26,17 @@ const SELECT_TRANSACAO = `
 
 // Entradas agrupadas por categoria de receita (?mes=AAAA-MM; sem mês, tudo).
 // Subcategorias já usadas (para autocompletar), da mais usada para a menos usada.
+// Anos com dados (para o seletor de ano do filtro de meses, anotação 47): do primeiro lançamento até o ano seguinte ao atual.
+router.get('/anos', (req, res) => {
+  const r = db.prepare("SELECT MIN(substr(data, 1, 4)) AS ini FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL").get(req.usuario.id);
+  const c = db.prepare("SELECT MIN(substr(data_compra, 1, 4)) AS ini FROM lancamentos_cartao WHERE usuario_id = ? AND excluido_em IS NULL").get(req.usuario.id);
+  const atual = new Date().getFullYear();
+  const ini = Math.min(atual, Number((r && r.ini) || atual), Number((c && c.ini) || atual));
+  const anos = [];
+  for (let a = Math.max(ini, atual - 15); a <= atual + 1; a++) anos.push(a);
+  res.json({ anos });
+});
+
 router.get('/subcategorias', (req, res) => {
   const { categoriaId, categoriaReceita } = req.query;
   let filtro = '';
@@ -74,7 +85,7 @@ router.get('/resumo-receitas', (req, res) => {
   const params = [req.usuario.id];
   let filtro = '';
   if (mes) {
-    filtro = " AND strftime('%Y-%m', data) = ?";
+    filtro = " AND mes_fin(data) = ?";
     params.push(mes);
   }
   const linhas = db
@@ -183,7 +194,7 @@ router.get('/', (req, res) => {
   const onde = ['t.usuario_id = ?', 't.excluido_em IS NULL', 'c.excluido_em IS NULL'];
   const params = [req.usuario.id];
   if (mes) {
-    onde.push("strftime('%Y-%m', t.data) = ?");
+    onde.push("mes_fin(t.data) = ?");
     params.push(mes);
   }
   if (contaId) {

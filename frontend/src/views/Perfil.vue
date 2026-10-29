@@ -20,13 +20,13 @@ import ApagarDadosModal from '../components/ApagarDadosModal.vue';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import Modal from '../components/Modal.vue';
 import FeedbackModal from '../components/FeedbackModal.vue';
-import { carregarNovidades, dataCurta } from '../services/novidades.js';
+import { carregarNovidades, dataCurta, rotuloVersao, ehTeste } from '../services/novidades.js';
 import PlanoReserva from '../components/PlanoReserva.vue';
 import Backup from './Backup.vue';
 import { destino } from '../config/destino.js';
 import { perfil, nomeExibido, inicialDe, trocarSenha } from '../services/perfil.js';
 import { avisar } from '../services/avisos.js';
-import { minutosAutoBloqueio, definirAutoBloqueio, definirApelido, bloquear, conferirSenha, gerarNovoCodigo, confirmarCodigoGuardado, codigoRecuperacaoPendente } from '../services/acesso.js';
+import { minutosAutoBloqueio, definirAutoBloqueio, definirApelido, bloquear, conferirSenha, gerarNovoCodigo, confirmarCodigoGuardado, codigoRecuperacaoPendente, verCodigoAtual, temCodigoVisivel } from '../services/acesso.js';
 import { atualizacaoBacen, atualizacaoInvestimentos } from '../services/atualizacoes.js';
 import { atualizar as atualizarBacen, estadoBacen } from '../services/bacen.js';
 import { resetDisponivel } from '../services/resetDemo.js';
@@ -39,6 +39,7 @@ const route = useRoute();
 const ehPwa = !!import.meta.env.VITE_PWA;
 
 import { SECOES_PERFIL as SECOES } from '../config/perfilSecoes.js';
+import { lerInicio, gravarInicio, descreverInicio, intervaloDoMes } from '../utils/mesFinanceiro.js';
 const secao = computed(() => String(route.params.secao || 'perfil'));
 const tituloSecao = computed(() => (SECOES.find((x) => x.id === secao.value) || SECOES[0]).rotulo);
 
@@ -115,7 +116,7 @@ async function enviarSenha() {
 // "Regras" abre a tela de regras de categorização quando ela existir (setor Categorias); até lá, cai em Categorias.
 const rotaRegras = computed(() => (router.getRoutes().some((r) => r.path === '/regras') ? '/regras' : '/orcamento?aba=regras'));
 const FINANCAS = computed(() => [
-  { rotulo: 'Custos fixos', sub: 'aluguel, internet… e a projeção do mês seguinte', icone: CalendarClock, rota: '/custos-fixos' },
+  { rotulo: 'Custo de vida', sub: 'fixos e essenciais do mês, e a projeção do mês seguinte', icone: CalendarClock, rota: '/custos-fixos' },
   { rotulo: 'Categorias', sub: 'criar, editar, cores e ícones', icone: Tags, rota: '/orcamento' },
   { rotulo: 'Orçamento por categoria', sub: 'quanto planeja gastar em cada uma', icone: GaugeIcon, rota: '/orcamento' },
   { rotulo: 'Regras de categorização', sub: 'o app aprende: "Padaria do José" vai para Mercado', icone: ListChecks, rota: rotaRegras.value },
@@ -166,6 +167,24 @@ async function salvarConfig() {
   } catch { /* mantém o que está na tela */ }
 }
 onMounted(carregarConfig);
+// Início do mês financeiro (anotação 51): dia 1 (padrão), dia fixo (1–28 ou último) ou 5º dia útil.
+const ini = lerInicio();
+const inicioTipo = ref(ini.tipo === 'util' ? 'util' : (Number(ini.dia) === 1 ? 'padrao' : 'dia'));
+const inicioDia = ref(ini.tipo === 'dia' && Number(ini.dia) !== 1 ? String(ini.dia) : '5');
+const TIPOS_INICIO = [{ id: 'padrao', rotulo: 'Dia 1' }, { id: 'dia', rotulo: 'Dia fixo' }, { id: 'util', rotulo: '5º dia útil' }];
+const cfgInicio = computed(() => (inicioTipo.value === 'util' ? { tipo: 'util', n: 5 } : inicioTipo.value === 'dia' ? { tipo: 'dia', dia: inicioDia.value === 'ultimo' ? 'ultimo' : Number(inicioDia.value) } : { tipo: 'dia', dia: 1 }));
+const exemploInicio = computed(() => {
+  const h = new Date();
+  const { de, ate } = intervaloDoMes(h.getFullYear(), h.getMonth() + 1, cfgInicio.value);
+  const dm = (x) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  return `Ex.: o mês de ${['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][h.getMonth()]} vai de ${dm(de)} a ${dm(ate)}.`;
+});
+const inicioMudou = computed(() => JSON.stringify(cfgInicio.value) !== JSON.stringify(lerInicio().tipo === 'dia' && Number(lerInicio().dia) === 1 ? { tipo: 'dia', dia: 1 } : lerInicio()));
+function salvarInicio() {
+  gravarInicio(cfgInicio.value);
+  avisar(`Mês financeiro começa no ${descreverInicio(cfgInicio.value)}.`, { tipo: 'ok' });
+  setTimeout(() => location.reload(), 700); // recarrega para todas as telas usarem o novo período
+}
 
 // ---- 6. Sobre o app ----
 const dataBacen = ref('—');
@@ -183,19 +202,34 @@ onMounted(async () => { novidades.value = await carregarNovidades(); });
 const feedbackAberto = ref(false);
 const versao = ref('—');
 onMounted(async () => { versao.value = await textoVersao(); });
-// ---- Chave de recuperação (Segurança): gerar uma nova pede a senha ----
+// ---- Chave de recuperação (Segurança, anotação 49): "Ver chave atual" ou "Gerar nova", sempre pedindo a senha ----
 const recPendente = ref(codigoRecuperacaoPendente());
 const modalRec = ref(false);
+const recModo = ref('ver'); // 'ver' | 'gerar'
 const senhaRec = ref('');
 const erroRec = ref('');
 const codigoRec = ref('');
-function abrirRec() { senhaRec.value = ''; erroRec.value = ''; codigoRec.value = ''; modalRec.value = true; }
-async function gerarRec() {
-  erroRec.value = '';
-  if (!(await conferirSenha(senhaRec.value))) { erroRec.value = 'Senha incorreta.'; return; }
-  try { codigoRec.value = await gerarNovoCodigo(); } catch (e) { erroRec.value = e.message; }
+const recSomenteVer = ref(false);
+const recCarregando = ref(false);
+const podeVerRec = ref(false);
+function abrirRec() {
+  senhaRec.value = ''; erroRec.value = ''; codigoRec.value = ''; recSomenteVer.value = false;
+  podeVerRec.value = temCodigoVisivel();
+  recModo.value = podeVerRec.value ? 'ver' : 'gerar';
+  modalRec.value = true;
 }
-async function recGuardado() { await confirmarCodigoGuardado(); recPendente.value = false; modalRec.value = false; avisar('Código de recuperação guardado. Faça um backup novo para ele valer também no arquivo.', { tipo: 'ok', rota: '/backup?fazer=1', duracao: 10000 }); }
+async function confirmarRec() {
+  if (!senhaRec.value || recCarregando.value) return;
+  erroRec.value = ''; recCarregando.value = true;
+  try {
+    if (recModo.value === 'ver') { codigoRec.value = await verCodigoAtual(senhaRec.value); recSomenteVer.value = true; return; }
+    if (!(await conferirSenha(senhaRec.value))) { erroRec.value = 'Senha ou PIN incorreto.'; return; }
+    codigoRec.value = await gerarNovoCodigo();
+    recSomenteVer.value = false; recPendente.value = true;
+  } catch (e) { erroRec.value = (e && e.message) || 'Não foi possível concluir. Tente de novo.'; }
+  finally { recCarregando.value = false; senhaRec.value = ''; }
+}
+async function recGuardado() { await confirmarCodigoGuardado(); recPendente.value = false; modalRec.value = false; avisar('Chave de recuperação guardada. Faça um backup novo para ela valer também no arquivo.', { tipo: 'ok', rota: '/backup?fazer=1', duracao: 10000 }); }
 
 </script>
 
@@ -240,9 +274,9 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
       </CardPadrao>
     </section>
 
-    <!-- 2b. Plano da Reserva de Liberdade -->
+    <!-- 2b. Quanto guardar (antes "Plano da Reserva de Liberdade", anotação 43) -->
     <section v-if="secao === 'reserva'" id="reserva" class="secao" aria-labelledby="h-reserva">
-      <h2 id="h-reserva">Plano da Reserva de Liberdade</h2>
+      <h2 id="h-reserva">Quanto guardar</h2>
       <PlanoReserva />
     </section>
 
@@ -282,7 +316,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
           <template v-if="ehPwa">
             <button type="button" class="linha atalho" data-chave-rec @click="abrirRec">
               <span class="quadro"><KeyRound :size="20" :stroke-width="1.8" /></span>
-              <span class="texto"><b>Ver/gerar nova chave de recuperação</b><small>{{ recPendente ? 'pendente: gere e guarde o seu código' : 'o código substitui a senha se você a esquecer' }}</small></span>
+              <span class="texto"><b>Chave de recuperação</b><small>{{ recPendente ? 'pendente: gere e guarde a sua chave' : 'ver a chave atual ou gerar uma nova' }}</small></span>
               <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
             </button>
             <DesbloqueioBiometrico />
@@ -319,6 +353,21 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
         <div class="bloco">
           <div class="linha fixa"><span class="quadro"><Zap :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Animações</b><small>menos movimento nas telas e gráficos</small></span></div>
           <PerfilAbas :model-value="movimento" :opcoes="MOVIMENTOS" rotulo="Animações" @update:model-value="definirMovimento" />
+        </div>
+      </CardPadrao>
+      <CardPadrao subtitulo="quando começa o seu mês">
+        <div class="bloco" data-inicio-mes>
+          <div class="linha fixa"><span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Início do mês financeiro</b><small>use o dia em que o salário costuma cair: o que entra e o que sai até o próximo pagamento fica no mesmo mês</small></span></div>
+          <PerfilAbas v-model="inicioTipo" :opcoes="TIPOS_INICIO" rotulo="Início do mês financeiro" />
+          <label v-if="inicioTipo === 'dia'" class="linha">
+            <span class="texto"><b>Dia do mês</b></span>
+            <select v-model="inicioDia" aria-label="Dia em que o mês começa">
+              <option v-for="d in 27" :key="d" :value="String(d + 1)">Dia {{ d + 1 }}</option>
+              <option value="ultimo">Último dia do mês</option>
+            </select>
+          </label>
+          <p class="nota">{{ inicioTipo === 'util' ? 'Conta só dias úteis: sem sábados, domingos e feriados nacionais. ' : '' }}{{ exemploInicio }} Vale para o Saldo do mês, o filtro de meses, o orçamento, o Custo de vida e o Quanto guardar.</p>
+          <button v-if="inicioMudou" type="button" class="botao-prim" data-salvar-inicio @click="salvarInicio">Salvar e recarregar</button>
         </div>
       </CardPadrao>
     </section>
@@ -361,16 +410,16 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
         <!-- Versão tocável: expande para baixo com as novidades (anotação 40) -->
         <button type="button" class="linha atalho versao" :aria-expanded="versaoAberta" data-versao @click="versaoAberta = !versaoAberta">
           <span class="quadro"><Info :size="20" :stroke-width="1.8" /></span>
-          <span class="texto"><b>Versão</b><small>{{ versao }}<template v-if="novidades[0]"> · {{ novidades[0].versao }}</template></small></span>
+          <span class="texto"><b>{{ novidades[0] ? rotuloVersao(novidades[0]) : 'Versão' }}<span v-if="novidades[0] && ehTeste(novidades[0])" class="selo-teste">teste</span></b><small>build {{ versao }}</small></span>
           <ChevronDown :size="18" :stroke-width="1.8" class="seta gira" :class="{ aberta: versaoAberta }" />
         </button>
         <div v-if="versaoAberta" class="novidades" data-novidades>
           <template v-if="novidades.length">
             <section v-for="(n, i) in novidades" :key="n.versao" class="nov">
               <button v-if="i > 0" type="button" class="nov-cab" :aria-expanded="abertasAnt.includes(n.versao)" @click="alternarAnt(n.versao)">
-                <b>{{ n.versao }}</b><small>{{ dataCurta(n.data) }}</small><ChevronDown :size="16" :stroke-width="1.8" class="gira" :class="{ aberta: abertasAnt.includes(n.versao) }" />
+                <b>Versão {{ n.versao }}</b><small>{{ dataCurta(n.data) }}</small><ChevronDown :size="16" :stroke-width="1.8" class="gira" :class="{ aberta: abertasAnt.includes(n.versao) }" />
               </button>
-              <div v-else class="nov-cab atual"><b>{{ n.versao }} · atual</b><small>{{ dataCurta(n.data) }}</small></div>
+              <div v-else class="nov-cab atual"><b>Versão {{ n.versao }} · atual</b><small>{{ dataCurta(n.data) }}</small></div>
               <template v-if="i === 0 || abertasAnt.includes(n.versao)">
                 <p class="nov-resumo">{{ n.resumo }}</p>
                 <ul><li v-for="(t, k) in n.itens" :key="k">{{ t }}</li></ul>
@@ -410,13 +459,21 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
     <AlterarSenhaAcesso :aberto="modalAcesso" @fechar="modalAcesso = false" />
     <ApagarDadosModal v-model:aberto="apagarAberto" />
     <FeedbackModal v-model:aberto="feedbackAberto" />
-    <Modal :aberto="modalRec" titulo="Chave de recuperação" @fechar="modalRec = false">
-      <template v-if="!codigoRec">
-        <p class="nota">O código atual não pode ser mostrado de novo (ele não fica guardado em texto). Gere um novo: os backups feitos a partir de agora abrem com o código novo; os antigos, com o código da época ou com a senha.</p>
-        <CampoTexto v-model="senhaRec" type="password" rotulo="Sua senha ou PIN" autocomplete="current-password" :erro="erroRec" @keyup.enter="gerarRec" />
-        <button type="button" class="botao-prim" :disabled="!senhaRec" style="margin-top: 12px" @click="gerarRec"><KeyRound :size="18" :stroke-width="2" /> Gerar novo código</button>
-      </template>
-      <ChaveRecuperacao v-else :codigo="codigoRec" rotulo-continuar="Concluir" @guardado="recGuardado" />
+    <Modal :aberto="modalRec" titulo="Chave de recuperação" :largura="480" @fechar="modalRec = false">
+      <div v-if="!codigoRec" class="rec" data-rec-form>
+        <PerfilAbas v-if="podeVerRec" v-model="recModo" :opcoes="[{ id: 'ver', rotulo: 'Ver chave atual', icone: KeyRound }, { id: 'gerar', rotulo: 'Gerar nova', icone: RefreshCw }]" rotulo="Chave de recuperação" />
+        <p v-if="recModo === 'ver'" class="nota">Para mostrar a chave que vale hoje, confirme a sua senha ou PIN.</p>
+        <template v-else>
+          <p class="nota">A chave de recuperação substitui a senha se você a esquecer: abre o app e os backups.</p>
+          <p class="alerta-rec" role="note"><b>Ao gerar uma nova, a chave anterior deixa de abrir o app.</b> Backups antigos continuam abrindo com a chave da época ou com a senha; faça um backup novo depois.</p>
+        </template>
+        <CampoTexto v-model="senhaRec" type="password" rotulo="Sua senha ou PIN" autocomplete="current-password" :erro="erroRec" @keyup.enter="confirmarRec" />
+        <button type="button" class="botao-prim" :disabled="!senhaRec || recCarregando" data-rec-confirmar @click="confirmarRec">
+          <KeyRound :size="18" :stroke-width="2" /> {{ recCarregando ? 'Aguarde…' : recModo === 'ver' ? 'Mostrar chave atual' : 'Gerar nova chave' }}
+        </button>
+      </div>
+      <ChaveRecuperacao v-else :codigo="codigoRec" :somente-ver="recSomenteVer" rotulo-continuar="Concluir" @guardado="recGuardado" />
+      <template v-if="codigoRec && recSomenteVer" #rodape><button type="button" class="botao-prim" @click="modalRec = false">Fechar</button></template>
     </Modal>
   </div>
 </template>
@@ -461,6 +518,10 @@ select { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px sol
 .link-mini:disabled { opacity: 0.5; }
 .perigo .quadro { background: color-mix(in srgb, var(--cor-grave, #c0283c) 12%, transparent); color: var(--cor-grave, #c0283c); }
 .perigo b { color: var(--cor-grave, #c0283c); }
+.rec { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.rec .nota { margin: 0; }
+.alerta-rec { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; background: color-mix(in srgb, var(--cor-grave, #c0283c) 9%, transparent); border: 1px solid color-mix(in srgb, var(--cor-grave, #c0283c) 30%, transparent); }
+.selo-teste { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--cor-borda); color: var(--cor-texto-suave); vertical-align: 1px; }
 .gira { transition: transform var(--anim-padrao, .2s) ease; color: var(--cor-texto-suave); flex-shrink: 0; }
 .gira.aberta { transform: rotate(180deg); }
 .novidades { display: flex; flex-direction: column; gap: 10px; padding: 4px 6px 8px 60px; }

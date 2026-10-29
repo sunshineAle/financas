@@ -1,7 +1,7 @@
 // Registro do service worker + aviso "Nova versão disponível — atualizar" (skipWaiting controlado).
 // Fora de views: o aviso é um modal central simples, com as cores por tokens do app.
 import { aviso } from '../../src/services/atualizacao.js';
-import { carregarNovidades } from '../../src/services/novidades.js';
+import { carregarNovidades, rotuloVersao, ehTeste } from '../../src/services/novidades.js';
 // Modal central pequeno. "Agora não" fecha, mas o convite volta sempre que a tela de acesso reaparece (reavisar), até atualizar.
 const FUNDO = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.55)';
 const CAIXA = 'width:100%;max-width:320px;display:flex;flex-direction:column;gap:8px;padding:20px 18px 16px;border-radius:16px;background:var(--cor-fundo-elevado,#fff);color:var(--cor-texto,#1a1a1a);border:1px solid var(--cor-borda,#ddd);box-shadow:0 16px 48px rgba(0,0,0,.35);font:400 14px/1.45 var(--fonte-texto,system-ui,sans-serif);text-align:center';
@@ -24,17 +24,19 @@ function mostrarAviso(worker) {
   texto.textContent = 'Atualize para ter as melhorias mais recentes. Seus dados continuam no aparelho.';
   const botao = document.createElement('button');
   botao.type = 'button';
-  botao.textContent = 'Atualizar agora';
+  botao.textContent = 'Atualizar';
   botao.style.cssText = BOTAO + ';margin-top:6px';
-  botao.addEventListener('click', () => { botao.disabled = true; botao.textContent = 'Atualizando…'; worker.postMessage({ tipo: 'sf:pular-espera' }); });
+  botao.addEventListener('click', () => { try { localStorage.setItem('sf:mostrar-novidades', '1'); } catch { /* ignora */ } botao.disabled = true; botao.textContent = 'Atualizando…'; worker.postMessage({ tipo: 'sf:pular-espera' }); });
   const depois = document.createElement('button');
   depois.type = 'button';
   depois.textContent = 'Agora não';
   depois.style.cssText = BOTAO_SEC;
   depois.addEventListener('click', () => fundo.remove());
-  // Resumo curto da versão nova (changelog.json) + "Ver detalhes" (abre Sobre o app).
+  // Resumo da versão NOVA (anotação 42): lido da rede, fora do cache. O texto genérico só fica sem internet.
   const resumo = document.createElement('span');
-  resumo.style.cssText = 'font-size:13.5px;color:var(--cor-texto,#1a1a1a);display:none';
+  resumo.style.cssText = 'font-size:14px;color:var(--cor-texto,#1a1a1a);display:none;line-height:1.45';
+  const versaoTxt = document.createElement('small');
+  versaoTxt.style.cssText = 'display:none;font-size:12px;color:var(--cor-texto-suave,#666)';
   const detalhes = document.createElement('button');
   detalhes.type = 'button';
   detalhes.textContent = 'Ver detalhes';
@@ -44,14 +46,16 @@ function mostrarAviso(worker) {
     if (document.querySelector('.tela-acesso')) { try { sessionStorage.setItem('sf:abrir-rota', '/mais/sobre?novidades=1'); } catch { /* ignora */ } }
     else location.hash = '#/mais/sobre?novidades=1';
   });
-  carregarNovidades().then((lista) => {
+  carregarNovidades({ fresca: true }).then((lista) => {
     const n = lista && lista[0];
     if (!n || !n.resumo) return;
     resumo.textContent = n.resumo; resumo.style.display = 'block';
+    versaoTxt.textContent = rotuloVersao(n) + (ehTeste(n) ? ' · teste' : ''); versaoTxt.style.display = 'block';
     texto.textContent = 'Seus dados continuam no aparelho.';
+    texto.style.fontSize = '12.5px'; texto.style.color = 'var(--cor-texto-suave,#666)';
     detalhes.style.display = 'inline-block';
   }).catch(() => {});
-  caixa.append(titulo, resumo, texto, detalhes, botao, depois);
+  caixa.append(titulo, versaoTxt, resumo, texto, detalhes, botao, depois);
   fundo.appendChild(caixa);
   document.body.appendChild(fundo);
 }

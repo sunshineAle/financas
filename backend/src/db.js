@@ -21,5 +21,7 @@ if (relatorioMigracao) {
   (relatorioMigracao.avisos || []).forEach((a) => console.warn('[banco] aviso:', a));
 }
 db.pragma('foreign_keys = ON');
+// Mês financeiro (anotação 51): mes_fin(data) -> 'YYYY-MM' conforme o início do mês escolhido nas Configurações.
+require('./utils/mesFinanceiro').registrar(db);
 
 module.exports = db;

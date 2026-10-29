@@ -41,10 +41,11 @@ const SECOES = [
     'A barra do topo mostra quanto do orçamento já foi usado e quanto ainda pode gastar.',
     'Crie, renomeie ou mude a cor e o ícone pelo menu de cada categoria.',
   ] },
-  { id: 'custos-fixos', icone: CalendarClock, titulo: 'Custos fixos e avisos', passos: [
-    'Em Mais > Custos fixos, cadastre o que se repete todo mês (aluguel, internet, mensalidades) com valor e dia.',
-    'A tela mostra a projeção do mês seguinte: custos fixos ativos + parcelas de cartão + parcelas de dívidas e acordos.',
-    'Pause um custo fixo para tirá-lo da projeção sem apagar.',
+  { id: 'custos-fixos', icone: CalendarClock, titulo: 'Custo de vida e avisos', passos: [
+    'Em Mais > Custo de vida, aba Fixos, cadastre o que tem valor igual todo mês (aluguel, internet, assinaturas) com valor e dia.',
+    'Na aba Essenciais, adicione as categorias que você paga todo mês com valor que muda (luz, água, mercado). O app estima pela média dos últimos 6 meses.',
+    'Custo de vida = fixos + essenciais. A projeção do mês seguinte soma também as parcelas de cartão, dívidas e acordos.',
+    'Pause um item para tirá-lo do cálculo sem apagar.',
     'O sino do topo avisa de fatura, parcela ou acordo vencendo e de orçamento no limite. Em Perfil você pode ligar os avisos no aparelho (1 por dia).',
   ] },
   { id: 'metas', icone: Target, titulo: 'Metas e Reserva de Liberdade', passos: [

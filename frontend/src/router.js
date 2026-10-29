@@ -38,7 +38,7 @@ const router = createRouter({
     { path: '/manual', name: 'manual', component: Manual, meta: { titulo: 'Manual' } },
     { path: '/apoie', name: 'apoie', component: Apoie, meta: { titulo: 'Apoie o desenvolvedor' } },
     { path: '/regras', name: 'regras', component: Regras, meta: { titulo: 'Regras de categorização' } },
-    { path: '/custos-fixos', name: 'custos-fixos', component: CustosFixos, meta: { titulo: 'Custos fixos' } },
+    { path: '/custos-fixos', name: 'custos-fixos', component: CustosFixos, meta: { titulo: 'Custo de vida' } },
     { path: '/importar', name: 'importar', component: Importar, meta: { titulo: 'Importar extrato ou fatura' } },
     // Rotas antigas: tudo vive em /perfil (Perfil e configurações), com âncoras. Mantidas para links, avisos e favoritos.
     { path: '/backup', name: 'backup', redirect: (to) => ({ path: '/mais/dados-backup', query: to.query }) },

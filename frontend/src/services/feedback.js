@@ -27,10 +27,11 @@ async function gravarFila(f) { await kvSet(FILA, f); }
 
 async function postar(item) {
   const r = await fetch(FEEDBACK_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(item), redirect: 'follow' });
+  // Só conta como enviado com a resposta { ok: true } do script (anotação 44). Página de login do Google, HTML ou erro
+  // = não chegou: fica na fila e tenta de novo (o ID único evita linha duplicada na planilha).
   let j = null;
-  try { j = await r.json(); } catch { /* resposta opaca: o ID evita duplicar no reenvio */ }
-  if (j && j.ok === false && j.erro !== 'mensagem_vazia') throw new Error(j.erro || 'falha');
-  if (!r.ok && !j) throw new Error('HTTP ' + r.status);
+  try { j = await r.json(); } catch { j = null; }
+  if (!j || j.ok !== true) throw new Error((j && (j.detalhe || j.erro)) || ('sem resposta do script (HTTP ' + r.status + ')'));
   return true;
 }
 
@@ -47,7 +48,7 @@ export async function enviarFeedback({ tipo, mensagem, nome, contato, site }) {
   };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) { await gravarFila([...(await lerFila()), item]); return 'na-fila'; }
   try { await postar(item); return 'enviado'; }
-  catch { await gravarFila([...(await lerFila()), item]); return 'na-fila'; }
+  catch { await gravarFila([...(await lerFila()), item]); return 'erro-fila'; }
 }
 
 let enviando = false;

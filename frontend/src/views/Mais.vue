@@ -28,7 +28,7 @@ function resumoBackup() {
 const NOMES_TEMA = { auto: 'automático', claro: 'claro', escuro: 'escuro' };
 const resumos = computed(() => ({
   perfil: emailTopo.value || nomeTopo.value,
-  financas: 'Custos fixos, categorias e regras',
+  financas: 'Custo de vida, categorias e regras',
   reserva: 'Quanto guardar por mês',
   'dados-backup': resumoBackup(),
   seguranca: modoPWA ? (bioLigada.value ? 'Biometria ativada' : 'Senha ou PIN') : 'Senha e sessões',

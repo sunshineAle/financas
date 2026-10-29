@@ -4,7 +4,9 @@ const { parseData, parseValor, limparDescricao, normalizar, iso, MESES, somarDia
 
 const RE_VALOR = /(?:R\$\s*)?[-−(]?\s*\d{1,3}(?:\.\d{3})*,\d{2}\)?(?:\s*(?:CR|DB|[CD]))?(?=\s|$)|(?:R\$\s*)?[-−]?\d+,\d{2}(?:\s*(?:CR|DB|[CD]))?(?=\s|$)/g;
 const RE_DATA_INI = /^\s*(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{1,2}\s+(?:de\s+)?(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*\.?(?:\s+(?:de\s+)?\d{2,4})?)\b\s*/i;
-const IGNORAR = /^(total|subtotal|saldo|limite|encargos|resumo|vencimento|fechamento|pagamento minimo|valor minimo|data|descricao|lancamentos|compras|periodo|pagina|cartao final|fatura|juros|iof|cet)\b/;
+// Linhas COM data que são resumo/cabeçalho. IOF, juros, encargos e multa com data são cobranças da fatura e ficam
+// (antes eram descartados e o total importado ficava menor que o da fatura). Só o resumo "juros/encargos a.m." sai.
+const IGNORAR = /^(total|subtotal|saldo|limite|resumo|vencimento|fechamento|pagamento minimo|valor minimo|data|descricao|lancamentos|compras|periodo|pagina|cartao final|fatura|cet|(?:juros|encargos|iof)\b.*\b(?:a ?m|a ?a|ao mes|ao ano|maximo|proxima fatura|proximo periodo))\b/;
 
 // Procura a data de referência (vencimento/fim do período) e o ano predominante.
 function referencia(linhas) {

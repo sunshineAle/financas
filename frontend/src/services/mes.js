@@ -10,12 +10,15 @@
 //   </CabecalhoPagina>                                     // (sem #corpo a aba fica solta; <SeletorMes /> avulso também vale)
 //   deslizar para o lado (v-deslizar-mes) troca de mês
 import { ref, computed } from 'vue';
+import { chaveDaData, intervaloDoMes, ehPadrao, iso } from '../utils/mesFinanceiro.js';
 
+// Mês FINANCEIRO de hoje (anotação 51): com o início no 5º dia útil, dia 3 ainda pertence ao mês anterior.
 const hoje = new Date();
-const chaveHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+const chaveHoje = chaveDaData(iso(hoje));
+const [anoHoje, mesHoje] = chaveHoje.split('-').map(Number);
 
-export const ano = ref(hoje.getFullYear());
-export const mesNum = ref(hoje.getMonth() + 1); // 1..12
+export const ano = ref(anoHoje);
+export const mesNum = ref(mesHoje); // 1..12
 export const anoInteiro = ref(false);
 
 export const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -27,10 +30,12 @@ export const periodo = computed(() => ({
   ano: ano.value,
   mes: mesNum.value,
   chave: anoInteiro.value ? String(ano.value) : mes.value,
-  // intervalo de datas ISO do período, pronto para filtros
-  de: anoInteiro.value ? `${ano.value}-01-01` : `${mes.value}-01`,
-  ate: anoInteiro.value ? `${ano.value}-12-31` : `${mes.value}-${String(new Date(ano.value, mesNum.value, 0).getDate()).padStart(2, '0')}`,
+  // intervalo de datas ISO do período (mês financeiro: pode começar no dia 7 e ir até o dia 4 do mês seguinte)
+  ...(anoInteiro.value ? { de: intervaloDoMes(ano.value, 1).de, ate: intervaloDoMes(ano.value, 12).ate } : intervaloDoMes(ano.value, mesNum.value)),
 }));
+// "07/11 a 04/12" quando o mês financeiro não começa no dia 1 (o filtro de meses mostra o período real).
+const dm = (s) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
+export const intervaloTxt = computed(() => (anoInteiro.value || ehPadrao() ? '' : `${dm(periodo.value.de)} a ${dm(periodo.value.ate)}`));
 export const ehAtual = computed(() => !anoInteiro.value && mes.value === chaveHoje);
 export const rotuloPeriodo = computed(() => (anoInteiro.value ? String(ano.value) : `${MESES[mesNum.value - 1]} de ${ano.value}`));
 
@@ -50,15 +55,20 @@ export function alternarAno() { // 'Ano inteiro' <-> mês (mantém o ano e o mê
   anoInteiro.value = !anoInteiro.value;
 }
 export function voltarAtual() {
-  ano.value = hoje.getFullYear();
-  mesNum.value = hoje.getMonth() + 1;
+  ano.value = anoHoje;
+  mesNum.value = mesHoje;
   anoInteiro.value = false;
 }
+// Seletor de ano (anotação 47): troca o ano mantendo o mês.
+export function trocarAno(a) { ano.value = a; anoInteiro.value = false; }
+export const anoAtual = anoHoje;
 
 // O Dashboard sempre abre no mês atual (a menos que já estivesse nele).
 export function iniciarMes(router) {
   router.afterEach((to, from) => {
     if (to.path === '/' && from.path !== '/' ) voltarAtual();
+    // A visão anual existe só em Relatórios (anotação 47): ao sair de lá, as outras telas voltam a ver por mês.
+    if (anoInteiro.value && to.name !== 'relatorios') anoInteiro.value = false;
   });
 }
 

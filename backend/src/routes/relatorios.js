@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { semPagamentoDeFatura, parcelasCartao, chaveHoje } = require('../utils/cartaoMeses');
 const { exigirAutenticacao } = require('../middleware/auth');
+const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
 
 const router = express.Router();
 router.use(exigirAutenticacao);
@@ -32,7 +33,7 @@ router.get('/fluxo-caixa', (req, res) => {
 
   const linhas = db
     .prepare(
-      `SELECT strftime('%Y-%m', data) AS chave,
+      `SELECT mes_fin(data) AS chave,
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes
@@ -54,14 +55,14 @@ router.get('/fluxo-caixa', (req, res) => {
 
 // Detalhamento por categoria do mês atual — o que mais pesou.
 router.get('/detalhamento-categoria', (req, res) => {
-  const mesAtual = new Date().toISOString().slice(0, 7);
+  const mesAtual = chaveDaDataFin(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString());
   const linhas = db
     .prepare(
       `SELECT categorias_orcamento.id AS id, categorias_orcamento.nome AS nome, SUM(-transacoes.valor) AS total
        FROM transacoes
        JOIN categorias_orcamento ON categorias_orcamento.id = transacoes.categoria_id AND categorias_orcamento.excluido_em IS NULL
        WHERE transacoes.usuario_id = ? AND transacoes.excluido_em IS NULL AND transacoes.ignorada = 0 AND transacoes.valor < 0
-         AND strftime('%Y-%m', transacoes.data) = ?
+         AND mes_fin(transacoes.data) = ?
          AND ${semPagamentoDeFatura('transacoes.')}
        GROUP BY categorias_orcamento.id
        ORDER BY total DESC`
@@ -82,7 +83,7 @@ router.get('/detalhamento-categoria', (req, res) => {
 router.get('/projecao', (req, res) => {
   const linhas = db
     .prepare(
-      `SELECT strftime('%Y-%m', data) AS chave,
+      `SELECT mes_fin(data) AS chave,
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes

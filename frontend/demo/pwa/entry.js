@@ -7,6 +7,8 @@ import { tratarRetornoOAuth } from '../../src/services/nuvem/retorno.js';
 if (tratarRetornoOAuth()) await new Promise(() => {});
 
 await prepararPersistencia();
+// Desfoque ao sair do app (anotação 46): vale desde a tela de acesso.
+import('../../src/services/desfoque.js').then((m) => m.iniciarDesfoque()).catch(() => {});
 
 // Service worker já na tela de acesso: o app passa a funcionar offline desde o primeiro acesso.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

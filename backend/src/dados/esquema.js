@@ -314,6 +314,21 @@ const TABELAS = {
     exporta: true,
     indices: ['CREATE INDEX IF NOT EXISTS idx_custos_fixos_usuario ON custos_fixos(usuario_id)'],
   },
+  // Anotação 41/43: Custo de vida › Essenciais — gastos do mês que mudam de valor (luz, água, mercado...), ligados a uma
+  // categoria. O valor estimado é a média dos últimos 6 meses da categoria; valor_manual (opcional) fixa outro valor.
+  custos_essenciais: {
+    cols: [
+      'usuario_id TEXT NOT NULL',
+      'categoria_id TEXT NOT NULL',
+      'nome TEXT',
+      'valor_manual REAL',
+      'dia_mes INTEGER',
+      'ativo INTEGER NOT NULL DEFAULT 1',
+    ],
+    fk: { usuario_id: 'usuarios', categoria_id: 'categorias_orcamento' },
+    exporta: true,
+    indices: ['CREATE INDEX IF NOT EXISTS idx_custos_essenciais_usuario ON custos_essenciais(usuario_id)'],
+  },
   // Setor B (onda 5): regras de categorização ("Padaria do José" -> Mercado). `padrao` = trecho do nome (sem acento/maiúscula);
   // valor_min/valor_max e conta_id são filtros opcionais. Saída aponta categoria_id; entrada, o nome em categoria_receita.
   regras_categorias: {
@@ -328,6 +343,9 @@ const TABELAS = {
       'categoria_receita TEXT',
       'ativa INTEGER NOT NULL DEFAULT 1',
       'aplicacoes INTEGER NOT NULL DEFAULT 0',
+      // Anotação 48: subcategoria e ícone do ITEM (chave do set v2) que a regra grava junto com a categoria.
+      'subcategoria TEXT',
+      'icone TEXT',
     ],
     fk: { usuario_id: 'usuarios', conta_id: 'contas', categoria_id: 'categorias_orcamento' },
     exporta: true,
@@ -448,7 +466,7 @@ const ORDEM = [
   'usuarios', 'configuracoes', 'conexoes_pluggy', 'contas', 'categorias_orcamento', 'categorias_receita',
   'categorias_receita_init', 'dividas', 'transacoes', 'historico_pagamentos', 'reserva_liberdade',
   'metas_reserva', 'historico_aportes', 'cartoes', 'lancamentos_cartao', 'faturas_pagas',
-  'investimentos_conectados', 'ativos', 'operacoes', 'custos_fixos', 'regras_categorias', 'importacoes', 'importacao_itens', 'perfis_importacao', 'tokens_open_finance',
+  'investimentos_conectados', 'ativos', 'operacoes', 'custos_fixos', 'custos_essenciais', 'regras_categorias', 'importacoes', 'importacao_itens', 'perfis_importacao', 'tokens_open_finance',
 ];
 
 // O que acontece com os filhos quando o pai é excluído (o mesmo que o ON DELETE do esquema antigo).
@@ -459,7 +477,7 @@ const RELACOES = {
     anular: [['regras_categorias', 'conta_id'], ['cartoes', 'conta_id'], ['dividas', 'conta_id'], ['historico_aportes', 'conta_id'], ['ativos', 'corretora_conta_id'], ['operacoes', 'conta_id']],
   },
   dividas: { cascata: [['historico_pagamentos', 'divida_id']], anular: [['lancamentos_cartao', 'divida_id']] },
-  categorias_orcamento: { cascata: [['regras_categorias', 'categoria_id']], anular: [['transacoes', 'categoria_id'], ['lancamentos_cartao', 'categoria_id'], ['custos_fixos', 'categoria_id']] },
+  categorias_orcamento: { cascata: [['regras_categorias', 'categoria_id'], ['custos_essenciais', 'categoria_id']], anular: [['transacoes', 'categoria_id'], ['lancamentos_cartao', 'categoria_id'], ['custos_fixos', 'categoria_id']] },
   reserva_liberdade: { cascata: [['historico_aportes', 'reserva_id'], ['metas_reserva', 'reserva_id']] },
   metas_reserva: { anular: [['historico_aportes', 'meta_id'], ['operacoes', 'meta_id']] },
   ativos: { cascata: [['operacoes', 'ativo_id']] },

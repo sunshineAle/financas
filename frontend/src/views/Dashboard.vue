@@ -16,6 +16,7 @@ import BotaoAcao from '../components/BotaoAcao.vue';
 import DashNumero from '../components/DashNumero.vue';
 import DashRosca from '../components/DashRosca.vue';
 import Valor from '../components/Valor.vue';
+import PrevisaoSaldo from '../components/PrevisaoSaldo.vue';
 import { moedaTotal } from '../services/privacidade.js';
 import { periodo, anoInteiro, rotuloPeriodo } from '../services/mes.js';
 import { corReceita, PALETA_RECEITA } from '../utils/coresReceita.js';
@@ -233,6 +234,9 @@ onMounted(async () => {
             </div>
           </transition>
         </div>
+
+        <!-- 1b. Dinheiro nas contas + previsão do saldo (anotação 51) -->
+        <PrevisaoSaldo />
 
         <!-- 2. Atividade recente ---------------------------------------------- -->
         <section class="cartao">

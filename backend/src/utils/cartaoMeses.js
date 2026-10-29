@@ -10,9 +10,11 @@ const semPagamentoDeFatura = (alias = '') =>
 
 const pad = (n) => String(n).padStart(2, '0');
 
+const { chaveDaData } = require('./mesFinanceiro');
+// Mês FINANCEIRO de hoje (anotação 51: o mês pode começar no dia 7 ou no 5º dia útil).
 function chaveHoje() {
   const d = new Date().toLocaleDateString('sv-SE', { timeZone: process.env.APP_TIMEZONE || 'America/Sao_Paulo' });
-  return d.slice(0, 7);
+  return chaveDaData(d);
 }
 
 // Todas as parcelas de cartão do usuário, com a data (AAAA-MM-DD) e o mês (AAAA-MM) em que cada uma pesa.
@@ -34,7 +36,7 @@ function parcelasCartao(usuarioId, { categoriaId = null } = {}) {
     const mes = (total % 12) + 1;
     const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
     const data = `${ano}-${pad(mes)}-${pad(Math.min(d, ultimo))}`;
-    return { ...l, data, mes: data.slice(0, 7) };
+    return { ...l, data, mes: chaveDaData(data) }; // mês financeiro da data em que a parcela pesa
   });
 }
 

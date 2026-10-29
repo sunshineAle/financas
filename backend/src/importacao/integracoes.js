@@ -24,7 +24,13 @@ function detectarDestino(descricao, ctx) {
 const REGEX_PAG_FATURA = /\b(pag(?:amento|to|\.)?\s*(?:de\s*|da\s*)?(?:fatura|cart[aã]o)|fatura\s+(?:do\s+)?(?:cart[aã]o|nubank|itau|inter|c6|bradesco|santander)|pgto\.?\s*fatura|pagto\s*cartao|cartao de credito|cart[aã]o cr[eé]dito)\b/i;
 function pareceFaturaDeCartao(descricao) { return REGEX_PAG_FATURA.test(String(descricao || '')) || /\bfatura\b/i.test(String(descricao || '')); }
 
-const REGEX_PAG_RECEBIDO = /\b(pagamento (?:recebido|efetuado|em conta|on[- ]?line)?|pgto\.? (?:recebido|efetuado)|pag(?:amento)?\.? fatura|obrigado pelo pagamento|pagamento fatura|credito de pagamento|pagto)\b/i;
+// Crédito na fatura que é o PAGAMENTO da fatura anterior (não é compra nem estorno). "Pagamento" sozinho também vale
+// (antes exigia um espaço depois da palavra e "PAGAMENTO" no fim da descrição escapava).
+const REGEX_PAG_RECEBIDO = /\b(pagamentos?(?: (?:recebido|efetuado|em conta|on[- ]?line))?|pgto\.?(?: (?:recebido|efetuado|fatura))?|pag(?:amento)?\.? (?:de |da )?fatura|obrigado pelo pagamento|credito de pagamento|pagto|d[eé]bito autom[aá]tico|pag(?:amento)? boleto)\b/i;
 function pareceCreditoDePagamento(descricao) { return REGEX_PAG_RECEBIDO.test(String(descricao || '')); }
+// Pagamento da fatura com descrição inequívoca: vale mesmo quando o arquivo traz o pagamento com o MESMO sinal das
+// compras (alguns bancos exportam tudo positivo). Sem isso, o pagamento entrava como "compra" e a fatura dobrava.
+const REGEX_PAG_FORTE = /\b(pagamento (?:recebido|efetuado|on[- ]?line|da fatura|de fatura|fatura)|pgto\.? (?:recebido|efetuado|fatura)|pagto (?:recebido|efetuado|fatura|debito automatico)|obrigado pelo pagamento|credito de pagamento|pagamento debito automatico|d[eé]bito autom[aá]tico fatura)\b/i;
+function pareceTextoDePagamentoDaFatura(descricao) { return REGEX_PAG_FORTE.test(texto.normalizar(descricao)); }
 
-module.exports = { lancamentos: () => lancamentos, ehEstorno, detectarReserva, detectarDestino, pareceFaturaDeCartao, pareceCreditoDePagamento, normalizar: texto.normalizar };
+module.exports = { lancamentos: () => lancamentos, ehEstorno, detectarReserva, detectarDestino, pareceFaturaDeCartao, pareceCreditoDePagamento, pareceTextoDePagamentoDaFatura, normalizar: texto.normalizar };

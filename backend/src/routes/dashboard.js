@@ -4,6 +4,7 @@ const db = require('../db');
 const { exigirAutenticacao } = require('../middleware/auth');
 
 const cartoesRouter = require('./cartoes');
+const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
 const { semPagamentoDeFatura, parcelasCartao, chaveHoje: chaveMesHoje } = require('../utils/cartaoMeses');
 
 const router = express.Router();
@@ -74,7 +75,8 @@ router.get('/', exigirAutenticacao, (req, res) => {
     parcelas.filter((p) => p.mes <= hojeChave && p.mes.slice(0, tam) === chave && (so ? so(p) : true));
   const ultimoPrevisto = Object.keys(previstoPorMes).sort().pop();
   const hojeData = new Date();
-  const chaveHoje = `${hojeData.getFullYear()}-${String(hojeData.getMonth() + 1).padStart(2, '0')}`;
+  // Mês financeiro de hoje (anotação 51): com o início no 5º dia útil, dia 3 ainda é o mês anterior.
+  const chaveHoje = chaveDaDataFin(`${hojeData.getFullYear()}-${String(hojeData.getMonth() + 1).padStart(2, '0')}-${String(hojeData.getDate()).padStart(2, '0')}`);
   let futuros = 0;
   if (ultimoPrevisto && ultimoPrevisto > chaveHoje) {
     const [ay, am] = ultimoPrevisto.split('-').map(Number);
@@ -92,7 +94,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
   );
   const linhasFluxo = db
     .prepare(
-      `SELECT strftime('%Y-%m', data) AS chave,
+      `SELECT mes_fin(data) AS chave,
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND ${semPagamentoDeFatura()} GROUP BY chave`
@@ -129,7 +131,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     db
       .prepare(
         `SELECT categoria_id AS id, SUM(-valor) AS total FROM transacoes
-         WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor < 0 AND categoria_id IS NOT NULL AND substr(strftime('%Y-%m', data), 1, ?) = ?
+         WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor < 0 AND categoria_id IS NOT NULL AND substr(mes_fin(data), 1, ?) = ?
            AND ${semPagamentoDeFatura()}
          GROUP BY categoria_id`
       )
@@ -149,7 +151,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
   const entradasPorCategoria = db
     .prepare(
       `SELECT COALESCE(categoria_receita, 'Sem categoria') AS nome, SUM(valor) AS valor
-       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor > 0 AND substr(strftime('%Y-%m', data), 1, ?) = ?
+       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor > 0 AND substr(mes_fin(data), 1, ?) = ?
        GROUP BY nome ORDER BY valor DESC`
     )
     .all(usuarioId, tamChave, chaveAtual)
@@ -225,7 +227,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END), 0) AS entradas,
               COALESCE(SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END), 0) AS saidas
-       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND substr(strftime('%Y-%m', data), 1, ?) = ?
+       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND substr(mes_fin(data), 1, ?) = ?
          AND ${semPagamentoDeFatura()}`
     )
     .get(usuarioId, tamChave, chaveAtual);

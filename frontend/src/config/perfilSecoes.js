@@ -4,7 +4,7 @@ import { User, Wallet, PiggyBank, DatabaseBackup, ShieldCheck, SlidersHorizontal
 export const SECOES_PERFIL = [
   { id: 'perfil', rotulo: 'Perfil', icone: User },
   { id: 'financas', rotulo: 'Minhas finanças', icone: Wallet },
-  { id: 'reserva', rotulo: 'Plano da Reserva de Liberdade', icone: PiggyBank },
+  { id: 'reserva', rotulo: 'Quanto guardar', icone: PiggyBank },
   { id: 'dados-backup', rotulo: 'Dados e backup', icone: DatabaseBackup },
   { id: 'seguranca', rotulo: 'Segurança', icone: ShieldCheck },
   { id: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },

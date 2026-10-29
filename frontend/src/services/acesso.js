@@ -91,7 +91,7 @@ export async function criarSenha(senha, apelido) {
   // Mantém a chave mestra que já existe (troca de senha / recuperação); senão, cria uma nova.
   const mestra = mestraMemoria || aleatorio(32);
   const novo = mestraMemoria === null;
-  const base = registro && !novo ? { rec: registro.rec, rec_confirmada: registro.rec_confirmada } : {};
+  const base = registro && !novo ? { rec: registro.rec, rec_confirmada: registro.rec_confirmada, rec_cod: registro.rec_cod } : {};
   await gravarRegistro({ v: 2, iter: ITERACOES, sal: b64(sal), hash: b64(hash), apelido: nome || undefined, pin: ehPin(senha), criada_em: (registro && registro.criada_em) || new Date().toISOString(), ...base, ms: await embrulharMestra(mestra, senha) });
   mestraMemoria = mestra;
   senhaMemoria = senha;
@@ -301,15 +301,40 @@ async function abrirMestraComSenha(senha) {
   if (registro.ms) { mestraMemoria = await desembrulharMestra(registro.ms, senha); if (mestraMemoria) return; }
   // Cadastro antigo (antes da chave de recuperação): cria a chave mestra agora; o código fica pendente em Perfil › Segurança.
   mestraMemoria = aleatorio(32);
-  await gravarRegistro({ ...registro, v: 2, ms: await embrulharMestra(mestraMemoria, senha), rec: null, rec_confirmada: false });
+  await gravarRegistro({ ...registro, v: 2, ms: await embrulharMestra(mestraMemoria, senha), rec: null, rec_cod: null, rec_confirmada: false });
 }
 
 // Gera um código NOVO (o anterior deixa de abrir backups futuros; os antigos continuam abrindo com o código antigo).
+// A chave vigente também fica guardada CIFRADA pela chave mestra (rec_cod), para "Ver chave atual" (anotação 49):
+// só abre com o app desbloqueado e a senha conferida de novo.
+async function chaveDaMestra(uso) {
+  return crypto.subtle.importKey('raw', mestraMemoria, { name: 'AES-GCM' }, false, uso);
+}
+async function cifrarCodigo(codigo) {
+  const iv = aleatorio(12);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await chaveDaMestra(['encrypt']), enc.encode(codigo));
+  return { iv: b64(iv), ct: b64(new Uint8Array(ct)) };
+}
 export async function gerarNovoCodigo() {
   if (!mestraMemoria) throw new Error('Desbloqueie o app com a senha antes.');
   const codigo = gerarCodigo();
-  await gravarRegistro({ ...registro, rec: await embrulharMestra(mestraMemoria, normalizarCodigo(codigo)), rec_confirmada: false });
+  const rec = await embrulharMestra(mestraMemoria, normalizarCodigo(codigo));
+  // confere antes de gravar: o código novo abre a MESMA chave mestra
+  const teste = await desembrulharMestra(rec, normalizarCodigo(codigo));
+  if (!teste || !iguais(teste, mestraMemoria)) throw new Error('Não foi possível gerar a chave. Tente de novo.');
+  await gravarRegistro({ ...registro, rec, rec_cod: await cifrarCodigo(codigo), rec_confirmada: false });
   return codigo;
+}
+export const temCodigoVisivel = () => !!(registro && registro.rec && registro.rec_cod);
+export async function verCodigoAtual(senha) {
+  if (!(await verificarSenha(senha))) throw new Error('Senha ou PIN incorreto.');
+  zerarFalhas();
+  if (!registro || !registro.rec) throw new Error('Ainda não há chave de recuperação. Gere uma nova.');
+  if (!registro.rec_cod || !mestraMemoria) throw new Error('A chave atual foi criada antes desta versão e não pode ser mostrada. Gere uma nova.');
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(registro.rec_cod.iv) }, await chaveDaMestra(['decrypt']), deB64(registro.rec_cod.ct));
+    return new TextDecoder().decode(pt);
+  } catch { throw new Error('Não foi possível abrir a chave atual. Gere uma nova.'); }
 }
 export async function confirmarCodigoGuardado() { if (registro) await gravarRegistro({ ...registro, rec_confirmada: true }); }
 
@@ -337,7 +362,7 @@ export function adotarMestra(mestra, rec) { mestraMemoria = mestra; adotarRec = 
 // O embrulho do código precisa ser o da MESMA chave mestra: sem código no backup, fica pendente (gerar em Segurança).
 export async function aplicarRecAdotado() {
   if (adotarRec === undefined || !registro) return;
-  await gravarRegistro({ ...registro, rec: adotarRec, rec_confirmada: !!adotarRec });
+  await gravarRegistro({ ...registro, rec: adotarRec, rec_cod: null, rec_confirmada: !!adotarRec });
   adotarRec = undefined;
 }
 

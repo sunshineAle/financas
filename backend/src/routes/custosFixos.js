@@ -4,8 +4,10 @@ const express = require('express');
 const db = require('../db');
 const dados = require('../dados');
 const { exigirAutenticacao } = require('../middleware/auth');
-const { projecaoCartaoPorMes, chaveHoje } = require('../utils/cartaoMeses');
+const { projecaoCartaoPorMes, chaveHoje, parcelasCartao, semPagamentoDeFatura } = require('../utils/cartaoMeses');
 const utilDividas = require('../utils/dividas');
+const { chaveDaData } = require('../utils/mesFinanceiro');
+const cartoesRouter = require('./cartoes');
 
 const router = express.Router();
 router.use(exigirAutenticacao);
@@ -57,8 +59,121 @@ function listar(usuarioId) {
 }
 
 router.get('/', (req, res) => {
-  const itens = listar(req.usuario.id);
-  res.json({ itens, totalAtivos: arred(itens.filter((i) => i.ativo).reduce((s, i) => s + i.valor, 0)) });
+  const hoje = chaveHoje();
+  const gastoMes = gastosDoMesPorCategoria(req.usuario.id, hoje);
+  const itens = listar(req.usuario.id).map((i) => ({ ...i, pagoMes: i.categoriaId ? (gastoMes[i.categoriaId] || 0) > 0 : null }));
+  const totalAtivos = arred(itens.filter((i) => i.ativo).reduce((s, i) => s + i.valor, 0));
+  const ess = essenciais(req.usuario.id);
+  // Custo de vida = fixos + essenciais estimados (anotação 41/43). Parcelas NÃO entram (são temporárias).
+  res.json({ itens, totalAtivos, totalEssenciais: ess.total, custoDeVida: arred(totalAtivos + ess.total) });
+});
+
+// ---- Essenciais (anotação 41/43): gastos do mês que mudam de valor, ligados a uma categoria ----
+const somarMesChave = (chave, n) => { const [a, m] = chave.split('-').map(Number); const t = a * 12 + (m - 1) + n; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`; };
+// Gasto por categoria e mês financeiro: saídas da conta (sem pagamento de fatura) + parcelas do cartão.
+function gastoPorCategoriaMes(usuarioId) {
+  const mapa = {}; // categoriaId -> { 'YYYY-MM': total }
+  db.prepare(
+    `SELECT categoria_id AS c, mes_fin(data) AS m, SUM(-valor) AS t FROM transacoes
+     WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor < 0 AND categoria_id IS NOT NULL AND ${semPagamentoDeFatura()}
+     GROUP BY categoria_id, m`
+  ).all(usuarioId).forEach((l) => { (mapa[l.c] ||= {})[l.m] = (mapa[l.c][l.m] || 0) + (Number(l.t) || 0); });
+  parcelasCartao(usuarioId).forEach((p) => { if (!p.categoria_id) return; (mapa[p.categoria_id] ||= {})[p.mes] = (mapa[p.categoria_id][p.mes] || 0) + (Number(p.valor) || 0); });
+  return mapa;
+}
+function gastosDoMesPorCategoria(usuarioId, chave) {
+  const mapa = gastoPorCategoriaMes(usuarioId);
+  return Object.fromEntries(Object.entries(mapa).map(([c, meses]) => [c, meses[chave] || 0]));
+}
+// Últimos 6 meses financeiros FECHADOS (sem o atual), do mais antigo ao mais recente. Com menos histórico, usa os que houver
+// (a partir do primeiro mês com gasto na categoria).
+function estatisticas(porMes, hoje) {
+  const chaves = [6, 5, 4, 3, 2, 1].map((n) => somarMesChave(hoje, -n));
+  const primeiro = chaves.findIndex((k) => (porMes?.[k] || 0) > 0);
+  if (primeiro < 0) return { meses: 0, media: 0, min: 0, max: 0, tendencia: null, comGasto: 0 };
+  const vals = chaves.slice(primeiro).map((k) => arred(porMes[k] || 0));
+  const media = arred(vals.reduce((a, b) => a + b, 0) / vals.length);
+  let tendencia = 'estavel';
+  if (vals.length >= 2) {
+    const meio = Math.floor(vals.length / 2);
+    const ant = vals.slice(0, meio), rec = vals.slice(meio);
+    const ma = ant.reduce((a, b) => a + b, 0) / ant.length, mr = rec.reduce((a, b) => a + b, 0) / rec.length;
+    if (ma > 0 && mr > ma * 1.05) tendencia = 'subindo'; else if (mr < ma * 0.95) tendencia = 'descendo';
+  }
+  return { meses: vals.length, media, min: Math.min(...vals), max: Math.max(...vals), tendencia, comGasto: chaves.filter((k) => (porMes?.[k] || 0) > 0).length };
+}
+// Fora das sugestões (não essenciais por padrão): lazer, restaurante, delivery...
+const NAO_ESSENCIAL = /(lazer|restaurante|delivery|ifood|bar\b|bares|cinema|viage|passeio|presente|hobby|jogo|games|streaming|assinatura|compras|roupa|vestu|beleza|investiment|transfer|fatura|outros)/i;
+function essenciais(usuarioId) {
+  const hoje = chaveHoje();
+  const mapa = gastoPorCategoriaMes(usuarioId);
+  const linhas = db.prepare(
+    `SELECT e.*, k.nome AS categoria_nome, k.icone AS categoria_icone, k.cor AS categoria_cor FROM custos_essenciais e
+     JOIN categorias_orcamento k ON k.id = e.categoria_id AND k.excluido_em IS NULL
+     WHERE e.usuario_id = ? AND e.excluido_em IS NULL ORDER BY COALESCE(e.nome, k.nome) COLLATE NOCASE`
+  ).all(usuarioId);
+  const itens = linhas.map((l) => {
+    const est = estatisticas(mapa[l.categoria_id], hoje);
+    const manual = l.valor_manual != null && Number(l.valor_manual) > 0 ? arred(l.valor_manual) : null;
+    const gastoMes = arred(mapa[l.categoria_id]?.[hoje] || 0);
+    return {
+      id: l.id, categoriaId: l.categoria_id, nome: l.nome || l.categoria_nome, categoriaNome: l.categoria_nome, icone: l.categoria_icone || null, cor: l.categoria_cor || null,
+      valorManual: manual, dia: l.dia_mes || null, ativo: !!l.ativo, ...est, estimado: manual != null ? manual : est.media, gastoMes, pagoMes: gastoMes > 0,
+    };
+  });
+  const usadas = new Set(linhas.map((l) => l.categoria_id));
+  const cats = db.prepare('SELECT id, nome, icone, cor FROM categorias_orcamento WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId);
+  const sugestoes = cats
+    .filter((c) => !usadas.has(c.id) && !NAO_ESSENCIAL.test(c.nome))
+    .map((c) => ({ categoriaId: c.id, nome: c.nome, icone: c.icone || null, cor: c.cor || null, ...estatisticas(mapa[c.id], hoje) }))
+    .filter((c) => c.comGasto >= 5)
+    .sort((a, b) => b.media - a.media);
+  return { itens, sugestoes, total: arred(itens.filter((i) => i.ativo).reduce((s, i) => s + i.estimado, 0)) };
+}
+function validarEssencial(corpo, parcial = false) {
+  const c = corpo || {};
+  const out = {};
+  if (!parcial || c.categoriaId !== undefined) {
+    if (!c.categoriaId) return { erro: 'Escolha a categoria.' };
+    out.categoria_id = String(c.categoriaId);
+  }
+  if (c.nome !== undefined) { const n = String(c.nome || '').trim(); if (n.length > 80) return { erro: 'O nome pode ter até 80 caracteres.' }; out.nome = n || null; }
+  if (c.valorManual !== undefined) {
+    if (c.valorManual === null || c.valorManual === '' || Number(c.valorManual) === 0) out.valor_manual = null;
+    else { const v = Number(c.valorManual); if (!Number.isFinite(v) || v < 0) return { erro: 'Valor inválido.' }; out.valor_manual = arred(v); }
+  }
+  if (c.dia !== undefined) {
+    if (c.dia === null || c.dia === '' || Number(c.dia) === 0) out.dia_mes = null;
+    else { const d = Number(c.dia); if (!Number.isInteger(d) || d < 1 || d > 31) return { erro: 'O dia do mês deve estar entre 1 e 31.' }; out.dia_mes = d; }
+  }
+  if (c.ativo !== undefined) out.ativo = c.ativo ? 1 : 0;
+  return { dados: out };
+}
+router.get('/essenciais', (req, res) => res.json(essenciais(req.usuario.id)));
+router.post('/essenciais', (req, res) => {
+  const v = validarEssencial(req.body);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  if (!categoriaDoUsuario(req.usuario.id, v.dados.categoria_id)) return res.status(400).json({ erro: 'Categoria não encontrada.' });
+  if (db.prepare('SELECT id FROM custos_essenciais WHERE usuario_id = ? AND categoria_id = ? AND excluido_em IS NULL').get(req.usuario.id, v.dados.categoria_id)) {
+    return res.status(400).json({ erro: 'Essa categoria já está nos essenciais.' });
+  }
+  const novo = dados.inserir('custos_essenciais', { usuario_id: req.usuario.id, ativo: 1, ...v.dados });
+  res.status(201).json(essenciais(req.usuario.id).itens.find((i) => i.id === novo.id));
+});
+router.put('/essenciais/:id', (req, res) => {
+  const atual = db.prepare('SELECT id FROM custos_essenciais WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(req.params.id, req.usuario.id);
+  if (!atual) return res.status(404).json({ erro: 'Item não encontrado.' });
+  const v = validarEssencial(req.body, true);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  if (v.dados.categoria_id && !categoriaDoUsuario(req.usuario.id, v.dados.categoria_id)) return res.status(400).json({ erro: 'Categoria não encontrada.' });
+  dados.atualizar('custos_essenciais', atual.id, v.dados);
+  res.json(essenciais(req.usuario.id).itens.find((i) => i.id === atual.id));
+});
+router.delete('/essenciais/:id', (req, res) => {
+  const atual = db.prepare('SELECT id FROM custos_essenciais WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(req.params.id, req.usuario.id);
+  if (!atual) return res.status(404).json({ erro: 'Item não encontrado.' });
+  dados.excluir('custos_essenciais', atual.id);
+  res.json({ ok: true });
 });
 
 router.post('/', (req, res) => {
@@ -112,6 +227,7 @@ function parcelasDeDividas(usuarioId, deslocamento) {
   return { itens, total: arred(itens.reduce((s, i) => s + i.valor, 0)) };
 }
 
+// Projeção do mês = fixos + essenciais estimados + parcelas ativas (anotação 41).
 // GET /api/custos-fixos/projecao?meses=1 (padrão 1: o mês seguinte; até 6).
 router.get('/projecao', (req, res) => {
   const usuarioId = req.usuario.id;
@@ -119,6 +235,8 @@ router.get('/projecao', (req, res) => {
   const hoje = chaveHoje();
   const fixos = listar(usuarioId).filter((i) => i.ativo);
   const totalFixos = arred(fixos.reduce((s, i) => s + i.valor, 0));
+  const ess = essenciais(usuarioId);
+  const essAtivos = ess.itens.filter((i) => i.ativo);
   const cartao = Object.fromEntries(projecaoCartaoPorMes(usuarioId).map((m) => [m.mes, m]));
   const meses = [];
   for (let i = 1; i <= qtd; i++) {
@@ -129,12 +247,72 @@ router.get('/projecao', (req, res) => {
       mes: chave,
       rotulo: rotuloMes(chave),
       custosFixos: { total: totalFixos, quantidade: fixos.length, itens: fixos },
+      essenciais: { total: ess.total, quantidade: essAtivos.length },
       parcelasCartao: { total: arred(pc.total), quantidade: pc.quantidade },
       parcelasDividas: { total: pd.total, quantidade: pd.itens.length, itens: pd.itens },
-      total: arred(totalFixos + pc.total + pd.total),
+      total: arred(totalFixos + ess.total + pc.total + pd.total),
     });
   }
   res.json({ mes: meses[0].mes, proximo: meses[0], meses });
+});
+
+// ---- Previsão do dinheiro nas contas (anotação 51) ----
+// Única exceção à "data da compra": aqui a fatura entra no VENCIMENTO, porque a pergunta é "quanto vou ter na conta?".
+// Previsto(mês) = saldo anterior + entradas recorrentes − Custo de vida − faturas que vencem − parcelas de dívidas/acordos.
+// Mês 0 = o mês financeiro atual (só o que ainda falta acontecer nele); depois, os 5 seguintes.
+router.get('/previsao', (req, res) => {
+  const usuarioId = req.usuario.id;
+  const qtd = Math.min(12, Math.max(2, parseInt(req.query.meses, 10) || 6));
+  const hoje = chaveHoje();
+  const saldoContas = arred(db.prepare('SELECT COALESCE(SUM(saldo), 0) AS t FROM contas WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId).t);
+  // Entradas recorrentes = média dos 3 últimos meses financeiros fechados (sem resgates, rendimentos e transferências).
+  const ent = Object.fromEntries(db.prepare(
+    `SELECT mes_fin(data) AS m, SUM(valor) AS t FROM transacoes
+     WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor > 0 AND COALESCE(tipo_mov, '') = ''
+       AND COALESCE(categoria_receita, '') NOT IN ('Resgates e saques', 'Rendimentos')
+     GROUP BY m`
+  ).all(usuarioId).map((l) => [l.m, Number(l.t) || 0]));
+  const fechados = [1, 2, 3].map((n) => somarMes(hoje, -n)).filter((k) => ent[k] > 0);
+  const entradasMedia = fechados.length ? arred(fechados.reduce((s, k) => s + ent[k], 0) / fechados.length) : 0;
+  const recebidoMes = arred(ent[hoje] || 0);
+  // Custo de vida (fixos + essenciais). No mês atual, só o que ainda falta pagar.
+  const gastoMes = gastosDoMesPorCategoria(usuarioId, hoje);
+  const fixos = listar(usuarioId).filter((i) => i.ativo);
+  const ess = essenciais(usuarioId);
+  const essAtivos = ess.itens.filter((i) => i.ativo);
+  const custoVida = arred(fixos.reduce((s, i) => s + i.valor, 0) + ess.total);
+  const custoRestante = arred(
+    fixos.reduce((s, i) => s + (i.categoriaId && (gastoMes[i.categoriaId] || 0) > 0 ? 0 : i.valor), 0)
+    + essAtivos.reduce((s, i) => s + Math.max(0, i.estimado - i.gastoMes), 0)
+  );
+  // Faturas a pagar, no mês financeiro do vencimento.
+  const faturasPorMes = {};
+  cartoesRouter.faturasAPagar(usuarioId).forEach((f) => {
+    let k = chaveDaData(f.vence);
+    if (k < hoje) k = hoje; // vencida e não paga: pesa já
+    (faturasPorMes[k] ||= { total: 0, itens: [] }).total += f.total;
+    faturasPorMes[k].itens.push({ nome: f.cartao, valor: arred(f.total), vence: f.vence });
+  });
+  let saldo = saldoContas;
+  let negativoEm = null;
+  const meses = [];
+  for (let i = 0; i < qtd; i++) {
+    const chave = somarMes(hoje, i);
+    const entradas = i === 0 ? arred(Math.max(0, entradasMedia - recebidoMes)) : entradasMedia;
+    const custo = i === 0 ? custoRestante : custoVida;
+    const fat = faturasPorMes[chave] || { total: 0, itens: [] };
+    const pd = parcelasDeDividas(usuarioId, i + 1);
+    saldo = arred(saldo + entradas - custo - fat.total - pd.total);
+    if (saldo < 0 && !negativoEm) negativoEm = { mes: chave, rotulo: rotuloMes(chave) };
+    meses.push({
+      mes: chave, rotulo: rotuloMes(chave), atual: i === 0,
+      entradas, custoDeVida: custo,
+      faturas: { total: arred(fat.total), itens: fat.itens },
+      dividas: { total: pd.total, itens: pd.itens },
+      saldo,
+    });
+  }
+  res.json({ saldoContas, entradasMedia, custoDeVida: custoVida, semEntradas: !fechados.length, negativoEm, meses });
 });
 
 module.exports = router;
