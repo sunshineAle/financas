@@ -7,7 +7,7 @@
 // `centro` = botão central do rodapé; `acoes` = opções de lançamento do botão central (+ ou segurar).
 import {
   House, Landmark, ArrowLeftRight, CreditCard, ReceiptText, Target, Ellipsis,
-  ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock,
+  ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock, ListChecks,
 } from 'lucide-vue-next';
 
 export const GRUPOS = [
@@ -84,5 +84,28 @@ export function itemDaRota(g, rota) {
     || g.itens[0];
 }
 
-// Telas que mostram o TopoApp (foto do perfil à esquerda → Mais; sino de avisos à direita). O AppLayout o coloca.
+// (Antigo) telas com TopoApp. Desde a anotação 63 TODAS as telas têm o mesmo topo; mantido só por compatibilidade.
 export const ROTAS_COM_TOPO = ['dashboard', 'contas', 'objetivos', 'transacoes', 'cartoes', 'dividas'];
+
+// Menu lateral do PC/web (anotação 62), nesta ordem. `revisar` = item "A revisar" (só aparece quando há itens;
+// o contador vem de /api/reserva/auto/pendentes, os mesmos itens do card "A revisar" no topo de Transações).
+export const MENU_LATERAL = [
+  { rota: '/', rotulo: 'Início', icone: House },
+  { rota: '/transacoes', rotulo: 'Transações', icone: ArrowLeftRight },
+  { rota: '/contas', rotulo: 'Contas', icone: Landmark },
+  { rota: '/objetivos', rotulo: 'Objetivos', dica: 'Metas e Investimentos', icone: Target },
+  { rota: '/cartoes', rotulo: 'Cartões e Crédito', icone: CreditCard },
+  { rota: '/dividas', rotulo: 'Dívidas', icone: ReceiptText },
+  { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
+  { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
+  { rota: '/importar', rotulo: 'Importar', icone: FileUp },
+  { rota: '/transacoes?revisar=1', rotulo: 'A revisar', icone: ListChecks, revisar: true },
+];
+
+// Para onde a seta "Voltar" do topo leva (null = sem seta; no lugar dela fica o logo "D").
+// Celular: todas as telas internas do "Mais" e o extrato do cartão. PC: Perfil/configurações, Manual e o extrato do cartão.
+export function voltarDaRota(rota, celular) {
+  if (rota.name === 'cartao-extrato') return '/cartoes';
+  if (celular) return ehTelaInternaDoMais(rota) ? '/mais' : null;
+  return rota.name === 'mais-secao' || rota.name === 'manual' ? '/mais' : null;
+}

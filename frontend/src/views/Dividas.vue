@@ -21,7 +21,7 @@ import DividaCard from '../components/DividaCard.vue';
 import DividaAcordoModal from '../components/DividaAcordoModal.vue';
 import DividaPlanoGeral from '../components/DividaPlanoGeral.vue';
 import RelLinha from '../components/RelLinha.vue';
-import { Plus, Archive, Handshake, AlertTriangle, ListOrdered } from 'lucide-vue-next';
+import { Plus, Archive, Handshake, AlertTriangle, ListOrdered, Flame } from 'lucide-vue-next';
 import { MESES } from '../services/mes.js';
 import { taxaCartao as buscarTaxaCartao } from '../utils/jurosCartao.js';
 
@@ -343,6 +343,18 @@ function dataBR(iso) {
   return `${d}/${m}/${a}`;
 }
 
+// Juros mais caros (anotação 60.5): cheque especial (conta negativa) e rotativo (fatura vencida ou paga em parte).
+// Aparecem antes da lista, com selo; a taxa sem cadastro usa a média do Bacen (rotativo) ou o teto do cheque especial.
+const caros = ref([]);
+async function carregarCaros(rotativo) {
+  try {
+    const qs = rotativo ? `?rotativo=${encodeURIComponent(rotativo.toFixed(2))}` : '';
+    const r = await fetch(`/api/dividas/caros${qs}`, { credentials: 'include' });
+    caros.value = r.ok ? await r.json() : [];
+  } catch { caros.value = []; }
+}
+const pctCaro = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+
 async function carregarFaturasCartoes() {
   try {
     const r = await fetch('/api/cartoes', { credentials: 'include' });
@@ -437,7 +449,7 @@ const detalheEvo = computed(() => evolucao.value[mesEvo.value] || null);
 
 onMounted(() => {
   carregarApoioPagamento(); carregarDividas(); carregarFaturasCartoes(); carregarArquivadas();
-  buscarTaxaCartao().then((t) => { jurosCartao.value = t; });
+  buscarTaxaCartao().then((t) => { jurosCartao.value = t; carregarCaros(t?.rotativoMensal); }).catch(() => carregarCaros());
 });
 </script>
 
@@ -459,9 +471,22 @@ onMounted(() => {
     </TopoValor>
 
     <AbasSeletor v-model="aba" :abas="abas" tema="saida" bloco swipe />
-    <p class="texto-aba">{{ textoAba[aba] }}</p>
 
-    <CardPadrao :titulo="listaDaAba.length ? `${tituloAba[aba]} (${listaDaAba.length})` : tituloAba[aba]" :subtitulo="listaDaAba.length && aba !== 'quitadas' ? 'Maior risco primeiro. Toque numa dívida para ver o histórico, simular a quitação e pagar.' : ''">
+    <CardPadrao v-if="aba === 'aberto' && caros.length" class="card-caros" titulo="Pague primeiro: juros mais caros" ajuda="dividas.juros-caros" data-juros-caros>
+      <ul class="lista-limpa">
+        <li v-for="c in caros" :key="c.id" class="caro-item">
+          <span class="caro-ico" aria-hidden="true"><Flame :size="16" /></span>
+          <span class="meio">
+            <span class="linha1"><strong>{{ c.nome }}</strong><span class="numero-tabular valor">{{ moeda(c.saldo) }}</span></span>
+            <span class="linha2"><span class="selo-caro">juros mais caros</span><small>{{ c.rotulo }} · {{ pctCaro(c.taxa) }} ao mês{{ c.taxaEstimada ? ' (estimado)' : '' }}</small></span>
+            <small class="frase-caro">{{ c.frase }}</small>
+          </span>
+        </li>
+      </ul>
+      <button type="button" class="botao-secundario" @click="planoAberto = true">Ver plano de quitação</button>
+    </CardPadrao>
+
+    <CardPadrao :ajuda="'dividas.aba-' + aba" :titulo="listaDaAba.length ?`${tituloAba[aba]} (${listaDaAba.length})` : tituloAba[aba]" :subtitulo="listaDaAba.length && aba !== 'quitadas' ? 'Maior risco primeiro' : ''">
       <template v-if="listaDaAba.length">
         <ul class="lista-limpa">
           <DividaCard v-for="divida in listaDaAba" :key="divida.id" :divida="divida" :taxa-cartao="taxaCartaoMensal" :rotulo-taxa-cartao="rotuloTaxaCartao"
@@ -478,7 +503,7 @@ onMounted(() => {
     </CardPadrao>
 
     <template v-if="aba === 'aberto'">
-      <CardPadrao v-if="cartoesFaturas.length" titulo="Faturas a pagar" subtitulo="Fatura aberta de todos os cartões. O lançamento já conta como gasto no mês da fatura.">
+      <CardPadrao v-if="cartoesFaturas.length" titulo="Faturas a pagar" ajuda="dividas.faturas">
         <template #acoes><span :class="['total-fat', 'numero-tabular']">{{ moeda(totalFaturas) }}</span></template>
         <ul class="lista-limpa">
           <li v-for="c in cartoesFaturas" :key="c.id" class="item-lista" role="button" tabindex="0" @click="router.push({ name: 'cartao-extrato', params: { id: c.id } })" @keydown.enter="router.push({ name: 'cartao-extrato', params: { id: c.id } })">
@@ -492,7 +517,7 @@ onMounted(() => {
         </ul>
       </CardPadrao>
 
-      <CardPadrao titulo="Compras parceladas" subtitulo="Parcelas que ainda vão cair nas próximas faturas de todos os cartões. Sem juros: não entram no total devido.">
+      <CardPadrao titulo="Compras parceladas" ajuda="dividas.parceladas">
         <template #acoes><span class="total-fat numero-tabular">{{ moeda(totalParceladas) }}</span></template>
         <p v-if="!parceladas.length" class="nota">{{ carregandoParc ? 'Carregando…' : 'Nenhuma compra parcelada com parcelas futuras.' }}</p>
         <ul v-else class="lista-limpa">
@@ -504,7 +529,7 @@ onMounted(() => {
         </ul>
       </CardPadrao>
 
-      <CardPadrao titulo="Juros médios do cartão" subtitulo="Referência para saber se um acordo ou parcelamento está caro.">
+      <CardPadrao titulo="Juros médios do cartão" ajuda="dividas.juros-medios">
         <template v-if="jurosCartao">
           <dl class="juros-cartao">
             <div><dt>Média do cartão</dt><dd class="numero-tabular">{{ pct(jurosCartao.mensal) }} ao mês</dd></div>
@@ -520,7 +545,7 @@ onMounted(() => {
       </CardPadrao>
     </template>
 
-    <CardPadrao v-if="dividas.length" titulo="Evolução das dívidas" subtitulo="Últimos 6 meses · toque num mês para ver o detalhe">
+    <CardPadrao v-if="dividas.length" titulo="Evolução das dívidas" subtitulo="Últimos 6 meses" ajuda="dividas.evolucao">
       <RelLinha :pontos="evolucao" :selecionado="mesEvo >= 0 ? mesEvo : evolucao.length - 1" de="var(--saida-ambar-medio)" ate="var(--saida-carmim-medio)" :formato="moeda" @escolher="mesEvo = $event" />
       <dl v-if="detalheEvo" class="detalhe-evo" aria-live="polite">
         <div class="cab"><dt>{{ detalheEvo.nome }}</dt></div>
@@ -539,7 +564,7 @@ onMounted(() => {
 
     <FormularioModal :aberto="!!quebrarAlvo" :titulo="`Acordo quebrado · ${quebrarAlvo ? quebrarAlvo.nome : ''}`" tema="saida" rotuloSalvar="Confirmar quebra" :carregando="salvandoQuebra" :erro="erroQuebra" @salvar="confirmarQuebra" @fechar="quebrarAlvo = null">
       <p class="nota">Se o acordo foi quebrado, o desconto se perde: a dívida volta ao valor original, mais os encargos, menos o que você já pagou. Ela passa a contar como negativada e sobe na lista de risco.</p>
-      <CampoTexto v-model="encargosQuebra" type="number" step="0.5" min="0" max="200" inputmode="decimal" rotulo="Encargos sobre o valor original (%)" dica="Multa, juros de mora e correção que o credor cobra. Ajuste conforme o contrato." />
+      <CampoTexto v-model="encargosQuebra" type="number" step="0.5" min="0" max="200" inputmode="decimal" rotulo="Encargos sobre o valor original (%)" dica="Multa, juros de mora e correção que o credor cobra. Ajuste conforme o contrato." dica-ao-focar />
       <dl v-if="previaQuebra" class="detalhe-evo previa-quebra" aria-live="polite">
         <div><dt>Valor original</dt><dd class="numero-tabular">{{ moeda(previaQuebra.valorOriginal) }}</dd></div>
         <div><dt>Encargos</dt><dd class="numero-tabular">+ {{ moeda(previaQuebra.encargos) }}</dd></div>
@@ -564,31 +589,31 @@ onMounted(() => {
       <div class="acoes-formulario"><button type="button" class="botao-secundario" @click="mostrarArquivadas = false">Fechar</button></div>
     </Modal>
 
-    <FormularioModal :aberto="!!dividaEditando" titulo="Editar dívida" tema="saida" :carregando="salvandoEdicao" :erro="erroEdicaoDivida" @salvar="salvarEdicaoDivida" @fechar="dividaEditando = null">
+    <FormularioModal :aberto="!!dividaEditando" titulo="Editar dívida" ajuda="dividas.campos" tema="saida" :carregando="salvandoEdicao" :erro="erroEdicaoDivida" @salvar="salvarEdicaoDivida" @fechar="dividaEditando = null">
       <CampoTexto v-model="formEdicaoDivida.nome" rotulo="Nome" obrigatorio />
-      <CampoSelecao v-model="formEdicaoDivida.origem" :opcoes="opcoesOrigem" rotulo="Origem" dica="De onde a dívida veio: cartão, crediário, empréstimo, conta atrasada, pessoa ou outra." />
-      <CampoSelecao v-if="dividaEditando && dividaEditando.situacao !== 'quitada'" v-model="formEdicaoDivida.situacao" :opcoes="opcoesSituacaoEdicao" rotulo="Situação" dica="Como a dívida está agora. É ela que define a aba da página. Quitada só muda sozinha, ao pagar o saldo todo." />
-      <CampoTexto v-model="formEdicaoDivida.credor" rotulo="Credor — opcional" dica="Quem você deve: banco, loja, empresa de cobrança ou pessoa. Ajuda a achar os pagamentos nas transações." />
-      <CampoTexto v-model="formEdicaoDivida.taxaJuros" type="number" step="0.01" rotulo="Taxa de juros ao mês (%) — opcional" dica="Juros que a dívida cobra por mês (está no contrato ou no boleto). 0 = sem juros. Num acordo, a taxa é calculada sozinha." />
-      <CampoData v-model="formEdicaoDivida.vencimento" rotulo="Próximo vencimento — opcional" dica="Data da próxima parcela ou do boleto. Se passar, a dívida vira Atrasada e o risco sobe sozinho." />
-      <CampoSelecao v-model="formEdicaoDivida.contaId" :opcoes="opcoesContaVinc" rotulo="Banco / conta vinculado — opcional" dica="Com o banco vinculado, o sistema identifica sozinho as saídas que parecem pagamento desta dívida." />
-      <CampoSelecao v-model="formEdicaoDivida.urgencia" :opcoes="opcoesUrgencia" rotulo="Urgência" dica="Automática considera vencimento, acordo quebrado, negativação e juros. Escolher uma urgência à mão define o mínimo dela." />
+      <CampoSelecao v-model="formEdicaoDivida.origem" :opcoes="opcoesOrigem" rotulo="Origem" dica="De onde a dívida veio." dica-ao-focar />
+      <CampoSelecao v-if="dividaEditando && dividaEditando.situacao !== 'quitada'" v-model="formEdicaoDivida.situacao" :opcoes="opcoesSituacaoEdicao" rotulo="Situação" dica="Como a dívida está agora. Define a aba." dica-ao-focar />
+      <CampoTexto v-model="formEdicaoDivida.credor" rotulo="Credor — opcional" dica="Banco, loja, empresa de cobrança ou pessoa." dica-ao-focar />
+      <CampoTexto v-model="formEdicaoDivida.taxaJuros" type="number" step="0.01" rotulo="Taxa de juros ao mês (%) — opcional" dica="Está no contrato ou no boleto. 0 = sem juros." dica-ao-focar />
+      <CampoData v-model="formEdicaoDivida.vencimento" rotulo="Próximo vencimento — opcional" dica="Se passar, a dívida vira Atrasada." dica-ao-focar />
+      <CampoSelecao v-model="formEdicaoDivida.contaId" :opcoes="opcoesContaVinc" rotulo="Banco / conta vinculado — opcional" dica="Ajuda a achar os pagamentos desta dívida." dica-ao-focar />
+      <CampoSelecao v-model="formEdicaoDivida.urgencia" :opcoes="opcoesUrgencia" rotulo="Urgência" dica="Escolher à mão define o mínimo." dica-ao-focar />
     </FormularioModal>
 
-    <FormularioModal :aberto="mostrarFormulario" titulo="Nova dívida" tema="saida" rotuloSalvar="Salvar dívida" :carregando="salvandoDivida" :erro="erro" @salvar="criarDivida" @fechar="mostrarFormulario = false">
+    <FormularioModal :aberto="mostrarFormulario" titulo="Nova dívida" ajuda="dividas.campos" tema="saida" rotuloSalvar="Salvar dívida" :carregando="salvandoDivida" :erro="erro" @salvar="criarDivida" @fechar="mostrarFormulario = false">
       <CampoTexto v-model="formulario.nome" rotulo="Nome" placeholder="Ex: Carnê Magalu" obrigatorio />
-      <CampoSelecao v-model="formulario.origem" :opcoes="opcoesOrigem" rotulo="Origem" dica="De onde a dívida veio." />
-      <CampoSelecao v-model="formulario.situacao" :opcoes="opcoesSituacaoNova" rotulo="Situação" dica="Como ela está agora. Para fechar um acordo com o credor, use 'Adicionar acordo'." />
-      <CampoValor v-model="formulario.saldo" tipo="saida" rotulo="Saldo devedor" dica="Quanto falta pagar hoje." />
+      <CampoSelecao v-model="formulario.origem" :opcoes="opcoesOrigem" rotulo="Origem" dica="De onde a dívida veio." dica-ao-focar />
+      <CampoSelecao v-model="formulario.situacao" :opcoes="opcoesSituacaoNova" rotulo="Situação" dica="Acordo com o credor? Use 'Adicionar acordo'." dica-ao-focar />
+      <CampoValor v-model="formulario.saldo" tipo="saida" rotulo="Saldo devedor" dica="Quanto falta pagar hoje." dica-ao-focar />
       <CampoTexto v-model="formulario.parcelas" type="number" inputmode="numeric" min="1" step="1" rotulo="Parcelas restantes — opcional" placeholder="Ex: 10" />
       <CampoValor v-if="Number(formulario.parcelas) >= 1" v-model="formulario.valorParcela" tipo="saida" rotulo="Valor da parcela" />
-      <CampoData v-model="formulario.vencimento" rotulo="Próximo vencimento — opcional" dica="Data da próxima parcela ou do boleto. Se passar, a dívida vira Atrasada e o risco sobe sozinho." />
-      <CampoTexto v-model="formulario.taxaJuros" type="number" step="0.01" rotulo="Taxa de juros ao mês (%) — opcional" placeholder="Ex: 8.5" dica="Juros que a dívida cobra por mês. 0 = sem juros; em branco = não sei." />
-      <CampoSelecao v-model="formulario.contaId" :opcoes="opcoesContaVinc" rotulo="Banco / conta vinculado — opcional" dica="Com o banco vinculado, o sistema identifica sozinho as saídas que parecem pagamento desta dívida." />
-      <CampoSelecao v-model="formulario.urgencia" :opcoes="opcoesUrgencia" rotulo="Urgência" dica="Automática considera vencimento, negativação e juros. Escolher à mão define o mínimo." />
+      <CampoData v-model="formulario.vencimento" rotulo="Próximo vencimento — opcional" dica="Se passar, a dívida vira Atrasada." dica-ao-focar />
+      <CampoTexto v-model="formulario.taxaJuros" type="number" step="0.01" rotulo="Taxa de juros ao mês (%) — opcional" placeholder="Ex: 8.5" dica="0 = sem juros; em branco = não sei." dica-ao-focar />
+      <CampoSelecao v-model="formulario.contaId" :opcoes="opcoesContaVinc" rotulo="Banco / conta vinculado — opcional" dica="Ajuda a achar os pagamentos desta dívida." dica-ao-focar />
+      <CampoSelecao v-model="formulario.urgencia" :opcoes="opcoesUrgencia" rotulo="Urgência" dica="Escolher à mão define o mínimo." dica-ao-focar />
     </FormularioModal>
 
-    <FormularioModal :aberto="!!pagamentoAlvo" :titulo="`Iniciar pagamento · ${pagamentoAlvo ? pagamentoAlvo.nome : ''}`" tema="saida" rotuloSalvar="Registrar pagamento" :carregando="salvandoPg" :erro="erroPagamento" @salvar="registrarPagamento" @fechar="pagamentoAlvo = null">
+    <FormularioModal :aberto="!!pagamentoAlvo" :titulo="`Iniciar pagamento · ${pagamentoAlvo ? pagamentoAlvo.nome : ''}`" ajuda="dividas.pagamento" tema="saida" rotuloSalvar="Registrar pagamento" :carregando="salvandoPg" :erro="erroPagamento" @salvar="registrarPagamento" @fechar="pagamentoAlvo = null">
       <CampoValor v-model="formPg.valor" tipo="saida" rotulo="Valor pago" :dica="parcelaPg ? `Parcela: ${moeda(parcelaPg)}. Você pode editar o valor.` : ''" autofocus />
       <template v-if="abaixoDaParcela">
         <CampoSelecao v-model="formPg.quita" :opcoes="[{ valor: 'sim', rotulo: 'Sim, quita a parcela (desconto por antecipação)' }, { valor: 'nao', rotulo: 'Não, é só um pagamento parcial' }]" rotulo="Esse valor quita a parcela?" />
@@ -600,7 +625,6 @@ onMounted(() => {
       <CampoSelecao v-model="formPg.categoriaId" :opcoes="[{ valor: '', rotulo: 'Automática pelo nome' }, ...categoriasPg.map((c) => ({ valor: c.id, rotulo: c.nome }))]" rotulo="Categoria de despesa (opcional)" />
       <CampoTexto v-model="formPg.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" placeholder="Ex: Parcela de outubro" list="sugestoes-sub-pg" autocomplete="off" />
       <datalist id="sugestoes-sub-pg"><option v-for="s in sugestoesPg" :key="s" :value="s" /></datalist>
-      <p class="nota">Vira uma saída em Transações e abate o saldo desta dívida.</p>
     </FormularioModal>
   </div>
 </template>
@@ -678,6 +702,15 @@ button { font-family: var(--fonte-texto); font-weight: 600; font-size: 14px; pad
 .arq-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
 .perigo-mini { color: var(--cor-saida); border-color: var(--cor-saida); }
 .texto-aba { margin: -6px 0 0; font-size: 13px; color: var(--cor-texto-suave); }
+.caro-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--cor-card-borda); }
+.caro-item:last-child { border-bottom: none; }
+.caro-item .meio { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.caro-item .linha1, .caro-item .linha2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.caro-item .linha1 strong { overflow-wrap: anywhere; }
+.caro-item small { font-size: 12px; color: var(--cor-texto-suave); }
+.caro-ico { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
+.selo-caro { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
+.frase-caro { line-height: 1.4; }
 .vazio { display: flex; flex-direction: column; gap: 12px; }
 .vazio-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 .juros-cartao { margin: 0 0 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; font-size: 12px; }

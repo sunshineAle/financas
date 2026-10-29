@@ -33,7 +33,7 @@ const CORES = {
   contas: ['var(--entrada-ceu-medio)', 'var(--entrada-royal-medio)'],
   reserva: ['var(--meta-violeta-medio)', 'var(--meta-orquidea-medio)'],
   renda_fixa: ['var(--investimento-esmeralda-medio)', 'var(--investimento-verde-agua-medio)'],
-  renda_variavel: ['var(--investimento-jade-medio)', 'var(--investimento-menta-medio)'],
+  renda_variavel: ['var(--investimento-menta-medio)', 'var(--investimento-anis-medio)'], // ciano claro: separa da renda fixa (petróleo)
   faturas: ['var(--saida-carmim-medio)', 'var(--saida-tangerina-medio)'],
   dividas: ['var(--saida-vermelho-medio)', 'var(--saida-brasa-medio)'],
   cheque_especial: ['var(--saida-coral-medio)', 'var(--saida-ambar-medio)'],
@@ -75,7 +75,7 @@ const mesFatura = (chave) => {
 </script>
 
 <template>
-  <Modal :aberto="aberto" titulo="Patrimônio" :tema="temaModal" :largura="560" @fechar="emit('fechar')">
+  <Modal :aberto="aberto" titulo="Patrimônio" ajuda="inicio.patrimonio" :tema="temaModal" :largura="560" @fechar="emit('fechar')">
     <div class="patrimonio">
       <p v-if="carregando && !dados" class="estado">Carregando…</p>
       <p v-else-if="erro" class="estado erro" role="alert">{{ erro }}</p>
@@ -162,7 +162,6 @@ const mesFatura = (chave) => {
             </li>
           </ul>
         </div>
-        <p class="nota">Investimentos pelo valor guardado (sem cotação do dia). Compromissos futuros não entram no patrimônio: viram passivo quando a fatura abre.</p>
       </template>
     </div>
   </Modal>

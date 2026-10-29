@@ -6,7 +6,7 @@ const { exigirAutenticacao } = require('../middleware/auth');
 const cartoesRouter = require('./cartoes');
 const { calcularPatrimonio } = require('./patrimonio');
 const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
-const { semPagamentoDeFatura, parcelasCartao, chaveHoje: chaveMesHoje } = require('../utils/cartaoMeses');
+const { semPagamentoDeFatura, parcelasCartao, chaveHoje: chaveMesHoje, entradasCartao } = require('../utils/cartaoMeses');
 
 const router = express.Router();
 
@@ -76,7 +76,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     db
       .prepare(
         `SELECT substr(h.data, 1, 7) AS chave, SUM(h.valor) AS total FROM historico_aportes h
-         JOIN reserva_liberdade r ON r.id = h.reserva_id WHERE r.usuario_id = ? AND h.excluido_em IS NULL AND r.excluido_em IS NULL GROUP BY chave`
+         JOIN reserva_liberdade r ON r.id = h.reserva_id WHERE r.usuario_id = ? AND h.excluido_em IS NULL AND r.excluido_em IS NULL AND h.operacao <> 'saldo_inicial' GROUP BY chave`
       )
       .all(usuarioId)
       .map((l) => [l.chave, l.total])
@@ -90,6 +90,9 @@ router.get('/', exigirAutenticacao, (req, res) => {
     )
     .all(usuarioId);
   const porChave = Object.fromEntries(linhasFluxo.map((l) => [l.chave, l]));
+  // Anotação 61: cashback recebido no cartão é entrada (meses até o atual)
+  const cashbackCartao = entradasCartao(usuarioId).filter((e) => e.mes <= hojeChave);
+  cashbackCartao.forEach((e) => { (porChave[e.mes] ||= { chave: e.mes, entradas: 0, saidas: 0 }).entradas += e.valor; });
   const fluxoCaixa = meses.map((m) => ({
     chave: m.chave,
     mes: m.mes,
@@ -145,6 +148,12 @@ router.get('/', exigirAutenticacao, (req, res) => {
     )
     .all(usuarioId, tamChave, chaveAtual)
     .map((e) => ({ ...e, cor: corReceitaPorNome[e.nome] || null }));
+  const cashbackPeriodo = cashbackCartao.filter((e) => e.mes.slice(0, tamChave) === chaveAtual).reduce((s, e) => s + e.valor, 0);
+  if (cashbackPeriodo > 0) {
+    const ja = entradasPorCategoria.find((e) => e.nome === 'Cashback');
+    if (ja) ja.valor += cashbackPeriodo; else entradasPorCategoria.push({ nome: 'Cashback', valor: cashbackPeriodo, cor: corReceitaPorNome.Cashback || null });
+    entradasPorCategoria.sort((a, b) => b.valor - a.valor);
+  }
 
   // Dívidas que pedem atenção (vermelho e amarelo), para destacar junto das despesas
   const dividasUrgentes = db
@@ -180,7 +189,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
   const reservaRow = db.prepare('SELECT id, valor_atual FROM reserva_liberdade WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId);
   if (reservaRow) {
     const aportesMes = db
-      .prepare("SELECT COALESCE(SUM(valor), 0) AS t FROM historico_aportes WHERE reserva_id = ? AND excluido_em IS NULL AND substr(data, 1, ?) = ?")
+      .prepare("SELECT COALESCE(SUM(valor), 0) AS t FROM historico_aportes WHERE reserva_id = ? AND excluido_em IS NULL AND operacao <> 'saldo_inicial' AND substr(data, 1, ?) = ?")
       .get(reservaRow.id, tamChave, chaveAtual).t;
     const semMeta = db
       .prepare('SELECT COALESCE(SUM(valor), 0) AS t FROM historico_aportes WHERE reserva_id = ? AND excluido_em IS NULL AND meta_id IS NULL')
@@ -221,6 +230,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     )
     .get(usuarioId, tamChave, chaveAtual);
   somaPeriodo.saidas += cartaoNoPeriodo(tamChave, chaveAtual).reduce((s, p) => s + p.valor, 0);
+  somaPeriodo.entradas += cashbackPeriodo;
   const previstasPeriodo = Object.entries(previstoPorMes)
     .filter(([k]) => k > chaveHoje && k.slice(0, tamChave) === chaveAtual) // só o que ainda vai acontecer
     .reduce((s, [, v]) => s + v, 0);

@@ -135,11 +135,9 @@ onMounted(carregar);
 <template>
   <div class="pagina">
     <h1>Regras de categorização</h1>
-    <p class="nota">Ensine o app: quando o nome de um lançamento tiver certo trecho, ele já entra na categoria certa.</p>
     <AbasSeletor v-model="aba" :abas="[{ id: 'saida', rotulo: 'Despesas' }, { id: 'entrada', rotulo: 'Entradas' }]" :tema="aba" bloco />
-    <CardPadrao :titulo="aba === 'saida' ? 'Regras de despesa' : 'Regras de entrada'" :subtitulo="`${lista.length} regra(s)`">
+    <CardPadrao ajuda="regras" :titulo="aba === 'saida' ? 'Regras de despesa' : 'Regras de entrada'" :subtitulo="`${lista.length} regra(s)`">
       <p v-if="!carregando && !lista.length" class="nota">Nenhuma regra ainda. Ao corrigir a categoria de um lançamento em Transações, o app sugere criar uma.</p>
-      <p v-else-if="lista.length" class="dica-gesto">Toque para editar · arraste para a esquerda para pausar · para a direita para excluir</p>
       <transition-group tag="ul" name="regra" class="lista">
         <li v-for="r in lista" :key="r.id" class="regra-item" :class="{ off: !r.ativa, arrastando: dxDe(r) !== 0 }">
           <div class="fundo excluir" :class="{ pronto: passouMeio(r) && dxDe(r) > 0 }" aria-hidden="true" :style="{ opacity: dxDe(r) > 0 ? 1 : 0 }">

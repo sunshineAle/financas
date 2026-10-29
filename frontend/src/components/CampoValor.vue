@@ -9,7 +9,7 @@ import CampoBase from './CampoBase.vue';
 const props = defineProps({
   modelValue: { type: Number, default: 0 },
   rotulo: { type: String, default: 'Valor' },
-  erro: String, dica: String, autofocus: Boolean, disabled: Boolean, permiteNegativo: Boolean,
+  erro: String, dica: String, dicaAoFocar: Boolean, autofocus: Boolean, disabled: Boolean, permiteNegativo: Boolean,
   tipo: { type: String, default: '' },
   tema: { type: String, default: 'neutro' },
 });
@@ -33,7 +33,7 @@ onMounted(() => { if (props.autofocus) el.value?.focus(); });
 </script>
 
 <template>
-  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :tema="t" :para="id">
+  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="t" :para="id">
     <div class="valor-wrap" :class="{ erro: !!erro, zero: !modelValue }">
       <span class="moeda">{{ neg ? '− R$' : 'R$' }}</span>
       <input :id="id" ref="el" class="valor-input numero-tabular" type="text" inputmode="numeric" autocomplete="off" :value="texto" :disabled="disabled" :aria-invalid="!!erro" @input="aoDigitar" />

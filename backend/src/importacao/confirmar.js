@@ -48,7 +48,7 @@ function confirmar(usuarioId, corpo) {
   const formato = ['ofx', 'csv', 'xlsx', 'pdf'].includes(corpo.formato) ? corpo.formato : 'csv';
   const opcoes = corpo.opcoes || {};
   const periodo = corpo.periodo || {};
-  const resultado = { novas: 0, atualizadas: 0, ignoradas: 0, anuladas: 0, faturasPagas: 0, transferencias: 0, avisos: [], reservasPendentes: [] };
+  const resultado = { novas: 0, atualizadas: 0, ignoradas: 0, anuladas: 0, faturasPagas: 0, transferencias: 0, avisos: [], reservasPendentes: [], vinculadas: [] };
 
   for (const l of linhas) {
     if (ACOES_GRAVAM.includes(l.acao) || l.acao === 'atualizar') {
@@ -76,7 +76,10 @@ function confirmar(usuarioId, corpo) {
       if (ctx.fatura) {
         const totalApp = totalDaFatura(dest.cartao, ctx.fatura);
         const totalArquivo = arred(linhas.filter((l) => l.status !== 'fora_periodo' && l.status !== 'pagamento_recebido').reduce((t, l) => t - (Number(l.valor) || 0), 0));
-        resultado.fatura = { chave: ctx.fatura, totalApp, totalArquivo };
+        const contam = linhas.filter((l) => l.status !== 'fora_periodo' && l.status !== 'pagamento_recebido' && (ACOES_GRAVAM.includes(l.acao) || l.status === 'duplicada' || l.acao === 'manter' || l.acao === 'atualizar'));
+        const compras = arred(contam.filter((l) => Number(l.valor) < 0).reduce((t, l) => t - Number(l.valor), 0));
+        const creditos = arred(contam.filter((l) => Number(l.valor) > 0).reduce((t, l) => t + Number(l.valor), 0));
+        resultado.fatura = { chave: ctx.fatura, totalApp, totalArquivo, compras, creditos }; // anotação 61: total = compras − créditos
         if (Math.abs(totalApp - totalArquivo) > 0.009) {
           resultado.avisos.push(`A fatura ${ctx.fatura.split('-').reverse().join('/')} soma ${totalApp.toFixed(2).replace('.', ',')} no app e ${totalArquivo.toFixed(2).replace('.', ',')} no arquivo: confira linhas descartadas e lançamentos feitos à mão nessa fatura.`);
         }
@@ -106,6 +109,8 @@ function totalDaFatura(cartao, chave) {
 // Exclusão suave de uma transação importada, devolvendo saldo da conta e gasto da categoria.
 function removerTransacao(t) {
   const conta = db.prepare('SELECT * FROM contas WHERE id = ? AND excluido_em IS NULL').get(t.conta_id);
+  // Anotação 56: se estava ligada a uma meta (caixinha), tira o Guardar/Resgatar da meta e a linha de rendimento derivada
+  try { const C = integ.caixinhas(); if (C) C.desvincularTransacao(t, { manterTransacao: false }); } catch (e) { /* segue */ }
   if (t.ignorada !== 1) somarSaldo(conta, -t.valor);
   if (t.categoria_id && t.valor < 0 && t.ignorada === 0) dados.somar('categorias_orcamento', t.categoria_id, 'gasto_atual', -Math.abs(t.valor));
   dados.excluirOnde('faturas_pagas', 'transacao_id = ?', [t.id]);
@@ -145,6 +150,7 @@ function gravarConta(ctx, conta, linhas, corpo) {
   const emAberto = faturasEmAberto(usuarioId);
   const inseridas = new Map();
   const E = integ.lancamentos();
+  const caixinhasAVincular = [];
 
   for (const l of linhas) {
     const valor = arred(Number(l.valor));
@@ -184,7 +190,16 @@ function gravarConta(ctx, conta, linhas, corpo) {
     inseridas.set(l.idx, t);
     resultado.novas++;
 
-    if (l.status === 'reserva' && l.reserva) resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: l.reserva.rotulo, sentido: l.reserva.sentido, valor: Math.abs(valor), data: l.data, descricao: l.descricao });
+    if (l.status === 'reserva' && l.reserva && l.reserva.caixinha) {
+      // Anotação 56: caixinha ligada a meta. Com meta escolhida, vincula depois do laço (em ordem de data); sem meta, fica
+      // "A revisar" já fora dos totais (não conta como entrada/saída enquanto o usuário não decide).
+      const sentido = valor < 0 ? 'guardar' : 'resgatar';
+      if (l.reserva.metaId) caixinhasAVincular.push({ t, metaId: String(l.reserva.metaId), sentido, data: l.data });
+      else {
+        require('../utils/carteiraDb').tirarDosTotais(t.id, 'reserva_pendente');
+        resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: l.reserva.rotulo, sentido, valor: Math.abs(valor), data: l.data, descricao: l.descricao });
+      }
+    } else if (l.status === 'reserva' && l.reserva) resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: l.reserva.rotulo, sentido: l.reserva.sentido, valor: Math.abs(valor), data: l.data, descricao: l.descricao });
 
     if (l.acao === 'transferencia' && l.transferencia && l.transferencia.contaId) {
       try {
@@ -194,7 +209,15 @@ function gravarConta(ctx, conta, linhas, corpo) {
       } catch (e) { resultado.avisos.push(`"${l.descricao}": não consegui transformar em transferência (${e.message}); ficou como lançamento comum.`); }
     }
 
-    if (l.status === 'pagamento_fatura' && l.fatura && l.fatura.cartaoId && l.fatura.chave) {
+    // Anotação 61: saída que é o pagamento adiantado já lançado na fatura do cartão — liga os dois (não conta duas vezes)
+    if (l.status === 'pagamento_fatura' && l.fatura && l.fatura.adiantadoId) {
+      const lanc = db.prepare("SELECT * FROM lancamentos_cartao WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL AND tipo_mov = 'pagamento' AND vinculo IS NULL").get(String(l.fatura.adiantadoId), usuarioId);
+      if (lanc && E && E.ligarPagamentoCartao) {
+        const { vinculo } = E.ligarPagamentoCartao(lanc, db.prepare('SELECT * FROM transacoes WHERE id = ?').get(t.id));
+        registrar(importacao.id, 'transacoes', t.id, formato, 'anulado', { vinculo, pagamentoCartao: true });
+        resultado.pagamentosCasados = (resultado.pagamentosCasados || 0) + 1;
+      } else resultado.avisos.push(`"${l.descricao}": o pagamento adiantado do cartão não está mais disponível; ficou como saída comum.`);
+    } else if (l.status === 'pagamento_fatura' && l.fatura && l.fatura.cartaoId && l.fatura.chave) {
       const f = emAberto.find((x) => x.cartaoId === String(l.fatura.cartaoId) && x.chave === l.fatura.chave);
       if (f && valor < 0) {
         // 'valor' = o que saiu da conta. Diferença pequena a menos = desconto; diferença maior fica só como aviso
@@ -208,6 +231,27 @@ function gravarConta(ctx, conta, linhas, corpo) {
         const i = emAberto.indexOf(f); emAberto.splice(i, 1);
       } else resultado.avisos.push(`"${l.descricao}": a fatura escolhida não está mais em aberto; ficou como saída comum.`);
     }
+  }
+
+  // Anotação 56: Guardar/Resgatar nas metas das caixinhas, em ordem de data (o resgate separa o rendimento pelo que já
+  // estava guardado, inclusive o que entrou neste mesmo arquivo).
+  if (caixinhasAVincular.length) {
+    const C = integ.caixinhas();
+    const reserva = require('../utils/carteiraDb').buscarReserva(usuarioId);
+    resultado.vinculadas = resultado.vinculadas || [];
+    caixinhasAVincular.sort((a, b) => String(a.data).localeCompare(String(b.data))).forEach((v) => {
+      const meta = db.prepare('SELECT * FROM metas_reserva WHERE id = ? AND reserva_id = ? AND excluido_em IS NULL').get(v.metaId, reserva.id);
+      const t = db.prepare('SELECT * FROM transacoes WHERE id = ?').get(v.t.id);
+      try {
+        if (!C || !meta) throw new Error('meta não encontrada');
+        const r = C.vincularTransacao(usuarioId, reserva, t, meta, { sentido: v.sentido });
+        resultado.vinculadas.push({ transacaoId: t.id, metaId: meta.id, metaNome: meta.nome, sentido: v.sentido, valor: Math.abs(t.valor), rendimento: r.rendimento, descricao: t.descricao });
+      } catch (e) {
+        try { require('../utils/carteiraDb').tirarDosTotais(t.id, 'reserva_pendente'); } catch (e2) { /* segue */ }
+        resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: v.sentido === 'guardar' ? 'Guardar' : 'Resgatar', sentido: v.sentido, valor: Math.abs(t.valor), data: v.data, descricao: t.descricao });
+        resultado.avisos.push(`"${t.descricao}": não consegui vincular à meta (${e.message}); ficou em A revisar.`);
+      }
+    });
   }
 
   // Estornos: ligam o estorno à despesa original (existente ou do mesmo arquivo)
@@ -251,6 +295,7 @@ function gravarFatura(ctx, cartao, linhas) {
   const { usuarioId, formato, importacao, resultado, opcoes, fatura } = ctx;
   const categoriasOk = new Set(db.prepare('SELECT id FROM categorias_orcamento WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId).map((c) => c.id));
   const inseridas = new Map();
+  const E = integ.lancamentos();
   const unico = (idExt) => !db.prepare('SELECT 1 FROM lancamentos_cartao WHERE usuario_id = ? AND id_externo = ? AND excluido_em IS NULL').get(usuarioId, idExt);
 
   for (const l of linhas) {
@@ -270,7 +315,9 @@ function gravarFatura(ctx, cartao, linhas) {
 
     const ehCredito = valor > 0;
     const p = l.parcela && Number(l.parcela.total) >= 2 && !ehCredito ? { atual: Math.max(1, Number(l.parcela.atual) || 1), total: Number(l.parcela.total) } : null;
-    const categoriaId = !ehCredito && l.categoriaId && categoriasOk.has(String(l.categoriaId)) ? String(l.categoriaId) : null;
+    // Anotação 61: o crédito também leva categoria quando é estorno (reduz o gasto da categoria); pagamento e cashback não
+    const tipoCredito = !ehCredito ? null : l.status === 'pagamento_adiantado' ? 'pagamento' : l.status === 'cashback' ? 'cashback' : 'estorno';
+    const categoriaId = (!ehCredito || tipoCredito === 'estorno') && l.categoriaId && categoriasOk.has(String(l.categoriaId)) ? String(l.categoriaId) : null;
     let idExterno = null;
     if (l.fitid) {
       idExterno = `imp:${formato}:${cartao.id}:${l.fitid}`;
@@ -288,6 +335,8 @@ function gravarFatura(ctx, cartao, linhas) {
         cartao_id: cartao.id, usuario_id: usuarioId, compra_id: compraId, descricao,
         valor: ehCredito ? -Math.abs(valor) : Math.abs(valor), data_compra: dataCompra, parcela_numero: k, total_parcelas: p ? p.total : 1,
         categoria_id: categoriaId, id_externo: k === n ? idExterno : null,
+        // crédito: pagamento adiantado / cashback; estorno sem a compra original = avulso (A revisar) até ser ligado abaixo
+        tipo_mov: tipoCredito === 'pagamento' ? 'pagamento' : tipoCredito === 'cashback' ? 'cashback' : tipoCredito === 'estorno' ? 'estorno_avulso' : null,
       });
       registrar(importacao.id, 'lancamentos_cartao', rec.id, formato, 'inserido', null);
       if (k === n) primeira = rec;
@@ -295,6 +344,23 @@ function gravarFatura(ctx, cartao, linhas) {
     }
     inseridas.set(l.idx, primeira);
     resultado.novas++;
+    if (tipoCredito === 'cashback') {
+      if (!resultado.cashback) E.garantirCashback(usuarioId);
+      resultado.cashback = arred((resultado.cashback || 0) + Math.abs(valor));
+    }
+    if (tipoCredito === 'pagamento') {
+      resultado.pagamentosAdiantados = (resultado.pagamentosAdiantados || 0) + 1;
+      // casa com a saída da conta (a escolhida na pré-visualização ou, se não veio, a que aparecer agora)
+      let t = l.pagamento && l.pagamento.transacaoId
+        ? db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL AND ignorada = 0').get(String(l.pagamento.transacaoId), usuarioId)
+        : null;
+      if (!t) t = E.procurarSaidaDoPagamento(usuarioId, { valor, data: l.data });
+      if (t) {
+        const { vinculo } = E.ligarPagamentoCartao(primeira, t);
+        registrar(importacao.id, 'transacoes', t.id, formato, 'anulado', { vinculo, pagamentoCartao: true });
+        resultado.pagamentosCasados = (resultado.pagamentosCasados || 0) + 1;
+      }
+    }
   }
 
   for (const l of linhas) {
@@ -303,13 +369,16 @@ function gravarFatura(ctx, cartao, linhas) {
     let ori = null;
     if (l.anula.tipo === 'existente') ori = db.prepare('SELECT * FROM lancamentos_cartao WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(l.anula.id), usuarioId);
     else ori = inseridas.get(l.anula.idx) || null;
-    if (!ori) { resultado.avisos.push(`"${l.descricao}": a compra original não foi encontrada; o crédito entrou na fatura.`); continue; }
-    const vinculo = dados.novoId();
-    dados.atualizar('lancamentos_cartao', est.id, { tipo_mov: 'estorno', vinculo });
-    dados.atualizar('lancamentos_cartao', ori.id, { tipo_mov: 'estornada', vinculo });
+    if (ori) ori = db.prepare('SELECT * FROM lancamentos_cartao WHERE id = ? AND excluido_em IS NULL').get(ori.id) || null; // estado atual (estorno parcial anterior)
+    if (!ori) { resultado.avisos.push(`"${l.descricao}": a compra original não foi encontrada; o estorno ficou em A revisar.`); continue; }
+    if (ori.tipo_mov && ori.tipo_mov !== 'estornada_parcial') { resultado.avisos.push(`"${l.descricao}": a compra original já tem estorno; este ficou em A revisar.`); continue; }
+    // Anotação 61: estorno total anula a compra; parcial anula só a parte estornada (a compra fica 'estornada_parcial')
+    const { vinculo, parcial } = E.ligarEstornoCartao(est, ori);
     registrar(importacao.id, 'lancamentos_cartao', ori.id, formato, 'anulado', { vinculo });
     resultado.anuladas++;
+    if (parcial) resultado.anuladasParcial = (resultado.anuladasParcial || 0) + 1;
   }
+  resultado.estornosRevisar = db.prepare("SELECT COUNT(*) AS n FROM lancamentos_cartao WHERE id IN (SELECT registro_id FROM importacao_itens WHERE importacao_id = ? AND acao = 'inserido' AND excluido_em IS NULL) AND tipo_mov = 'estorno_avulso' AND excluido_em IS NULL").get(importacao.id).n;
 }
 
 // ------------------------------------------------------------------------------------------- desfazer

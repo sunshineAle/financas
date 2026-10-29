@@ -63,7 +63,7 @@ const linhasTopo = computed(() => {
         <thead><tr><th>Data</th><th class="n">Cotas</th><th class="n">Preço</th><th class="n">Total</th><th class="m"></th></tr></thead>
         <tbody>
           <tr v-for="c in d.compras" :key="c.id">
-            <td>{{ dataBR(c.data) }}<small v-if="c.meta_nome" class="meta">meta {{ c.meta_nome }}</small></td>
+            <td>{{ dataBR(c.data) }}<small v-if="c.tipo === 'posicao_inicial'" class="meta" data-linha-posicao>Posição inicial</small><small v-else-if="c.meta_nome" class="meta">meta {{ c.meta_nome }}</small></td>
             <td class="n numero-tabular">{{ c.cotas == null ? '—' : numeroBR(c.cotas) }}</td>
             <td class="n numero-tabular">{{ c.preco == null ? '—' : moeda4(c.preco) }}</td>
             <td class="n numero-tabular"><b>{{ moeda(c.total) }}</b></td>

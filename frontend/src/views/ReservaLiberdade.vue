@@ -26,7 +26,8 @@ import AtivoDetalhe from '../components/AtivoDetalhe.vue';
 import OperacaoModal from '../components/OperacaoModal.vue';
 import TransferirCorretoraModal from '../components/TransferirCorretoraModal.vue';
 import ReservasAuto from '../components/ReservasAuto.vue';
-import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Landmark } from 'lucide-vue-next';
+import PosicaoInicialModal from '../components/PosicaoInicialModal.vue';
+import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Landmark, Flag } from 'lucide-vue-next';
 import { resolverChave, CATALOGO, ESCOLHAS } from '../utils/icones.js';
 import { META_V2, iconeCat } from '../utils/iconesCategoria.js';
 import { api, carregarCdi, comCdi, infoCdi, dataHoraBR, moeda, numeroBR } from '../services/investimentos.js';
@@ -56,7 +57,11 @@ const salvando = ref(false);
 // Metas (várias): modal de criar/editar
 const modalMeta = ref(false);
 const editandoMetaId = ref(null);
-const metaForm = ref({ nome: '', icone: '🎯', tipoInvestimento: '', meta: 0, prazo: '' });
+// Anotação 55: "Já guardado em" (data + valor). Anotação 56: caixinha do banco (conta + nome no extrato, apelidos com ';').
+const hojeIso = () => new Date().toLocaleDateString('sv-SE');
+const metaVazia = () => ({ nome: '', icone: '🎯', tipoInvestimento: '', meta: 0, prazo: '', jaData: hojeIso(), jaValor: 0, ehCaixinha: false, cxConta: '', cxNome: '' });
+const metaForm = ref(metaVazia());
+const jaOriginal = ref(null);
 const erroMeta = ref('');
 const confirmandoRemocao = ref(false);
 
@@ -298,7 +303,8 @@ async function registrarAporte() {
 // --- Metas ---------------------------------------------------------------
 function abrirNovaMeta() {
   editandoMetaId.value = null;
-  metaForm.value = { nome: '', icone: '🎯', tipoInvestimento: '', meta: 0, prazo: '' };
+  metaForm.value = metaVazia();
+  jaOriginal.value = null;
   erroMeta.value = '';
   errosMeta.value = {};
   confirmandoRemocao.value = false;
@@ -309,7 +315,12 @@ function abrirEdicaoMeta(m) {
   const meta = typeof m === 'string' ? metas.value.find((x) => x.id === m) : m;
   if (!meta) return;
   editandoMetaId.value = meta.id;
-  metaForm.value = { nome: meta.nome, icone: meta.icone || '🎯', tipoInvestimento: meta.tipo_investimento || '', meta: meta.valor_meta, prazo: meta.prazo || '' };
+  metaForm.value = {
+    nome: meta.nome, icone: meta.icone || '🎯', tipoInvestimento: meta.tipo_investimento || '', meta: meta.valor_meta, prazo: meta.prazo || '',
+    jaData: meta.saldo_inicial_data || hojeIso(), jaValor: Number(meta.saldo_inicial_valor) || 0,
+    ehCaixinha: !!meta.caixinha_conta_id, cxConta: meta.caixinha_conta_id || '', cxNome: meta.caixinha_nome || '',
+  };
+  jaOriginal.value = { data: metaForm.value.jaData, valor: metaForm.value.jaValor };
   erroMeta.value = '';
   errosMeta.value = {};
   confirmandoRemocao.value = false;
@@ -324,9 +335,16 @@ async function salvarMeta() {
   errosMeta.value = {};
   if (!f.nome.trim()) errosMeta.value.nome = 'Dê um nome para a meta.';
   if (!(Number(f.meta) > 0)) errosMeta.value.meta = 'Informe uma meta maior que zero.';
+  if (f.ehCaixinha && !f.cxConta) errosMeta.value.cxConta = 'Escolha a conta da caixinha.';
   if (Object.keys(errosMeta.value).length) return;
+  const o = jaOriginal.value;
+  const jaMudou = o ? o.data !== f.jaData || Number(o.valor) !== Number(f.jaValor) : Number(f.jaValor) > 0;
   const r = await api(editandoMetaId.value ? 'PUT' : 'POST', comCdi(editandoMetaId.value ? `/api/reserva/metas/${editandoMetaId.value}` : '/api/reserva/metas'),
-    { nome: f.nome, icone: f.icone, tipoInvestimento: f.tipoInvestimento || null, valorMeta: Number(f.meta), prazo: f.prazo || null });
+    {
+      nome: f.nome, icone: f.icone, tipoInvestimento: f.tipoInvestimento || null, valorMeta: Number(f.meta), prazo: f.prazo || null,
+      ...(jaMudou ? { saldoInicial: { data: f.jaData || hojeIso(), valor: Number(f.jaValor) || 0 } } : {}),
+      caixinha: f.ehCaixinha ? { contaId: f.cxConta, nome: f.cxNome || f.nome } : null,
+    });
   if (!r.ok) { erroMeta.value = r.json?.erro || 'Não foi possível salvar a meta.'; return; }
   modalMeta.value = false;
   await aposGravar(r.json);
@@ -366,7 +384,13 @@ async function operacaoSalva(resposta) {
   if (resposta && resposta.ativos) carteira.value = resposta;
   await aposGravar(null);
 }
+// Anotação 55: posição inicial do ativo
+const modalPosicao = ref(false);
+const posicaoEdicao = ref(null);
+function abrirPosicao(ativoId = '', edicao = null) { opAtivoId.value = ativoId || ''; posicaoEdicao.value = edicao; modalPosicao.value = true; }
+async function posicaoSalva() { modalPosicao.value = false; await aposGravar(null); }
 function editarOperacaoDoDetalhe(linha) {
+  if (linha.tipo === 'posicao_inicial') { abrirPosicao(props.ativoAberto, linha); return; }
   opInicial.value = linha.tipo;
   opAtivoId.value = props.ativoAberto;
   opEdicao.value = { ...linha, ativo_id: props.ativoAberto };
@@ -432,7 +456,7 @@ onMounted(carregarConectados);
         </template>
       </TopoValor>
 
-      <CardPadrao v-if="partesMetas.length" titulo="Visão geral">
+      <CardPadrao v-if="partesMetas.length" titulo="Visão geral" ajuda="objetivos.liquidez">
         <div class="palco-orbe" role="img" :aria-label="'Visão geral das metas: ' + partesMetas.map((a) => `${a.nome} ${a.pct}%`).join(', ')">
           <Orbe :partes="partesMetas" :tamanho="460" />
         </div>
@@ -451,23 +475,22 @@ onMounted(carregarConectados);
           <small class="falta-anel numero-tabular"><template v-if="m.valor_meta - acumulado(m) > 0">Faltam <Valor :valor="Math.max(0, m.valor_meta - acumulado(m))" /></template><template v-else>Concluída</template></small>
         </button>
       </section>
-      <p class="nota nota-centro">{{ reserva.aviso_liquidez }}</p>
     </template>
 
     <!-- ===== ABA INVESTIMENTOS ===== -->
     <template v-else>
       <TopoValor tema="investimento" variante="3" rotulo="Total investido" :valor="totalInvestido" :linhas="linhasTopoInv">
         <template #acoes>
-          <BarraAcoes compacto :colunas="carteira.tem_corretora ? 2 : 1" rotulo="Ações dos investimentos">
+          <BarraAcoes compacto :colunas="carteira.tem_corretora ? 3 : 2" rotulo="Ações dos investimentos">
             <BotaoAcao compacto :icone="PiggyBank" rotulo="Guardar" tema="investimento" destaque @click="abrirOperacao('guardar')" />
             <BotaoAcao v-if="carteira.tem_corretora" compacto :icone="ArrowLeftRight" rotulo="Transferir" tema="investimento" @click="modalTransf = true" />
+            <BotaoAcao compacto :icone="Flag" rotulo="Posição inicial" tema="investimento" data-posicao-inicial @click="abrirPosicao()" />
           </BarraAcoes>
         </template>
       </TopoValor>
       <p v-if="avisoOp" class="aviso-op" role="status">{{ avisoOp }}</p>
 
-      <CardPadrao v-if="!carteira.tem_corretora" tema="investimento" titulo="Cadastre sua corretora como conta">
-        <p class="nota">Para a compra sair da corretora, cadastre-a em Contas (tipo Corretora) e faça a transferência banco → corretora. Sem corretora, você ainda pode conciliar a compra com a transferência que aparece no extrato do banco.</p>
+      <CardPadrao v-if="!carteira.tem_corretora" tema="investimento" ajuda="objetivos.corretora" titulo="Cadastre sua corretora como conta">
         <template #rodape>
           <BarraAcoes compacto :colunas="1"><BotaoAcao compacto :icone="Landmark" rotulo="Ir para Contas" tema="investimento" @click="router.push('/contas')" /></BarraAcoes>
         </template>
@@ -487,7 +510,7 @@ onMounted(carregarConectados);
         <p v-else class="nota">Nenhum investimento registrado ainda. Toque em Guardar para começar.</p>
       </CardPadrao>
 
-      <CardPadrao v-if="carteira.ativos.length" titulo="Meus ativos" subtitulo="Consolidados por ticker, com preço médio. Toque para ver compras e proventos.">
+      <CardPadrao v-if="carteira.ativos.length" titulo="Meus ativos" ajuda="objetivos.ativos">
         <ul class="lista-ativos">
           <li v-for="a in ativosVisiveis" :key="a.id">
             <button type="button" class="linha-ativo" @click="abrirAtivo(a.id)">
@@ -509,7 +532,7 @@ onMounted(carregarConectados);
         </ul>
       </CardPadrao>
 
-      <CardPadrao v-if="pontosGrafico" titulo="Evolução do total investido">
+      <CardPadrao v-if="pontosGrafico" titulo="Evolução do total investido" ajuda="objetivos.evolucao">
         <svg class="grafico" :viewBox="`0 0 ${larguraGrafico} ${alturaGrafico + 18}`" role="img" aria-label="Evolução do saldo por mês">
           <defs>
             <linearGradient id="gAreaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--investimento-esmeralda-claro)" stop-opacity="0.5" /><stop offset="1" stop-color="var(--investimento-esmeralda-claro)" stop-opacity="0" /></linearGradient>
@@ -522,10 +545,9 @@ onMounted(carregarConectados);
             <text :x="pt.x" :y="alturaGrafico + 12" text-anchor="middle" class="eixo">{{ mesCurto(pt.mes) }}</text>
           </g>
         </svg>
-        <p class="nota">Valor investido acumulado ao fim de cada mês (compras e guardados menos vendas e resgates).</p>
       </CardPadrao>
 
-      <CardPadrao v-if="conectados.itens.length" titulo="Nos bancos conectados" subtitulo="Só consulta por enquanto: estes valores ainda não entram nas metas. Open Finance é opcional e fica para uma versão futura do app local.">
+      <CardPadrao v-if="conectados.itens.length" titulo="Nos bancos conectados" subtitulo="Só consulta" ajuda="objetivos.conectados">
         <ul class="legenda-rosca">
           <li v-for="i in conectados.itens" :key="i.id">
             <IconeCategoria :valor="i.tipo" tipo="investimento" :tamanho="36" />
@@ -537,7 +559,7 @@ onMounted(carregarConectados);
       <p class="nota nota-centro">Última atualização — {{ textoAtualizacao }}</p>
     </template>
 
-    <FormularioModal :aberto="modalMeta" :titulo="editandoMetaId ? 'Editar meta' : 'Nova meta'" tema="meta" :erro="erroMeta" rotulo-salvar="Salvar meta" @salvar="salvarMeta" @fechar="modalMeta = false">
+    <FormularioModal :aberto="modalMeta" ajuda="objetivos.meta-form" :titulo="editandoMetaId ? 'Editar meta' : 'Nova meta'" tema="meta" :erro="erroMeta" rotulo-salvar="Salvar meta" @salvar="salvarMeta" @fechar="modalMeta = false">
       <CampoTexto v-model="metaForm.nome" rotulo="Nome da meta" maxlength="60" placeholder="Ex: Viagem, Reserva de Liberdade" tema="meta" obrigatorio :erro="errosMeta.nome" />
       <CampoValor v-model="metaForm.meta" rotulo="Valor da meta" tema="meta" :erro="errosMeta.meta" />
       <div v-if="sugestaoAtiva" class="sugestao">
@@ -548,14 +570,25 @@ onMounted(carregarConectados);
           <button v-for="o in iconesForm" :key="o.emoji" type="button" :title="o.rotulo" :aria-label="o.rotulo" :class="['opc-icone', { ativo: metaForm.icone === o.emoji }]" :aria-pressed="metaForm.icone === o.emoji" @click="metaForm.icone = o.emoji"><IconeCategoria :valor="o.emoji" tipo="meta" :tamanho="36" /></button>
         </div>
       </CampoBase>
-      <CampoSelecao v-model="metaForm.tipoInvestimento" rotulo="Tipo de investimento desta meta" :opcoes="opcoesTipoMeta" tema="meta" dica="Metas aceitam só liquidez rápida: CDB/RDB com liquidez diária, Tesouro Selic, LCI/LCA, poupança e fundos DI." />
+      <CampoSelecao v-model="metaForm.tipoInvestimento" rotulo="Tipo de investimento desta meta" :opcoes="opcoesTipoMeta" tema="meta" dica="Só liquidez rápida." dica-ao-focar />
       <CampoData v-model="metaForm.prazo" rotulo="Prazo (opcional)" tema="meta" />
+      <CampoBase rotulo="Já guardado em" dica="O que já estava guardado antes. Não sai de nenhuma conta." dica-ao-focar>
+        <div class="duas-colunas">
+          <CampoData v-model="metaForm.jaData" rotulo="Data" :max="hojeIso()" tema="meta" />
+          <CampoValor v-model="metaForm.jaValor" rotulo="Valor" tema="meta" />
+        </div>
+      </CampoBase>
+      <label class="marca-cx"><input v-model="metaForm.ehCaixinha" type="checkbox" data-meta-caixinha /> Esta meta é uma caixinha do banco</label>
+      <template v-if="metaForm.ehCaixinha">
+        <CampoSelecao v-model="metaForm.cxConta" rotulo="Conta da caixinha" :opcoes="[{ valor: '', rotulo: 'Escolha a conta…' }, ...contas.filter((c) => c.origem === 'manual').map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="meta" :erro="errosMeta.cxConta" />
+        <CampoTexto v-model="metaForm.cxNome" rotulo="Nome como aparece no extrato" :placeholder="metaForm.nome || 'Ex: Viagem, Meu Porquinho'" maxlength="300" tema="meta" dica="Apelidos separados por ponto e vírgula. Ex: Viagem; Caixinha Viagem" dica-ao-focar />
+      </template>
       <template v-if="editandoMetaId && metas.length > 1" #extra>
         <button type="button" class="sf-botao perigo" @click="removerMeta">{{ confirmandoRemocao ? 'Confirmar remoção' : 'Remover' }}</button>
       </template>
     </FormularioModal>
 
-    <FormularioModal :aberto="modalAporte" :titulo="editandoAporte ? 'Editar lançamento' : ehResgate ? 'Resgatar da meta' : 'Guardar na meta'" :tema="temaForm" :carregando="salvando" :erro="erroAporte" :rotulo-salvar="editandoAporte ? 'Salvar alterações' : ehResgate ? 'Resgatar' : 'Guardar'" @salvar="registrarAporte" @fechar="modalAporte = false">
+    <FormularioModal :aberto="modalAporte" ajuda="objetivos.guardar" :titulo="editandoAporte ? 'Editar lançamento' : ehResgate ? 'Resgatar da meta' : 'Guardar na meta'" :tema="temaForm" :carregando="salvando" :erro="erroAporte" :rotulo-salvar="editandoAporte ? 'Salvar alterações' : ehResgate ? 'Resgatar' : 'Guardar'" @salvar="registrarAporte" @fechar="modalAporte = false">
       <CampoTipo v-if="!editandoAporte" v-model="aporte.operacao" :opcoes="opcoesOperacao" />
       <p v-else class="nota-inline"><strong>{{ ehResgate ? 'Resgatar' : 'Guardar' }}</strong></p>
       <CampoValor v-if="!usaCotacao" v-model="aporte.valor" rotulo="Valor total" :tema="temaForm" :erro="errosAporte.valor" />
@@ -570,11 +603,10 @@ onMounted(carregarConectados);
       <p v-if="errosAporte.cotacao" class="sf-erro">{{ errosAporte.cotacao }}</p>
       <CampoData v-model="aporte.data" rotulo="Data (opcional)" atalhos :tema="temaForm" />
       <CampoSelecao v-model="aporte.contaId" :rotulo="ehResgate ? 'Conta que recebe o resgate (opcional)' : 'Conta de origem (opcional)'" :opcoes="opcoesContas" :tema="temaForm" />
-      <p v-if="aporte.contaId" class="nota-inline">O saldo de contas manuais é ajustado na hora; em conta conectada o saldo continua vindo do banco.</p>
       <CampoTexto v-model="aporte.descricao" rotulo="Observação (opcional)" maxlength="200" placeholder="Ex: guardado do mês" :tema="temaForm" />
-      <p class="nota-inline">Ações, FIIs, ETFs e cripto (liquidez lenta) não entram em metas: registre-os na aba Investimentos.</p>
     </FormularioModal>
 
+    <PosicaoInicialModal :aberto="modalPosicao" :carteira="carteira" :ativo-id="opAtivoId" :edicao="posicaoEdicao" @fechar="modalPosicao = false" @salvo="posicaoSalva" />
     <OperacaoModal :aberto="modalOp" :carteira="carteira" :metas="metas" :ativo-id="opAtivoId" :operacao-inicial="opInicial" :edicao="opEdicao" :meta-inicial="opMetaInicial" @fechar="modalOp = false" @salvo="operacaoSalva" />
     <TransferirCorretoraModal :aberto="modalTransf" :contas="carteira.contas" :corretoras="carteira.corretoras" @fechar="modalTransf = false" @salvo="transferenciaSalva" />
   </div>
@@ -629,6 +661,8 @@ onMounted(carregarConectados);
 
 .duas-colunas { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
 @media (max-width: 480px) { .duas-colunas { grid-template-columns: 1fr; } }
+.marca-cx { display: flex; gap: 10px; align-items: center; font-size: 14.5px; min-height: 44px; }
+.marca-cx input { width: 20px; height: 20px; accent-color: var(--cor-meta); }
 .sugestao .sf-botao { width: 100%; min-height: 44px; font-size: 14px; }
 .seletor-icone { display: flex; flex-wrap: wrap; gap: 6px; }
 .opc-icone { padding: 3px; border-radius: 14px; border: 2px solid transparent; background: none; cursor: pointer; min-width: 44px; min-height: 44px; display: grid; place-items: center; }

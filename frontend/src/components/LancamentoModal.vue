@@ -209,8 +209,7 @@ function transferenciaFeita(t) {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" :titulo="titulo" :tema="f.tipo" :rotulo-salvar="noCartao ? 'Lançar compra' : f.tipo === 'entrada' ? 'Lançar entrada' : 'Lançar saída'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharLancamento">
-    <p v-if="!noCartao && !noConta" class="nota">Para o que não vem do banco: dinheiro em espécie, um Pix que ainda não sincronizou, uma entrada extra. Em contas manuais o saldo é ajustado na hora.</p>
+  <FormularioModal :aberto="aberto" :titulo="titulo" ajuda="lancar" :tema="f.tipo" :rotulo-salvar="noCartao ? 'Lançar compra' : f.tipo === 'entrada' ? 'Lançar entrada' : 'Lançar saída'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharLancamento">
     <CampoTipo v-if="!noCartao" v-model="f.tipo" />
     <CampoValor v-model="f.valor" :tipo="f.tipo" :erro="erros.valor" autofocus />
     <CampoTexto v-model="f.descricao" rotulo="Descrição" placeholder="Ex: Mercado, Salário, Pix do João" :erro="erros.descricao" />
@@ -233,13 +232,13 @@ function transferenciaFeita(t) {
     <template v-if="f.tipo === 'saida' && !usaCartao && vinculaveis.length">
       <CampoSelecao v-model="f.dividaId" rotulo="Vincular a acordo, dívida ou crediário (opcional)" :opcoes="[{ valor: '', rotulo: 'Nenhum' }, ...vinculaveis.map((d) => ({ valor: d.id, rotulo: d.nome }))]" />
       <template v-if="f.dividaId">
-        <CampoValor v-model="f.valorParcela" tipo="saida" rotulo="Valor da parcela" dica="Preenchido com a parcela da dívida; pode mudar. Se você pagar menos que a parcela, a diferença vira economia por antecipação." />
+        <CampoValor v-model="f.valorParcela" tipo="saida" rotulo="Valor da parcela" dica="Parcela da dívida; pode mudar." dica-ao-focar />
         <p v-if="economiaAntecipacao > 0" class="previa">Economia por antecipação: {{ moeda(economiaAntecipacao) }}. A parcela inteira ({{ moeda(f.valorParcela) }}) é abatida do saldo da dívida.</p>
         <p v-else-if="dividaEscolhida" class="previa">Saldo atual da dívida: {{ moeda(dividaEscolhida.saldo) }}. O valor pago será abatido dele e entra no histórico.</p>
       </template>
     </template>
-    <CampoCategoria v-if="f.tipo === 'saida'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Categoria de despesa" automatica="Automática" dica="Automática usa suas regras e o nome da descrição; sem correspondência vai para “Geral”." />
-    <CampoCategoria v-else v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Categoria de entrada" automatica="Automática" dica="Automática usa suas regras; sem correspondência vai para “Geral”." />
+    <CampoCategoria v-if="f.tipo === 'saida'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Categoria de despesa" automatica="Automática" dica="Automática usa suas regras e o nome da descrição." dica-ao-focar />
+    <CampoCategoria v-else v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Categoria de entrada" automatica="Automática" dica="Automática usa suas regras." dica-ao-focar />
     <CampoTexto v-if="!usaCartao" v-model="f.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" list="sugestoes-sub-lanc" autocomplete="off" placeholder="Ex: Presente da mãe, Uber do trabalho" />
     <CampoIconeItem v-if="!usaCartao" v-model="f.icone" :tipo="f.tipo" :descricao="f.descricao" />
     <datalist id="sugestoes-sub-lanc"><option v-for="s in sugestoesSub" :key="s" :value="s"></option></datalist>

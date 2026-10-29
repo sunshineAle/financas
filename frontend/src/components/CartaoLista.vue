@@ -57,19 +57,6 @@ const linhas = computed(() => props.lancamentos.map((l) => {
       </LinhaTransacao>
     </div>
   </div>
-</template></span>
-          <span v-if="cartaoNome" class="cart">· <IconeBanco :icone="cartaoIcone" :nome="cartaoNome" padrao="💳" :tamanho="13" /> {{ cartaoNome }}</span>
-          <span v-if="l.totalParcelas > 1">· total {{ moeda(l.valorTotalCompra) }}</span>
-        </span>
-      </div>
-      <span v-if="l.rotuloParcela" class="parcela">{{ l.rotuloParcela }}</span>
-      <span class="valor numero-tabular">− {{ moeda(l.valor) }}</span>
-      <MenuPontos>
-        <button v-if="manual" type="button" @click="emit('editar', l)">Editar</button>
-        <button type="button" class="perigo" @click="emit('remover', l)">Remover</button>
-      </MenuPontos>
-    </li>
-  </ul>
 </template>
 
 <style scoped>

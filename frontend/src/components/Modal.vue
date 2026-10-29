@@ -5,14 +5,17 @@
 // leva o foco para dentro e devolve ao elemento anterior ao fechar. Claro/escuro por tokens.
 // Props: aberto, titulo, tema ('entrada'|'saida'|'meta'|'investimento'|'neutro': cor do foco/filete), largura (px máx. no PC; padrão 520).
 // Slots: default (corpo, rola), #rodape (fixo embaixo — botões). Para formulários prontos use <FormularioModal>.
+// ajuda (opcional): id em config/ajudaSecoes.js — põe o "?" minúsculo ao lado do título (anotação 64).
 import { watch, onUnmounted, ref, nextTick } from 'vue';
 import { X } from 'lucide-vue-next';
+import AjudaSecao from './AjudaSecao.vue';
 
 const props = defineProps({
   aberto: { type: Boolean, default: false },
   titulo: { type: String, default: '' },
   tema: { type: String, default: 'neutro' },
   largura: { type: Number, default: 520 },
+  ajuda: { type: String, default: '' },
 });
 const emit = defineEmits(['fechar']);
 const caixa = ref(null);
@@ -71,7 +74,7 @@ onUnmounted(() => {
         <div ref="caixa" class="modal" role="dialog" aria-modal="true" :aria-label="titulo" tabindex="-1" :style="{ '--largura': largura + 'px' }">
           <span class="alca" aria-hidden="true"></span>
           <div class="cabecalho-modal">
-            <h2>{{ titulo }}</h2>
+            <h2>{{ titulo }}<AjudaSecao v-if="ajuda" :secao="ajuda" /></h2>
             <button type="button" class="fechar" aria-label="Fechar" @click="emit('fechar')"><X :size="18" /></button>
           </div>
           <div class="corpo-modal"><slot /></div>

@@ -8,7 +8,7 @@
 //  - compra no cartão → 'credito' (cartão do tipo crediário → 'crediario');
 //  - na conta, pela descrição: PIX → pix; BOLETO / pagamento de título → boleto; compra no débito / "débito" → debito;
 //    saque / dinheiro, ou conta do tipo dinheiro → dinheiro; transferência interna (ou TED/DOC) → transferencia;
-//  - guardar/resgatar (reserva) e o que não for reconhecido → null (sem pílula).
+//  - guardar/resgatar (reserva), estorno, saldo inicial/ajuste e o que não for reconhecido → null (sem pílula).
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -24,6 +24,7 @@ function meioDaTransacao(t) {
   const mov = String(t.tipo_mov || '');
   if (/^reserva_/.test(mov)) return null;
   if (mov.startsWith('transferencia')) return 'transferencia';
+  if (mov) return null; // estorno, saldo inicial, ajuste de saldo: não é pagamento
   const d = semAcento(t.descricao);
   if (RE_PIX.test(d)) return 'pix';
   if (RE_BOLETO.test(d)) return 'boleto';

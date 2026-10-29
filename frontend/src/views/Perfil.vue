@@ -11,6 +11,7 @@ import {
 } from 'lucide-vue-next';
 import FormularioModal from '../components/FormularioModal.vue';
 import CardPadrao from '../components/CardPadrao.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
 import CampoTexto from '../components/CampoTexto.vue';
 import PerfilAvatar from '../components/PerfilAvatar.vue';
 import PerfilAbas from '../components/PerfilAbas.vue';
@@ -267,7 +268,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
       <h2 id="h-financas">Minhas finanças</h2>
       <CardPadrao subtitulo="quando começa o seu mês">
         <div class="bloco" data-inicio-mes>
-          <div class="linha fixa"><span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Início do mês financeiro</b><small>use o dia em que o salário costuma cair: o que entra e o que sai até o próximo pagamento fica no mesmo mês</small></span></div>
+          <div class="linha fixa"><span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Início do mês financeiro<AjudaSecao secao="perfil.inicio-mes" /></b></span></div>
           <PerfilAbas v-model="inicioTipo" :opcoes="TIPOS_INICIO" rotulo="Início do mês financeiro" />
           <label v-if="inicioTipo === 'dia'" class="linha">
             <span class="texto"><b>Dia do mês</b></span>
@@ -276,7 +277,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
               <option value="ultimo">Último dia do mês</option>
             </select>
           </label>
-          <p class="nota">{{ inicioTipo === 'util' ? 'Conta só dias úteis: sem sábados, domingos e feriados nacionais. ' : '' }}{{ exemploInicio }} Vale para o Saldo do mês, o filtro de meses, o orçamento, o Custo de vida e o Quanto guardar. Vai junto no backup.</p>
+          <p class="nota">{{ exemploInicio }}</p>
           <button v-if="inicioMudou" type="button" class="botao-prim" data-salvar-inicio @click="salvarInicio">Salvar e recarregar</button>
         </div>
       </CardPadrao>

@@ -66,8 +66,9 @@ function consolidarAtivo(operacoes) {
   for (const o of ordenar(operacoes)) {
     const total = Number(o.total) || 0;
     const c = o.cotas == null ? null : Number(o.cotas);
-    if (OPERACOES_ENTRADA.includes(o.tipo)) {
-      totalComprado += total;
+    if (OPERACOES_ENTRADA.includes(o.tipo) || o.tipo === 'posicao_inicial') {
+      // Anotação 55: a posição inicial entra no custo e nas cotas (preço médio parte daí), mas não é aporte (fora do total comprado)
+      if (o.tipo !== 'posicao_inicial') totalComprado += total;
       if (c > 0) cotas += c;
       custo += total;
       compras.push({ id: o.id, data: o.data, cotas: c, preco: o.preco == null ? null : Number(o.preco), total: r2(total), tipo: o.tipo, descricao: o.descricao || null, meta_id: o.meta_id || null, conta_id: o.conta_id || null });
@@ -124,7 +125,7 @@ function cotasEm(operacoes, data) {
   for (const o of ordenar(operacoes)) {
     if (String(o.data).slice(0, 10) > String(data).slice(0, 10)) break;
     const c = Number(o.cotas) || 0;
-    if (OPERACOES_ENTRADA.includes(o.tipo)) cotas += c;
+    if (OPERACOES_ENTRADA.includes(o.tipo) || o.tipo === 'posicao_inicial') cotas += c;
     else if (OPERACOES_SAIDA.includes(o.tipo)) cotas -= c;
   }
   return Math.max(0, r6(cotas));

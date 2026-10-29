@@ -81,8 +81,7 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" :titulo="editando ? 'Editar regra' : 'Nova regra de categoria'" :tema="f.tipo" :rotulo-salvar="editando ? 'Salvar' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
-    <p class="nota">Toda vez que o nome tiver esse trecho, o lançamento vai para a categoria escolhida.</p>
+  <FormularioModal :aberto="aberto" ajuda="regras" :titulo="editando ? 'Editar regra' : 'Nova regra de categoria'" :tema="f.tipo" :rotulo-salvar="editando ? 'Salvar' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
     <div v-if="editando" class="estado" :class="{ pausada: !ativa }">
       <span><b>{{ ativa ? 'Regra ativa' : 'Regra pausada' }}</b><small>{{ ativa ? 'Categoriza os próximos lançamentos.' : 'Não categoriza nada até ser ativada.' }}</small></span>
       <button type="button" class="alternar" @click="emit('alternar', inicial)">
@@ -95,7 +94,7 @@ async function salvar() {
     <CampoCategoria v-else :key="'e'" v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Vai para a categoria" />
     <CampoTexto v-model="f.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" placeholder="Ex: Delivery, Uber do trabalho" :tema="f.tipo" />
     <CampoIconeItem v-model="f.icone" :tipo="f.tipo" :descricao="f.padrao" />
-    <CampoSelecao v-model="f.contaId" rotulo="Conta ou cartão (opcional)" :opcoes="opcoesConta" :tema="f.tipo" dica="Sem conta escolhida, a regra vale para todas as contas e para as compras no cartão." />
+    <CampoSelecao v-model="f.contaId" rotulo="Conta ou cartão (opcional)" :opcoes="opcoesConta" :tema="f.tipo" dica="Sem conta escolhida, vale para todas." dica-ao-focar />
     <label class="opcao"><input v-model="f.usarValor" type="checkbox" /> Só para uma faixa de valor</label>
     <div v-if="f.usarValor" class="faixa">
       <CampoValor v-model="f.valorMin" :tipo="f.tipo" rotulo="De" />

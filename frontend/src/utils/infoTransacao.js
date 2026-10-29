@@ -13,6 +13,7 @@ export function infoTransacao(t, { categorias = [], receitas = [] } = {}) {
   const mov = String(t.tipo_mov || '');
   if (ehReservaMov(t)) return { nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
   if (mov.startsWith('transferencia')) return { nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  if (mov === 'saldo_inicial' || mov === 'ajuste_saldo') return { nome: t.rotulo_mov || (mov === 'saldo_inicial' ? 'Saldo inicial' : 'Ajuste de saldo'), cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (mov) return { nome: 'Estornos', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (REGEX_FATURA.test(t.descricao || '')) return { nome: 'Pagamento de fatura', cor: null, icone: null, neutra: true, tipoNeutro: 'fatura' };
   if (REGEX_TRANSF.test(t.descricao || '')) return { nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };

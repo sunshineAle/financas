@@ -210,7 +210,7 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" :titulo="titulo" tema="investimento" :carregando="salvando" :erro="erro" :rotulo-salvar="edicao ? 'Salvar alterações' : op === 'resgatar' ? 'Resgatar' : op === 'guardar' ? 'Guardar' : 'Registrar'" @salvar="salvar" @fechar="emit('fechar')">
+  <FormularioModal :aberto="aberto" :titulo="titulo" ajuda="objetivos.operacao" tema="investimento" :carregando="salvando" :erro="erro" :rotulo-salvar="edicao ? 'Salvar alterações' : op === 'resgatar' ? 'Resgatar' : op === 'guardar' ? 'Guardar' : 'Registrar'" @salvar="salvar" @fechar="emit('fechar')">
     <CampoTipo v-if="!edicao" v-model="f.operacao" :opcoes="opcoesOperacao" />
     <CampoSelecao v-if="!edicao && !ativoId" v-model="f.ativo" rotulo="Ativo" :opcoes="opcoesAtivo" tema="investimento" />
     <template v-if="novo">
@@ -240,18 +240,16 @@ async function salvar() {
         <CampoValor v-model="f.total" rotulo="Valor recebido" tema="investimento" :erro="erros.total || erros.preco" />
       </template>
       <CampoValor v-else v-model="f.total" :rotulo="op === 'rendimento' ? 'Rendimento recebido' : op === 'resgatar' ? 'Valor resgatado' : 'Valor'" tema="investimento" :erro="erros.total" />
-      <p v-if="op === 'rendimento' && !ativoDeCotas" class="nota">Renda fixa e metas rendem sozinhas pelo CDI/Selic do Bacen no histórico. Registre aqui só o rendimento real do extrato, se quiser.</p>
       <p v-if="resultadoResgate && !resultadoResgate.erro" class="resultado" :class="resultadoResgate.valor >= 0 ? 'lucro' : 'prejuizo'" data-resultado>
         {{ resultadoResgate.valor >= 0 ? 'Lucro' : 'Prejuízo' }} estimado pelo preço médio: <b>{{ moeda(Math.abs(resultadoResgate.valor)) }}</b></p>
 
       <CampoData v-model="f.data" rotulo="Data" atalhos tema="investimento" />
 
       <CampoSelecao v-if="temMeta" v-model="f.metaId" rotulo="Vincular a uma meta (opcional)" :opcoes="opcoesMeta" tema="investimento" />
-      <p v-else-if="!liquidezRapida && op !== 'rendimento' && metas.length" class="nota">Liquidez lenta: este ativo não entra em metas, fica só em Investimentos.</p>
 
       <div class="grupo-conta">
         <CampoSelecao v-model="f.conta" :rotulo="op === 'guardar' ? 'De onde sai o dinheiro' : 'Conta que recebe o dinheiro'" :opcoes="opcoesConta" tema="investimento" :erro="erros.conta" />
-        <CampoSelecao v-if="conciliando" v-model="f.transacaoId" rotulo="Transferência no extrato" :opcoes="opcoesCandidatas" tema="investimento" :erro="erros.transacao" dica="Marcada com ★ quando parece uma transferência para corretora. Ela deixa de contar como gasto." />
+        <CampoSelecao v-if="conciliando" v-model="f.transacaoId" rotulo="Transferência no extrato" :opcoes="opcoesCandidatas" tema="investimento" :erro="erros.transacao" dica="★ = parece transferência para corretora. Deixa de contar como gasto." dica-ao-focar />
         <p v-else-if="corretoraDoAtivo && f.conta === corretoraDoAtivo && op === 'guardar'" class="nota">A compra sai da conta da corretora. Se o dinheiro ainda está no banco, faça antes a transferência banco → corretora.</p>
         <p v-else-if="semCorretora && ativoDeCotas && op === 'guardar'" class="nota">Sem corretora cadastrada: cadastre-a como conta (tipo Corretora) ou concilie com a transferência do extrato.
           <button type="button" class="link" @click="router.push('/contas')">Ir para Contas</button></p>

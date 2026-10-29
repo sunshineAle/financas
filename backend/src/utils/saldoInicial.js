@@ -57,7 +57,7 @@ function ajustarSaldo(usuarioId, conta, saldoReal) {
   if (!Number.isFinite(real)) throw erro('Informe o saldo de hoje.');
   const atual = db.prepare('SELECT saldo FROM contas WHERE id = ?').get(conta.id).saldo;
   const diferenca = arredondar(real - atual);
-  const ponto = db.prepare("SELECT MAX(substr(data, 1, 10)) AS d FROM transacoes WHERE conta_id = ? AND excluido_em IS NULL AND tipo_mov IN ('saldo_inicial', 'ajuste_saldo')").get(conta.id).d
+  const ponto = db.prepare("SELECT MAX(substr(data, 1, 10)) AS d FROM transacoes WHERE conta_id = ? AND excluido_em IS NULL AND (tipo_mov = 'saldo_inicial' OR (tipo_mov = 'ajuste_saldo' AND substr(data, 1, 10) < ?))").get(conta.id, hojeStr()).d
     || db.prepare('SELECT MIN(substr(data, 1, 10)) AS d FROM transacoes WHERE conta_id = ? AND excluido_em IS NULL').get(conta.id).d
     || hojeStr();
   if (Math.abs(diferenca) < 0.005) return { diferenca: 0, ajuste: null, desde: ponto, faltando: false };

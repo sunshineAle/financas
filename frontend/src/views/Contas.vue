@@ -13,6 +13,7 @@ import CampoValor from '../components/CampoValor.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
 import CampoInstituicao from '../components/CampoInstituicao.vue';
 import CampoBase from '../components/CampoBase.vue';
+import CampoData from '../components/CampoData.vue';
 import { avisar } from '../services/avisos.js';
 import { aplicarOrdem, moverItem } from '../services/ordem.js';
 import ContaCartao from '../components/ContaCartao.vue';
@@ -49,7 +50,13 @@ const tipos = [
 ];
 const rotuloTipo = (t) => ({ corrente: 'Corrente', poupanca: 'Poupança', corretora: 'Corretora', dinheiro: 'Dinheiro', beneficio: 'Benefício', outra: 'Outra' }[t] || t);
 
-const formulario = ref({ nome: '', tipo: 'corrente', saldo: 0, icone: '🏦', cor: '' });
+const hojeIso = () => new Date().toLocaleDateString('sv-SE');
+const dataBR = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
+const diaMesBR = (d) => dataBR(d).slice(0, 5);
+// Anotação 55: no cadastro/edição o saldo é o "Saldo inicial" (data de início + valor), lançado fora das entradas e saídas.
+const formVazio = () => ({ nome: '', tipo: 'corrente', saldo: 0, saldoData: hojeIso(), icone: '🏦', cor: '' });
+const formulario = ref(formVazio());
+const saldoOriginal = ref(null); // { data, valor } ao abrir a edição: só envia se mudou
 const erros = reactive({ nome: '' });
 const categorias = ref([]);
 const editandoId = ref(null);
@@ -130,14 +137,20 @@ function abrirEmTransacoes() {
 function abrirNova() {
   editandoId.value = null;
   erro.value = '';
-  formulario.value = { nome: '', tipo: 'corrente', saldo: 0, icone: '🏦', cor: '' };
+  formulario.value = formVazio();
+  saldoOriginal.value = null;
   erros.nome = '';
   modalAberto.value = true;
 }
 function editar(conta) {
   editandoId.value = conta.id;
   erro.value = '';
-  formulario.value = { nome: conta.nome, tipo: conta.tipo, saldo: Number(conta.saldo) || 0, icone: conta.icone || '🏦', cor: conta.cor || '' };
+  const temInicial = conta.saldo_inicial_data != null;
+  formulario.value = {
+    nome: conta.nome, tipo: conta.tipo, icone: conta.icone || '🏦', cor: conta.cor || '',
+    saldo: temInicial ? Number(conta.saldo_inicial_valor) || 0 : 0, saldoData: temInicial ? conta.saldo_inicial_data : hojeIso(),
+  };
+  saldoOriginal.value = { data: formulario.value.saldoData, valor: formulario.value.saldo };
   erros.nome = '';
   modalAberto.value = true;
 }
@@ -145,12 +158,13 @@ function cancelarEdicao() {
   editandoId.value = null;
   erro.value = '';
   modalAberto.value = false;
-  formulario.value = { nome: '', tipo: 'corrente', saldo: 0, icone: '🏦', cor: '' };
+  formulario.value = formVazio();
 }
 async function salvar() {
   erro.value = '';
   erros.nome = '';
   if (!formulario.value.nome.trim()) { erros.nome = 'Informe um nome para a conta.'; return; }
+  if (formulario.value.saldo && formulario.value.saldoData > hojeIso()) { erro.value = 'A data do saldo não pode ser no futuro.'; return; }
   salvando.value = true;
   try {
     const novo = !editandoId.value;
@@ -162,9 +176,9 @@ async function salvar() {
       body: JSON.stringify({
         nome: formulario.value.nome,
         tipo: formulario.value.tipo,
-        saldo: Number(formulario.value.saldo) || 0,
         icone: formulario.value.icone,
         cor: formulario.value.cor || null,
+        ...(saldoMudou() ? { saldoInicial: { data: formulario.value.saldoData || hojeIso(), valor: Number(formulario.value.saldo) || 0 } } : {}),
       }),
     });
     if (!resposta.ok) {
@@ -182,6 +196,38 @@ async function salvar() {
     salvando.value = false;
   }
 }
+function saldoMudou() {
+  const o = saldoOriginal.value; const f = formulario.value;
+  if (!o) return !!Number(f.saldo);
+  return o.data !== f.saldoData || Number(o.valor) !== Number(f.saldo);
+}
+function pularSaldo() { formulario.value.saldo = 0; salvar(); }
+const ehEdicaoConectada = computed(() => !!editandoId.value && contas.value.find((c) => c.id === editandoId.value)?.origem !== 'manual');
+
+// ---- Anotação 55: Ajustar saldo (conciliação) ----
+const ajuste = ref({ aberto: false, valor: 0, salvando: false, erro: '', resultado: null });
+function abrirAjuste() {
+  if (!contaSel.value) return;
+  ajuste.value = { aberto: true, valor: Number(contaSel.value.saldo) || 0, salvando: false, erro: '', resultado: null };
+}
+async function salvarAjuste() {
+  const conta = contaSel.value;
+  if (!conta) return;
+  if (ajuste.value.resultado) { ajuste.value.aberto = false; return; }
+  ajuste.value.salvando = true; ajuste.value.erro = '';
+  try {
+    const r = await fetch(`/api/contas/${conta.id}/ajustar-saldo`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ saldo: Number(ajuste.value.valor) || 0 }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { ajuste.value.erro = d.erro || 'Não foi possível ajustar.'; return; }
+    await carregarContas();
+    carregarExtrato();
+    if (!d.diferenca) { ajuste.value.aberto = false; avisar('O saldo já estava certo.', { tipo: 'ok' }); return; }
+    if (d.faltando) ajuste.value.resultado = d; // mostra o aviso de lançamentos faltando, com atalho para importar
+    else { ajuste.value.aberto = false; avisar(`Ajuste de saldo de ${moeda(d.diferenca)} lançado (fora das entradas e saídas).`, { tipo: 'ok' }); }
+  } finally { ajuste.value.salvando = false; }
+}
+function importarDoAjuste() { ajuste.value.aberto = false; importar(); }
+
 async function remover(conta) {
   if (!confirm(`Arquivar a conta "${conta.nome}"? Ela sai da lista (por enquanto não há como restaurar).`)) return;
   await fetch(`/api/contas/${conta.id}`, { method: 'DELETE', credentials: 'include' });
@@ -295,6 +341,7 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
                     @transferir="transferir"
                     @importar="importar"
                     @editar="editar(contaSel)"
+                    @ajustar="abrirAjuste"
                     @sincronizar="sincronizarAgora(contaSel)"
                     @arquivar="remover(contaSel)"
                   />
@@ -311,10 +358,30 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
       </template>
     </CabecalhoPagina>
 
-    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar conta' : 'Nova conta'" tema="entrada" :carregando="salvando" :erro="erro" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar conta'" @salvar="salvar" @fechar="cancelarEdicao">
+    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar conta' : 'Nova conta'" :ajuda="ehEdicaoConectada ? '' : 'contas.saldo-inicial'" tema="entrada" :carregando="salvando" :erro="erro" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar conta'" @salvar="salvar" @fechar="cancelarEdicao">
       <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" rotulo="Instituição" :erro="erros.nome" obrigatorio tema="entrada" />
       <CampoSelecao v-model="formulario.tipo" rotulo="Tipo" :opcoes="tipos" />
-      <CampoValor v-model="formulario.saldo" rotulo="Saldo atual" tema="entrada" permite-negativo />
+      <template v-if="!ehEdicaoConectada">
+        <div class="duas">
+          <CampoData v-model="formulario.saldoData" rotulo="Saldo em" :max="hojeIso()" tema="entrada" dica="Data de início" />
+          <CampoValor v-model="formulario.saldo" rotulo="Saldo inicial" tema="entrada" permite-negativo dica="Não conta como entrada do mês." dica-ao-focar />
+        </div>
+      </template>
+      <template v-if="fluxo && !editandoId" #extra>
+        <button type="button" class="sf-botao secundario" :disabled="salvando" @click="pularSaldo">Pular</button>
+      </template>
+    </FormularioModal>
+
+    <FormularioModal :aberto="ajuste.aberto" titulo="Ajustar saldo" ajuda="contas.ajustar-saldo" tema="entrada" :carregando="ajuste.salvando" :erro="ajuste.erro" :rotulo-salvar="ajuste.resultado ? 'Fechar' : 'Ajustar'" :sem-cancelar="!!ajuste.resultado" @salvar="salvarAjuste" @fechar="ajuste.aberto = false">
+      <template v-if="!ajuste.resultado">
+        <p class="nota">Saldo no app: <b>{{ contaSel ? moeda(contaSel.saldo) : '' }}</b></p>
+        <CampoValor v-model="ajuste.valor" rotulo="Saldo real de hoje" tema="entrada" permite-negativo autofocus dica="O que o banco mostra hoje." dica-ao-focar />
+      </template>
+      <div v-else class="aviso-ajuste" data-aviso-faltando>
+        <p>Ajuste de <b>{{ moeda(ajuste.resultado.diferenca) }}</b> lançado.</p>
+        <p>Pode haver lançamentos faltando entre {{ diaMesBR(ajuste.resultado.desde) }} e hoje.</p>
+        <button type="button" class="botao-secundario" @click="importarDoAjuste">Importar extrato</button>
+      </div>
     </FormularioModal>
   </div>
 </template>
@@ -346,6 +413,10 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
   .area-resumo { grid-area: res; }
   .area-extrato { grid-area: ext; }
 }
+.duas { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 480px) { .duas { grid-template-columns: 1fr; } }
+.aviso-ajuste { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.aviso-ajuste p { margin: 0; font-size: 14.5px; line-height: 1.45; }
 .escolhas { display: flex; flex-direction: column; gap: 10px; }
 .escolha { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 14px; border-radius: 16px; background: var(--cor-fundo); border: 1.5px solid var(--cor-borda); color: var(--cor-texto); cursor: pointer; text-align: left; font-family: var(--fonte-texto); }
 .escolha:hover, .escolha:focus-visible { border-color: var(--cor-entrada); background: var(--cor-entrada-fundo); outline: none; }

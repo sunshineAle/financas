@@ -11,6 +11,7 @@ import AbasSeletor from '../components/AbasSeletor.vue';
 import BarraAcoes from '../components/BarraAcoes.vue';
 import BotaoAcao from '../components/BotaoAcao.vue';
 import CardPadrao from '../components/CardPadrao.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
 import BarraDegrade from '../components/BarraDegrade.vue';
 import RelLinha from '../components/RelLinha.vue';
 import RelBarrasH from '../components/RelBarrasH.vue';
@@ -268,8 +269,7 @@ onMounted(() => { carregar(); carregarFixos(); });
 
         <!-- Evolução do saldo -->
         <CardPadrao class="painel larga" aria-labelledby="t-evolucao">
-          <h2 id="t-evolucao"><TrendingUp :size="18" :stroke-width="1.8" /> Evolução do saldo</h2>
-          <p class="nota">Entradas menos saídas de cada mês. Toque em um mês para ir até ele.</p>
+          <h2 id="t-evolucao"><TrendingUp :size="18" :stroke-width="1.8" /> Evolução do saldo<AjudaSecao secao="relatorios.evolucao" /></h2>
           <RelLinha :pontos="pontosLinha" :selecionado="indiceSel" :formato="moedaInt" @escolher="escolherPonto" />
         </CardPadrao>
 
@@ -294,9 +294,8 @@ onMounted(() => { carregar(); carregarFixos(); });
 
         <!-- Esta semana x semana passada -->
         <CardPadrao class="painel" aria-labelledby="t-semana">
-          <h2 id="t-semana">Esta semana × semana passada</h2>
+          <h2 id="t-semana">Esta semana × semana passada<AjudaSecao secao="relatorios.semana" /></h2>
           <template v-if="semana">
-            <p class="nota">Saídas dos últimos 7 dias comparadas aos 7 dias anteriores.</p>
             <div class="duo">
               <div><small>Esta semana</small><b class="numero-tabular">{{ moeda(semana.totalAtual) }}</b></div>
               <div><small>Semana passada</small><b class="numero-tabular">{{ moeda(semana.totalAnterior) }}</b></div>
@@ -328,8 +327,8 @@ onMounted(() => { carregar(); carregarFixos(); });
 
         <!-- Projeção -->
         <CardPadrao v-if="projecao" class="painel" aria-labelledby="t-proj">
-          <h2 id="t-proj">Projeção para o próximo mês</h2>
-          <p class="nota">Média dos últimos {{ projecao.mesesConsiderados || 0 }} meses com dados.</p>
+          <h2 id="t-proj">Projeção para o próximo mês<AjudaSecao secao="relatorios.projecao" /></h2>
+          <p class="nota">Média de {{ projecao.mesesConsiderados || 0 }} meses</p>
           <div class="linha-proj"><span>Entradas</span><span class="numero-tabular v-ent">{{ moeda(projecao.entradas) }}</span></div>
           <div class="linha-proj"><span>Saídas</span><span class="numero-tabular v-sai">{{ moeda(projecao.saidas) }}</span></div>
           <div class="linha-proj total"><span>Saldo projetado</span><span class="numero-tabular" data-total>{{ moeda(projecao.entradas - projecao.saidas) }}</span></div>

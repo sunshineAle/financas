@@ -13,12 +13,15 @@
 //   logo abaixo de um <SeletorMes ligada> (ficando sem espaço entre os dois).
 //   Com `sem-mes` o slot `corpo` é só renderizado, sem bloco.
 // PC: tudo numa linha (título | fileira | ações). Celular: linha 1 título + ações; linha 2 fileira.
-import { computed } from 'vue';
+import { computed, useSlots, Comment, Fragment, Text } from 'vue';
 import { useRoute } from 'vue-router';
 import SeletorMes from './SeletorMes.vue';
-import { ROTAS_COM_TOPO } from '../config/menu.js';
+import { voltarDaRota } from '../config/menu.js';
 import { ehCelular } from '../services/layout.js';
-defineProps({
+// Anotações 62/63: o título de TODAS as páginas fica no TopoApp (centralizado no celular, à esquerda no PC), então aqui
+// ele não aparece (o prop `titulo` segue aceito). O slot `esquerda` some quando o topo já mostra a seta "Voltar".
+// Sem título, sem ações e sem fileira de meses, o cabeçalho não ocupa espaço (nenhuma margem extra acima do conteúdo).
+const props = defineProps({
   titulo: { type: String, default: '' },
   semMes: { type: Boolean, default: false },
   cor: { type: String, default: 'var(--cor-primaria)' },
@@ -26,18 +29,21 @@ defineProps({
   semSetas: { type: Boolean, default: false },
   semAtalhos: { type: Boolean, default: false },
 });
-// Nas telas com TopoApp (exceto Início) o título aparece CENTRALIZADO no topo, entre a foto e o sino; aqui fica só para leitores de tela.
 const route = useRoute();
-// No celular o título fica centralizado no topo (TopoApp). Em tela grande, nas páginas com filtro mensal, ele fica aqui, ao lado do filtro.
-const noTopo = computed(() => route.name !== 'dashboard' && ROTAS_COM_TOPO.includes(route.name) && ehCelular.value);
+const slots = useSlots();
+// Slot "vazio" = só comentários de v-if (ex.: botão que aparece só às vezes). Avaliado na renderização, então é reativo.
+const temNos = (nos) => (nos || []).some((n) => n.type !== Comment && (n.type === Fragment ? temNos(n.children) : n.type !== Text || String(n.children).trim()));
+const temSlot = (nome) => !!slots[nome] && temNos(slots[nome]());
+const comEsq = () => temSlot('esquerda') && !voltarDaRota(route, ehCelular.value);
+const linhaVazia = () => !comEsq() && !temSlot('default');
+const faixaVazia = () => linhaVazia() && props.semMes;
 </script>
 
 <template>
-  <div class="cabecalho-pagina" :class="{ 'com-bloco': $slots.corpo && !semMes }">
-    <header class="faixa" :class="{ 'sem-mes': semMes }">
-      <div class="linha-titulo" :class="{ vazia: noTopo && !$slots.esquerda && !$slots.default }">
-        <div class="esq"><slot name="esquerda" /></div>
-        <h1 class="titulo-pequeno" :class="{ 'sr-only': noTopo }">{{ titulo }}</h1>
+  <div class="cabecalho-pagina" :class="{ 'com-bloco': $slots.corpo && !semMes, oculto: faixaVazia() && !$slots.corpo }">
+    <header v-if="!faixaVazia()" class="faixa" :class="{ 'sem-mes': semMes }">
+      <div v-if="!linhaVazia()" class="linha-titulo">
+        <div v-if="comEsq()" class="esq"><slot name="esquerda" /></div>
         <div class="acoes"><slot /></div>
       </div>
       <div v-if="!semMes" class="linha-mes">
@@ -61,26 +67,17 @@ const noTopo = computed(() => route.name !== 'dashboard' && ROTAS_COM_TOPO.inclu
 
 <style scoped>
 .cabecalho-pagina { display: flex; flex-direction: column; gap: 0; width: 100%; min-width: 0; }
+.cabecalho-pagina.oculto { display: none; }
 .cabecalho-pagina:not(.com-bloco) { gap: var(--espaco-secao, 12px); }
 .faixa { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .linha-titulo { display: flex; align-items: center; gap: 10px; min-height: 36px; }
 .esq { display: flex; align-items: center; flex: 0 0 auto; }
-.esq:empty { display: none; }
-.titulo-pequeno { margin: 0; font-family: var(--fonte-display); font-size: 15px; font-weight: 600; letter-spacing: 0.02em; color: var(--cor-texto-suave); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acoes { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.acoes { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 .linha-mes { min-width: 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; flex: 0 0 auto !important; }
-.linha-titulo.vazia { display: none; }
-.linha-titulo:has(.sr-only) { justify-content: flex-end; }
-.sem-mes .linha-titulo { position: relative; justify-content: center; }
-.sem-mes .titulo-pequeno { flex: 0 1 auto; text-align: center; color: var(--cor-texto); }
-.sem-mes .esq { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
-.sem-mes .acoes { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
 @media (min-width: 769px) {
   .faixa:not(.sem-mes) { flex-direction: row; align-items: flex-end; gap: 16px; }
   .faixa:not(.sem-mes) .linha-titulo { display: contents; }
   .faixa:not(.sem-mes) .esq { order: 0; align-self: center; }
-  .faixa:not(.sem-mes) .titulo-pequeno { order: 1; flex: 0 0 auto; align-self: center; max-width: 30%; }
   .faixa:not(.sem-mes) .linha-mes { order: 2; flex: 1 1 auto; }
   .faixa:not(.sem-mes) .acoes { order: 3; align-self: center; }
 }

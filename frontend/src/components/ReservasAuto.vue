@@ -10,6 +10,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import CardPadrao from './CardPadrao.vue';
 import LinhaTransacao from './LinhaTransacao.vue';
 import { api, comCdi } from '../services/investimentos.js';
+import { avisar } from '../services/avisos.js';
 
 const props = defineProps({ metas: { type: Array, default: null }, versao: { type: Number, default: 0 } });
 const emit = defineEmits(['decidido']);
@@ -19,6 +20,8 @@ const metasProprias = ref([]);
 const listaMetas = computed(() => (props.metas && props.metas.length ? props.metas : metasProprias.value));
 const escolha = ref({});
 const rend = ref({});
+const regra = ref({}); // anotação 56: escolha manual da caixinha vira regra (apelido da caixinha na meta)
+const opcoesDe = (p) => (p.opcoes && p.opcoes.length ? p.opcoes.map((m) => ({ id: m.id, rotulo: m.nome })) : opcoes.value);
 const erro = ref('');
 const ocupado = ref(false);
 
@@ -29,7 +32,7 @@ const sugestaoRend = (p) => {
 };
 function preencher() {
   pendentes.value.forEach((p) => {
-    if (!escolha.value[p.transacao.id]) escolha.value[p.transacao.id] = listaMetas.value[0]?.id || '';
+    if (!escolha.value[p.transacao.id]) escolha.value[p.transacao.id] = (p.opcoes && p.opcoes[0] ? p.opcoes[0].id : listaMetas.value[0]?.id) || '';
     if (rend.value[p.transacao.id] === undefined) rend.value[p.transacao.id] = sugestaoRend(p);
   });
 }
@@ -56,8 +59,10 @@ async function decidir(p, acao) {
   try {
     const corpo = { transacaoId: p.transacao.id, acao, metaId: escolha.value[p.transacao.id] || null };
     if (acao === 'vincular' && p.deteccao.sentido === 'resgatar') corpo.rendimento = Number(rend.value[p.transacao.id]) || 0;
+    if (acao === 'vincular' && p.deteccao.caixinha && regra.value[p.transacao.id]) corpo.regra = true;
     const r = await api('POST', comCdi('/api/reserva/auto/decidir'), corpo);
     if (!r.ok) { erro.value = r.json?.erro || 'Não foi possível salvar.'; return; }
+    if (r.json && r.json.regra) avisar(`Regra criada: “${r.json.regra}” vai sempre para esta meta.`, { tipo: 'ok', grupo: 'sugestao-regra' });
     emit('decidido', r.json);
     await carregar();
   } finally { ocupado.value = false; }
@@ -74,8 +79,9 @@ async function decidir(p, acao) {
           <p class="pergunta">{{ p.deteccao.sentido === 'guardar' ? 'Guardar' : 'Resgatar' }} {{ p.deteccao.ativo }} {{ p.deteccao.sentido === 'guardar' ? 'em' : 'de' }} qual meta?</p>
           <div class="acoes">
             <select v-model="escolha[p.transacao.id]" class="sf-entrada" :aria-label="'Meta para ' + p.transacao.descricao" @change="trocouMeta(p)">
-              <option v-for="o in opcoes" :key="o.id" :value="o.id">{{ o.rotulo }}</option>
+              <option v-for="o in opcoesDe(p)" :key="o.id" :value="o.id">{{ o.rotulo }}</option>
             </select>
+            <label v-if="p.deteccao.caixinha && p.trecho" class="regra"><input v-model="regra[p.transacao.id]" type="checkbox" /> Sempre que vier “{{ p.trecho }}”, usar esta meta</label>
             <label v-if="p.deteccao.sentido === 'resgatar'" class="rend">
               <span>Quanto disso foi rendimento?</span>
               <input v-model.number="rend[p.transacao.id]" type="number" min="0" step="0.01" class="sf-entrada" inputmode="decimal" />
@@ -113,5 +119,7 @@ async function decidir(p, acao) {
 .rend { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .rend input { min-height: 44px; }
 .rend small { font-size: 11.5px; color: var(--cor-texto-suave); }
+.regra { flex: 1 1 100%; display: flex; gap: 8px; align-items: center; font-size: 13px; min-height: 36px; }
+.regra input { width: 18px; height: 18px; accent-color: var(--cor-meta); }
 .link { background: none; border: none; padding: 6px 2px; color: var(--cor-texto-suave); font: 600 13px var(--fonte-texto); text-decoration: underline; cursor: pointer; }
 </style>

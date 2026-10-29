@@ -548,7 +548,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
     </Modal>
 
     <!-- Cadastro / edição -->
-    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão ou crédito'" tema="saida" :rotulo-salvar="tipoForm === 'cheque' ? 'Ir para Contas' : tipoForm === 'emprestimo' ? 'Ir para Dívidas' : editandoId ? 'Salvar alterações' : 'Adicionar'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
+    <FormularioModal :aberto="modalAberto" :ajuda="naoViraCartao ? '' : 'cartoes.tipo-' + tipoForm" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão ou crédito'" tema="saida" :rotulo-salvar="tipoForm === 'cheque' ? 'Ir para Contas' : tipoForm === 'emprestimo' ? 'Ir para Dívidas' : editandoId ? 'Salvar alterações' : 'Adicionar'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
       <CampoBase rotulo="Tipo de crédito">
         <div class="tipos-credito" role="radiogroup" aria-label="Tipo de crédito">
           <button v-for="t in tiposVisiveis" :key="t.id" type="button" role="radio" :aria-checked="tipoForm === t.id" :class="['tipo-op', { ativo: tipoForm === t.id }]" :data-tipo="t.id" @click="escolherTipo(t.id)">
@@ -568,20 +568,15 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
       </div>
 
       <template v-else>
-        <p class="nota">
-          <template v-if="tipoForm === 'crediario'">No crediário cada compra vira parcelas, cobradas todo mês no dia do vencimento. Se pagar antes, registre o desconto por antecipação em Dívidas.</template>
-          <template v-else-if="tipoForm === 'loja'">Funciona como cartão de crédito, com fatura mensal, mas só pode ser usado na própria loja.</template>
-          <template v-else>Os dias de fechamento e vencimento definem em qual fatura cai cada compra e cada parcela.</template>
-        </p>
         <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" :rotulo="tipoForm === 'cartao' ? 'Instituição do cartão' : 'Loja ou instituição'" :placeholder="tipoForm === 'crediario' ? 'Ex: Sparcelado, Casas Bahia, Magalu' : tipoForm === 'loja' ? 'Ex: Renner, C&A, Riachuelo' : 'Ex: Nubank, Inter, Itaú'" padrao="💳" :erro="erros.nome" obrigatorio tema="saida" />
         <CampoSelecao v-model="formulario.contaId" :rotulo="tipoForm === 'crediario' ? 'Conta que paga as parcelas' : 'Conta que paga a fatura'" :opcoes="[{ valor: '', rotulo: 'Nenhuma (sem vínculo)' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="saida" />
         <div class="duas-campos">
-          <CampoTexto v-if="tipoForm !== 'crediario'" v-model="formulario.diaFechamento" rotulo="Dia de fechamento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaFechamento" obrigatorio tema="saida" />
+          <CampoTexto v-if="tipoForm !== 'crediario'" v-model="formulario.diaFechamento" rotulo="Dia de fechamento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaFechamento" obrigatorio tema="saida" dica="Define em qual fatura cai cada compra." dica-ao-focar />
           <CampoTexto v-model="formulario.diaVencimento" rotulo="Dia de vencimento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaVencimento" obrigatorio tema="saida" />
         </div>
         <CampoValor v-model="formulario.limite" :rotulo="tipoForm === 'crediario' ? 'Limite da loja (opcional)' : 'Limite (opcional)'" tipo="saida" />
 
-        <CampoBase v-if="tipoForm !== 'crediario'" rotulo="Bandeira" :dica="formulario.bandeira ? `Sugerida pelo nome: ${nomeBandeira(formulario.bandeira)}. Pode trocar.` : 'Está escrita no cartão físico. Opcional.'">
+        <CampoBase v-if="tipoForm !== 'crediario'" rotulo="Bandeira" :dica="formulario.bandeira ? `Sugerida pelo nome: ${nomeBandeira(formulario.bandeira)}. Pode trocar.` : ''">
           <div class="bandeiras" role="radiogroup" aria-label="Bandeira">
             <button v-for="b in BANDEIRAS" :key="b.id || 'nao-sei'" type="button" role="radio" :aria-checked="formulario.bandeira === b.id" :class="['band-op', { ativo: formulario.bandeira === b.id }]" :data-bandeira="b.id || 'nao-sei'" @click="escolherBandeira(b.id)">
               <IconeBandeira v-if="b.id" :bandeira="b.id" :tamanho="16" colorido />
@@ -606,8 +601,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
       </template>
     </FormularioModal>
 
-    <FormularioModal :aberto="saldoModal" titulo="Fatura e parcelas já em aberto" tema="saida" rotulo-salvar="Lançar no cartão" :carregando="saldoSalvando" :erro="saldoErro" @salvar="salvarSaldoInicial" @fechar="saldoModal = false">
-      <p class="nota">Para quem começou a usar o app no meio do mês: o valor em aberto entra na fatura atual e cada parcela restante entra numa fatura, a partir da atual.</p>
+    <FormularioModal :aberto="saldoModal" titulo="Fatura e parcelas já em aberto" ajuda="cartoes.inicio-mes" tema="saida" rotulo-salvar="Lançar no cartão" :carregando="saldoSalvando" :erro="saldoErro" @salvar="salvarSaldoInicial" @fechar="saldoModal = false">
       <CartaoSaldoInicial v-model="saldoInicial" />
     </FormularioModal>
   </div>

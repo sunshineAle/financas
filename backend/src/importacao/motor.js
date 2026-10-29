@@ -100,6 +100,15 @@ function importacaoAnterior(usuarioId, dest, impressao, nomeArquivo, qtdLinhas) 
   return { id: m.id, em: m.criado_em, arquivo: m.arquivo_nome, novas: m.qtd_novas, atualizadas: m.qtd_atualizadas };
 }
 
+// Anotação 55: extrato com lançamentos ANTES da data do saldo inicial da conta. A tela pergunta se move a data de início
+// (e recalcula o valor para o saldo de hoje continuar certo). Devolve { data, valor, primeiraData } ou null.
+function antesDoSaldoInicial(dest, primeira) {
+  if (dest.tipo !== 'conta' || dest.conta.origem !== 'manual') return null;
+  const si = db.prepare("SELECT valor, substr(data, 1, 10) AS data FROM transacoes WHERE conta_id = ? AND tipo_mov = 'saldo_inicial' AND excluido_em IS NULL ORDER BY rowid DESC LIMIT 1").get(dest.conta.id);
+  if (!si || !primeira || primeira >= si.data) return null;
+  return { data: si.data, valor: si.valor, primeiraData: primeira };
+}
+
 function analisar(usuarioId, corpo) {
   const dest = destinoDe(usuarioId, corpo.destino);
   const leitura = lerEntrada(corpo, perfisDoUsuario(usuarioId));
@@ -137,10 +146,16 @@ function analisar(usuarioId, corpo) {
     dica: leitura.banco ? leitura.banco.dica : '',
     periodoArquivo: { inicio: periodoArquivo.inicio, fim: periodoArquivo.fim },
     periodo,
-    fatura: infoFatura ? { ...infoFatura, totalArquivo: resultado.totalArquivo } : null,
+    // Anotação 61: total declarado no arquivo (quando há) ao lado do total das linhas lidas
+    fatura: infoFatura ? {
+      ...infoFatura, totalArquivo: resultado.totalArquivo, compras: resultado.compras, creditos: resultado.creditos,
+      totalDeclarado: Number.isFinite(Number(leitura.meta.totalFatura)) && leitura.meta.totalFatura !== null ? Math.abs(Number(leitura.meta.totalFatura)) : null,
+    } : null,
+    motivoSinal: sinal.motivoSinal || null, creditosPorTexto: sinal.creditosPorTexto || 0,
     impressao,
     importacaoAnterior: importacaoAnterior(usuarioId, dest, impressao, corpo.nomeArquivo, lista.length),
     saldoExtrato: leitura.meta.saldo !== undefined && leitura.meta.saldo !== null ? { valor: leitura.meta.saldo, data: leitura.meta.saldoData || periodoArquivo.fim } : null,
+    antesDoSaldoInicial: antesDoSaldoInicial(dest, linhas.filter((l) => !l.foraPeriodo).map((l) => l.data).sort()[0]),
     sinalAuto: sinal.sinalAuto, sinalInvertido: sinal.sinalInvertido, sinalFixo: !!(leitura.meta.sinalNormalizado || leitura.formato === 'ofx'),
     perfilAplicado: leitura.perfilAplicado || null,
     mapeamento: leitura.mapeamento || null, assinatura: leitura.assinatura || null, colunas: leitura.colunas || null,

@@ -40,7 +40,9 @@ const BANDEIRAS = { mastercard: 'Mastercard', visa: 'Visa', elo: 'Elo', amex: 'A
 const ehSaida = computed(() => props.t.valor < 0);
 const neutra = computed(() => !!props.info.neutra);
 const classeValor = computed(() => (neutra.value ? 'neutro' : ehSaida.value ? 'negativo' : 'positivo'));
-const valorTxt = computed(() => `${props.t.valor > 0 ? '+' : props.t.valor < 0 ? '−' : ''} ${moeda(Math.abs(props.t.valor))}`.trim());
+// Saldo inicial (anotação 55) é ponto de partida, não entrada nem saída: valor sem sinal.
+const semSinal = computed(() => props.t.tipo_mov === 'saldo_inicial');
+const valorTxt = computed(() => (semSinal.value ? moeda(props.t.valor) : `${props.t.valor > 0 ? '+' : props.t.valor < 0 ? '−' : ''} ${moeda(Math.abs(props.t.valor))}`.trim()));
 
 // Ícone (anotação 37): item escolhido → item reconhecido pela descrição → categoria; cor sempre a da categoria.
 const iconeValor = computed(() => {
@@ -139,7 +141,7 @@ function abrir() { if (props.clicavel) emit('abrir', props.t); }
 <template>
   <div
     class="linha-tx"
-    :class="{ clicavel, ignorada: t.ignorada === 1, 'fora-totais': t.ignorada === 2, selecionada, 'com-menu': temMenu }"
+    :class="{ clicavel, ignorada: t.ignorada === 1, 'fora-totais': t.ignorada === 2, selecionada, 'com-menu': temMenu, 'sem-extras': !temExtras }"
     :tabindex="clicavel ? 0 : null" :role="clicavel ? 'button' : 'group'" :aria-label="rotuloLinha" :aria-pressed="selecionada || null"
     @click="abrir" @keydown.enter.self="abrir" @keydown.space.self.prevent="abrir"
   >
@@ -190,6 +192,9 @@ function abrir() { if (props.clicavel) emit('abrir', props.t); }
   transition: background var(--anim-rapida) ease;
 }
 .linha-tx.com-menu { grid-template-columns: 44px minmax(0, 1fr) auto 36px; grid-template-areas: 'ic desc valor mn' 'ic meta extras mn'; padding-right: 0; }
+/* Sem parcela/ícones à direita, a linha de baixo usa também o espaço embaixo do valor (cabe a categoria no celular). */
+.linha-tx.sem-extras { grid-template-areas: 'ic desc valor' 'ic meta meta'; }
+.linha-tx.com-menu.sem-extras { grid-template-areas: 'ic desc valor mn' 'ic meta meta mn'; }
 .linha-tx.clicavel { cursor: pointer; }
 .linha-tx.clicavel:hover, .linha-tx:focus-visible { background: var(--cor-realce); outline: none; }
 .linha-tx:focus-visible { box-shadow: inset 0 0 0 2px var(--cor-primaria); }

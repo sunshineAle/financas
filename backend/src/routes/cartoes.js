@@ -149,6 +149,7 @@ function lancamentosDoCartao(cartao) {
       cartao.dia_vencimento,
       l.parcela_numero
     ),
+    tipoMov: l.tipo_mov || null, // anotação 61: crédito (estorno_vinculado, estorno_avulso, pagamento, cashback) ou compra estornada
   }));
 }
 
@@ -597,10 +598,12 @@ router.put('/:id/lancamentos/:compraId', (req, res) => {
     .all(cartao.id, req.params.compraId, req.usuario.id);
   if (!linhas.length) return res.status(404).json({ erro: 'Compra não encontrada.' });
 
-  const totalAtual = faturas.arredondar(linhas.reduce((t, l) => t + l.valor, 0));
+  // Anotação 61: crédito na fatura (valor negativo) edita pelo valor positivo e continua crédito
+  const credito = linhas.some((l) => l.valor < 0);
+  const totalAtual = faturas.arredondar(Math.abs(linhas.reduce((t, l) => t + l.valor, 0)));
   const corpo = req.body || {};
   const lida = lerCompra(
-    { ...corpo, parcelas: linhas.length, valor: corpo.valor === undefined ? totalAtual : corpo.valor, dataCompra: corpo.dataCompra || linhas[0].data_compra },
+    { ...corpo, parcelas: linhas.length, valor: corpo.valor === undefined ? totalAtual : Math.abs(Number(corpo.valor)), dataCompra: corpo.dataCompra || linhas[0].data_compra },
     { usuarioId: req.usuario.id }
   );
   if (lida.erro) return res.status(400).json({ erro: lida.erro });
@@ -620,12 +623,40 @@ router.put('/:id/lancamentos/:compraId', (req, res) => {
   dados.transacao(() => {
     linhas.forEach((l, i) => {
       dados.atualizar('lancamentos_cartao', l.id, {
-        descricao: c.descricao, valor: c.valores[i], data_compra: c.dataCompra, divida_id: c.dividaId,
-        categoria_id: c.categoriaId, subcategoria: c.subcategoria,
+        descricao: c.descricao, valor: credito ? -c.valores[i] : c.valores[i], data_compra: c.dataCompra, divida_id: c.dividaId,
+        categoria_id: credito && ['pagamento', 'cashback'].includes(l.tipo_mov) ? null : c.categoriaId, subcategoria: c.subcategoria,
       });
     });
   });
   res.json({ ok: true });
+});
+
+// Anotação 61 — "marcar como crédito" na edição de um lançamento do cartão (ele fica verde e abate a fatura).
+// GET  …/credito/parecidas : compras parecidas (até 90 dias antes) para ligar um estorno
+// POST …/credito            { tipo: 'estorno'|'pagamento'|'cashback', originalCompraId?, contaId?, data? }
+const lanc = require('../utils/lancamentos');
+router.get('/:id/lancamentos/:compraId/credito/parecidas', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  const l = db.prepare('SELECT * FROM lancamentos_cartao WHERE cartao_id = ? AND compra_id = ? AND usuario_id = ? AND excluido_em IS NULL ORDER BY parcela_numero LIMIT 1')
+    .get(cartao.id, req.params.compraId, req.usuario.id);
+  if (!l) return res.status(404).json({ erro: 'Lançamento não encontrado.' });
+  res.json(lanc.comprasParecidas(req.usuario.id, l));
+});
+router.post('/:id/lancamentos/:compraId/credito', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  if (cartao.origem !== 'manual') return res.status(400).json({ erro: 'Lançamentos de cartão conectado vêm do banco e não podem ser editados.' });
+  const c = req.body || {};
+  if (c.data && !faturas.dataValida(c.data)) return res.status(400).json({ erro: 'Data inválida.' });
+  try {
+    const existe = db.prepare('SELECT 1 FROM lancamentos_cartao WHERE cartao_id = ? AND compra_id = ? AND usuario_id = ? AND excluido_em IS NULL').get(cartao.id, req.params.compraId, req.usuario.id);
+    if (!existe) return res.status(404).json({ erro: 'Lançamento não encontrado.' });
+    res.json(lanc.marcarCreditoCartao(req.usuario.id, req.params.compraId, { tipo: c.tipo, originalCompraId: c.originalCompraId || null, contaId: c.contaId || null, data: c.data || null }));
+  } catch (e) {
+    if (e instanceof lanc.ErroLancamento) return res.status(e.status).json({ erro: e.message });
+    throw e;
+  }
 });
 
 router.delete('/:id/lancamentos/:compraId', (req, res) => {

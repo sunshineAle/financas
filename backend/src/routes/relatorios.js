@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { semPagamentoDeFatura, parcelasCartao, chaveHoje } = require('../utils/cartaoMeses');
+const { semPagamentoDeFatura, parcelasCartao, chaveHoje, entradasCartao } = require('../utils/cartaoMeses');
 const { exigirAutenticacao } = require('../middleware/auth');
 const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
 
@@ -25,6 +25,13 @@ function cartaoPorMes(usuarioId) {
   parcelasCartao(usuarioId).forEach((p) => { if (p.mes <= hoje) m[p.mes] = (m[p.mes] || 0) + p.valor; });
   return m;
 }
+// Anotação 61: cashback recebido no cartão = entrada no mês dele (até o mês atual)
+function cashbackPorMes(usuarioId) {
+  const hoje = chaveHoje();
+  const m = {};
+  entradasCartao(usuarioId).forEach((e) => { if (e.mes <= hoje) m[e.mes] = (m[e.mes] || 0) + e.valor; });
+  return m;
+}
 
 // Fluxo de caixa real dos últimos 12 meses, a partir da tabela
 // "transacoes" (alimentada pela sincronização do Open Finance).
@@ -44,9 +51,10 @@ router.get('/fluxo-caixa', (req, res) => {
 
   const porChave = Object.fromEntries(linhas.map((l) => [l.chave, l]));
   const cartao = cartaoPorMes(req.usuario.id);
+  const cashback = cashbackPorMes(req.usuario.id);
   const fluxoCaixa = meses.map((m) => ({
     mes: m.mes,
-    entradas: porChave[m.chave]?.entradas || 0,
+    entradas: (porChave[m.chave]?.entradas || 0) + (cashback[m.chave] || 0),
     saidas: (porChave[m.chave]?.saidas || 0) + (cartao[m.chave] || 0),
   }));
 
@@ -96,6 +104,8 @@ router.get('/projecao', (req, res) => {
   const cartao = cartaoPorMes(req.usuario.id);
   const porMes = Object.fromEntries(linhas.map((l) => [l.chave, l]));
   Object.keys(cartao).forEach((k) => { (porMes[k] ||= { chave: k, entradas: 0, saidas: 0 }).saidas += cartao[k]; });
+  const cashback = cashbackPorMes(req.usuario.id);
+  Object.keys(cashback).forEach((k) => { (porMes[k] ||= { chave: k, entradas: 0, saidas: 0 }).entradas += cashback[k]; });
   linhas.length = 0;
   Object.values(porMes).sort((a, b) => (a.chave < b.chave ? 1 : -1)).slice(0, 3).forEach((l) => linhas.push(l));
 

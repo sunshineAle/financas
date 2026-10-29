@@ -1,108 +1,146 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { LogOut, Sun, Moon, SunMoon, Settings } from 'lucide-vue-next';
+import { Pin, PinOff } from 'lucide-vue-next';
 import BarraRodape from './BarraRodape.vue';
 import AvisoToast from './AvisoToast.vue';
 import LancamentoModal from './LancamentoModal.vue';
-import BotaoVoltar from './BotaoVoltar.vue';
 import TopoApp from './TopoApp.vue';
 import MarcaDagda from './MarcaDagda.vue';
 import AvisoArmazenamento from './AvisoArmazenamento.vue';
-import AvatarMini from './AvatarMini.vue';
-import { GRUPOS, grupoDaRota, ehTelaInternaDoMais, ROTAS_COM_TOPO } from '../config/menu.js';
+import { MENU_LATERAL } from '../config/menu.js';
 import { remontagemTransacoes } from '../services/nav.js';
-import { nomeExibido, inicialDe } from '../services/perfil.js';
 import { ehCelular } from '../services/layout.js';
-import { modoTema, definirTema } from '../services/tema.js';
 
 const router = useRouter();
 const route = useRoute();
 const usuario = ref(null);
 
-// Menu lateral (PC/web): fixo, com todas as páginas sempre visíveis e sem setas de recolher.
-// Grupos recolhíveis existem só no celular (rodapé com submenu radial).
 const chaveTela = computed(() => (route.name === 'transacoes' ? `t${remontagemTransacoes.value}` : 'p'));
-const grupoAtual = computed(() => grupoDaRota(route));
-const comTopo = computed(() => ROTAS_COM_TOPO.includes(route.name));
 function itemAtivo(item) {
+  if (item.revisar) return route.path === '/transacoes' && !!route.query.revisar;
+  if (item.rota === '/transacoes') return route.path === '/transacoes' && !route.query.revisar;
   return item.rota === '/' ? route.path === '/' : route.path === item.rota || route.path.startsWith(item.rota + '/') || (route.name === 'cartao-extrato' && item.rota === '/cartoes');
 }
 
-const ICONE_TEMA = { auto: SunMoon, claro: Sun, escuro: Moon };
-const ROTULO_TEMA = { auto: 'Tema: automático', claro: 'Tema: claro', escuro: 'Tema: escuro' };
-function alternarTema() {
-  const ordem = ['auto', 'claro', 'escuro'];
-  definirTema(ordem[(ordem.indexOf(modoTema.value) + 1) % ordem.length]);
+// ---- Menu lateral do PC/web (anotação 62) ----
+// Recolhido (só ícones, 64px) por padrão. Abre POR CIMA do conteúdo (240px) ao passar o mouse (depois de 150 ms) ou ao focar
+// um item pelo teclado; recolhe 300 ms depois que o mouse sai. Tablet sem mouse: tocar no "D" abre e fecha.
+// "Manter aberto" (fixar) fica salvo no aparelho; fixado, o menu empurra o conteúdo.
+const CHAVE_FIXO = 'sf:menu-fixo';
+const lerFixo = () => { try { return localStorage.getItem(CHAVE_FIXO) === '1'; } catch { return false; } };
+const fixo = ref(lerFixo());
+const aberto = ref(false);
+const expandido = computed(() => fixo.value || aberto.value);
+const menuRef = ref(null);
+let tAbrir = null;
+let tFechar = null;
+let ultimoPonteiro = 'mouse';
+const limparTempos = () => { clearTimeout(tAbrir); clearTimeout(tFechar); };
+function aoEntrar(e) {
+  if (e.pointerType !== 'mouse') return;
+  clearTimeout(tFechar);
+  if (!aberto.value) tAbrir = setTimeout(() => { aberto.value = true; }, 150);
 }
+function aoSair(e) {
+  if (e.pointerType !== 'mouse') return;
+  clearTimeout(tAbrir);
+  if (menuRef.value && menuRef.value.contains(document.activeElement) && document.activeElement.matches(':focus-visible')) return;
+  tFechar = setTimeout(() => { aberto.value = false; }, 300);
+}
+// Só o foco do TECLADO abre (no toque/clique o foco também chega, mas quem decide é o clique no "D").
+function aoFocar(e) { if (!e.target.matches(':focus-visible')) return; limparTempos(); aberto.value = true; }
+function aoDesfocar(e) {
+  if (menuRef.value && e.relatedTarget && menuRef.value.contains(e.relatedTarget)) return;
+  if (menuRef.value && menuRef.value.matches(':hover')) return;
+  limparTempos();
+  aberto.value = false;
+}
+function aoTocarMarca() {
+  if (fixo.value) return;
+  limparTempos();
+  aberto.value = !aberto.value;
+}
+function alternarFixo() {
+  fixo.value = !fixo.value;
+  try { localStorage.setItem(CHAVE_FIXO, fixo.value ? '1' : '0'); } catch { /* sem armazenamento: vale só nesta sessão */ }
+  if (!fixo.value) { aberto.value = ultimoPonteiro === 'mouse' && !!(menuRef.value && menuRef.value.matches(':hover')); }
+}
+function aoApontar(e) {
+  ultimoPonteiro = e.pointerType || 'mouse';
+  // toque fora do menu aberto (tablet): recolhe
+  if (aberto.value && !fixo.value && e.pointerType !== 'mouse' && menuRef.value && !menuRef.value.contains(e.target)) aberto.value = false;
+}
+watch(() => route.fullPath, () => { if (ultimoPonteiro !== 'mouse' && !fixo.value) aberto.value = false; atualizarRevisar(); });
 
-async function sair() {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  router.push('/login');
+// "A revisar": os mesmos itens do card "A revisar" do topo de Transações (guardar/resgatar do extrato sem decisão).
+const qtdRevisar = ref(0);
+async function atualizarRevisar() {
+  if (ehCelular.value) return;
+  try {
+    const r = await fetch('/api/reserva/auto/pendentes', { credentials: 'include' });
+    const j = r.ok ? await r.json() : null;
+    qtdRevisar.value = (j && Array.isArray(j.pendentes) && j.pendentes.length) || 0;
+  } catch { qtdRevisar.value = 0; }
 }
+const itensMenu = computed(() => MENU_LATERAL.filter((i) => !i.revisar || qtdRevisar.value > 0));
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', aoApontar, true);
   const resposta = await fetch('/api/auth/me', { credentials: 'include' });
   if (!resposta.ok) {
     router.push('/login');
     return;
   }
   usuario.value = await resposta.json();
+  atualizarRevisar();
 });
+onUnmounted(() => { limparTempos(); document.removeEventListener('pointerdown', aoApontar, true); });
 </script>
 
 <template>
-  <div class="casca" :class="{ 'casca-celular': ehCelular }" v-if="usuario">
-    <aside v-if="!ehCelular" class="sidebar">
-      <div class="topo-sidebar">
-        <div class="marca" title="Dagda Capital">
-          <MarcaDagda class="logo-marca" :tamanho="38" />
+  <div class="casca" :class="{ 'casca-celular': ehCelular, 'menu-fixo': fixo }" v-if="usuario">
+    <div v-if="!ehCelular" class="trilho">
+      <aside ref="menuRef" class="sidebar" :class="{ expandido, sobreposto: aberto && !fixo }" data-menu-lateral
+        @pointerenter="aoEntrar" @pointerleave="aoSair" @focusin="aoFocar" @focusout="aoDesfocar">
+        <div class="topo-sidebar">
+          <button type="button" class="marca" data-menu-marca :aria-expanded="expandido" :aria-label="expandido ? 'Dagda Capital: recolher o menu' : 'Dagda Capital: abrir o menu'" @click="aoTocarMarca">
+            <MarcaDagda class="logo-marca" :tamanho="36" />
+            <span class="nome-marca rotulo-texto" data-menu-nome>Dagda Capital</span>
+          </button>
         </div>
-      </div>
 
-      <nav class="nav-lateral" aria-label="Navegação principal">
-        <div v-for="g in GRUPOS" :key="g.id" class="secao-nav">
-          <h2 v-if="g.itens.length > 1" class="titulo-secao" :class="{ atual: grupoAtual === g.id }">{{ g.rotulo }}</h2>
-          <div class="itens-secao">
-            <router-link
-              v-for="item in g.itens"
-              :key="item.rota"
-              :to="item.rota"
-              class="item-nav"
-              :class="{ ativo: itemAtivo(item) }"
-              :title="item.rotulo"
-            >
+        <nav class="nav-lateral" aria-label="Navegação principal">
+          <router-link
+            v-for="item in itensMenu"
+            :key="item.rota"
+            :to="item.rota"
+            class="item-nav"
+            :class="{ ativo: itemAtivo(item) }"
+            :title="expandido ? (item.dica || null) : (item.dica ? `${item.rotulo} (${item.dica})` : item.rotulo)"
+            :aria-label="item.revisar ? `${item.rotulo}: ${qtdRevisar}` : item.rotulo"
+            :aria-current="itemAtivo(item) ? 'page' : null"
+          >
+            <span class="icone-caixa">
               <component :is="item.icone" :size="20" :stroke-width="1.8" class="icone-nav" />
-              <span class="rotulo-texto">{{ item.rotulo }}</span>
-            </router-link>
-          </div>
-        </div>
-      </nav>
+              <span v-if="item.revisar" class="contador" aria-hidden="true">{{ qtdRevisar > 99 ? '99+' : qtdRevisar }}</span>
+            </span>
+            <span class="rotulo-texto">{{ item.rotulo }}</span>
+          </router-link>
+        </nav>
 
-      <div class="rodape-sidebar">
-        <router-link to="/mais/perfil" class="usuario" :class="{ ativo: route.path === '/mais/perfil' }" title="Perfil">
-          <AvatarMini :inicial="inicialDe(usuario)" :tamanho="32" />
-          <span class="usuario-nome rotulo-texto">{{ nomeExibido(usuario) }}</span>
-        </router-link>
-        <router-link to="/mais" class="item-nav item-config" :class="{ ativo: route.path === '/mais' || (route.name === 'mais-secao' && route.path !== '/mais/perfil') || route.name === 'manual' }" title="Configurações">
-          <Settings :size="20" :stroke-width="1.8" class="icone-nav" />
-          <span class="rotulo-texto">Configurações</span>
-        </router-link>
-        <button type="button" class="botao-tema" @click="alternarTema" :title="ROTULO_TEMA[modoTema]" :aria-label="ROTULO_TEMA[modoTema]">
-          <component :is="ICONE_TEMA[modoTema]" :size="20" :stroke-width="1.8" class="icone-nav" />
-          <span class="rotulo-texto">{{ ROTULO_TEMA[modoTema] }}</span>
-        </button>
-        <button type="button" @click="sair" title="Sair">
-          <LogOut :size="20" :stroke-width="1.8" class="icone-nav" />
-          <span class="rotulo-texto">Sair</span>
-        </button>
-      </div>
-    </aside>
+        <div class="rodape-sidebar">
+          <button type="button" class="item-nav fixar" :class="{ ligado: fixo }" data-menu-fixar :aria-pressed="fixo" :title="fixo ? 'Manter aberto: ligado (clique para recolher)' : 'Manter aberto'" @click="alternarFixo">
+            <span class="icone-caixa"><component :is="fixo ? PinOff : Pin" :size="20" :stroke-width="1.8" class="icone-nav" /></span>
+            <span class="rotulo-texto">Manter aberto</span>
+          </button>
+        </div>
+      </aside>
+    </div>
 
     <main class="conteudo">
-      <TopoApp v-if="comTopo" :usuario="usuario" />
+      <TopoApp :usuario="usuario" />
       <AvisoArmazenamento v-if="route.name === 'dashboard'" />
-      <BotaoVoltar v-if="ehTelaInternaDoMais(route) && (ehCelular || route.name === 'mais-secao' || route.name === 'manual')" para="/mais" :rotulo="ehCelular ? 'Voltar' : 'Configurações'" />
       <div :key="chaveTela" class="tela"><slot /></div>
     </main>
 
@@ -113,152 +151,134 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Coluna do menu: 64px (recolhido, abre por cima do conteúdo) ou 240px quando "Manter aberto" (empurra o conteúdo). */
 .casca {
+  --menu-fechado: 64px;
+  --menu-aberto: 240px;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--menu-fechado) minmax(0, 1fr);
   min-height: 100%;
 }
+.casca.menu-fixo { grid-template-columns: var(--menu-aberto) minmax(0, 1fr); }
 
 .casca.casca-celular {
   grid-template-columns: 1fr;
 }
 
+.trilho { position: sticky; top: 0; height: 100vh; z-index: 60; }
+
 .sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--menu-fechado);
   background: var(--cor-fundo-sidebar);
   border-right: 1px solid var(--cor-borda);
-  padding: 24px 14px;
+  padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  gap: 18px;
   overflow-y: auto;
   overflow-x: hidden;
+  transition: width var(--anim-padrao) var(--anim-curva), box-shadow var(--anim-padrao) ease;
 }
+.sidebar.expandido { width: var(--menu-aberto); }
+.sidebar.sobreposto { box-shadow: 18px 0 40px -18px rgba(0, 0, 0, 0.45); }
 
-.topo-sidebar { display: flex; align-items: center; }
+.topo-sidebar { display: flex; align-items: center; min-height: 44px; }
 
 .marca {
   display: flex;
   align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 0 0 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--cor-texto);
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 12px;
 }
-
-.logo-marca {
-  width: 38px;
-  flex-shrink: 0;
-}
+.marca:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
+.logo-marca { width: 36px; flex-shrink: 0; }
+.nome-marca { font-family: var(--fonte-display); font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
 
 .nav-lateral {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 4px;
   flex: 1;
 }
 
-.secao-nav { display: flex; flex-direction: column; gap: 4px; }
-.itens-secao { display: flex; flex-direction: column; gap: 4px; }
-.titulo-secao {
-  margin: 0 0 2px;
-  padding: 0 12px;
-  color: var(--cor-texto-suave);
-  font-family: var(--fonte-texto);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.titulo-secao.atual { color: var(--cor-texto); }
-
 .item-nav {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-family: var(--fonte-texto);
   font-size: 14px;
   font-weight: 500;
   color: var(--cor-texto-suave);
   text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--anim-rapida) ease, color var(--anim-rapida) ease;
   white-space: nowrap;
 }
-
-.icone-nav {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
+.icone-caixa { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0; }
+.icone-nav { width: 20px; height: 20px; flex-shrink: 0; }
+/* Nomes: somem com o menu recolhido (sem mudar a posição dos ícones) */
+.rotulo-texto { opacity: 0; transition: opacity var(--anim-rapida) ease; overflow: hidden; text-overflow: ellipsis; }
+.expandido .rotulo-texto { opacity: 1; }
 
 .item-nav:hover {
   background: var(--cor-realce);
   color: var(--cor-texto);
 }
+.item-nav:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: -2px; }
 
 .item-nav.ativo {
   background: linear-gradient(135deg, var(--cor-primaria), var(--cor-violeta));
   color: #ffffff;
 }
 
+.contador {
+  position: absolute; top: -7px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px;
+  background: var(--cor-alerta, #d98a00); color: #1b1300; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
+  box-shadow: 0 0 0 2px var(--cor-fundo-sidebar);
+}
+
 .rodape-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 16px;
+  gap: 4px;
+  padding-top: 10px;
   border-top: 1px solid var(--cor-borda);
 }
+.fixar { width: 100%; border: none; background: none; cursor: pointer; text-align: left; }
+.fixar.ligado { color: var(--cor-texto); }
 
-.usuario { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 10px; text-decoration: none; min-width: 0; color: inherit; }
-.usuario:hover, .usuario.ativo { background: var(--cor-realce); }
-.usuario.ativo .usuario-nome { color: var(--cor-texto); font-weight: 600; }
-.usuario-nome {
-  font-size: 13px;
-  color: var(--cor-texto-suave);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rodape-sidebar button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  align-self: stretch;
-  font-family: var(--fonte-texto);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--cor-borda);
-  background: transparent;
-  color: var(--cor-texto);
-  cursor: pointer;
-}
+@media (prefers-reduced-motion: reduce) { .sidebar, .rotulo-texto { transition: none !important; } }
+:global(html[data-reduzir-movimento='1']) .sidebar, :global(html[data-reduzir-movimento='1']) .rotulo-texto { transition: none !important; }
 
 .tela { display: contents; }
 
+/* Sem espaço próprio acima: o TopoApp (altura fixa) + --espaco-secao definem onde o conteúdo começa, igual em todas as páginas */
 .conteudo {
-  padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
+  padding: 0 var(--margem-tela) var(--espaco-fim);
   overflow-x: hidden;
-}
-
-/* Ajustes gerais para telas estreitas — a colapsagem da sidebar em si já é
-   decidida via JS (matchMedia) lá em cima, para poder ser sobreposta pelo
-   toggle manual mesmo dentro dessas faixas. */
-@media (max-width: 900px) {
-  .conteudo {
-    padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
-  }
-}
-
-@media (max-width: 480px) {
-  .conteudo {
-    padding: var(--espaco-topo) var(--margem-tela) var(--espaco-fim);
-  }
+  min-width: 0;
 }
 
 /* Celular: o rodapé fica fixo embaixo, então o conteúdo ganha espaço para não ficar escondido atrás dele */
 .casca-celular .conteudo {
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
+</style>
+
+<style>
+/* Anotação 63: o título da página fica só no TopoApp. O <h1> próprio das telas antigas (Apoie, Custo de vida, Manual,
+   Regras, Mais, Perfil) some aqui, para nenhuma tela somar uma linha extra acima do conteúdo. */
+.casca .tela > .pagina > h1:first-child { display: none; }
 </style>

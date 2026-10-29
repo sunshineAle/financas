@@ -186,7 +186,8 @@ router.delete('/estorno-cartao/:vinculo', tratar((req, res) => {
 // Anotação 53 (linha de transação): completa cada item com o que a linha mostra além dos dados da transação:
 //  - meio: 'credito' | 'crediario' | 'debito' | 'pix' | 'boleto' | 'dinheiro' | 'transferencia' | null (utils/meioPagamento);
 //  - recorrente: true quando a descrição traz o nome de um custo fixo ativo (não há ligação gravada entre os dois);
-//  - a_revisar: true quando é guardar/resgatar reconhecido no extrato e ainda sem decisão (mesma regra de /api/reserva/auto/pendentes).
+//  - a_revisar: true quando tipo_mov = 'reserva_pendente' ou quando é guardar/resgatar reconhecido no extrato e ainda sem
+//    decisão (mesma regra de /api/reserva/auto/pendentes).
 // Os dados do selo já vêm no SELECT: conta_nome, conta_icone, conta_cor (conta ou cartão), cartao_bandeira e cartao_tipo_credito.
 const semAcento = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 function completarParaLinha(usuarioId, lista) {
@@ -199,8 +200,8 @@ function completarParaLinha(usuarioId, lista) {
     t.meio = meioDaTransacao({ ...t, tipo_credito: t.cartao_tipo_credito });
     const d = semAcento(t.descricao_base || t.descricao);
     t.recorrente = t.valor < 0 && !t.tipo_mov && fixos.some((n) => d.includes(n));
-    t.a_revisar = false;
-    if (!t.cartao && !t.tipo_mov && !t.revisao && !t.ignorada && String(t.data).slice(0, 10) >= desde) {
+    t.a_revisar = t.tipo_mov === 'reserva_pendente' || (t.cartao && t.tipo_mov === 'estorno_avulso'); // caixinha aguardando vínculo (time Saldos); estorno do cartão sem a compra (anotação 61)
+    if (!t.a_revisar && !t.cartao && !t.tipo_mov && !t.revisao && !t.ignorada && String(t.data).slice(0, 10) >= desde) {
       const det = detectarReservaAutomatica(t.descricao);
       if (det && ((det.sentido === 'guardar' && t.valor < 0) || (det.sentido === 'resgatar' && t.valor > 0))) {
         if (!pagasFatura) pagasFatura = new Set(db.prepare('SELECT transacao_id FROM faturas_pagas WHERE transacao_id IS NOT NULL AND excluido_em IS NULL').all().map((r) => r.transacao_id));
@@ -263,7 +264,9 @@ router.get('/', (req, res) => {
   // (a saída que sai da conta) fica de fora dos totais para não contar duas vezes. Sem ?mes, só contam
   // as parcelas até o mês atual; as futuras ficam na projeção (/api/transacoes/projecao).
   let doCartao = [];
-  if (!contaId && !categoriaReceita && tipo !== 'entrada') {
+  // Anotação 61: cashback recebido no cartão é ENTRADA (categoria Cashback); pagamento adiantado fica fora dos totais
+  const CASHBACK = lanc.CASHBACK || 'Cashback';
+  if (!contaId && (!categoriaReceita || categoriaReceita === CASHBACK) && !(tipo === 'entrada' && categoriaId)) {
     const argsC = [req.usuario.id];
     let filtroC = '';
     if (categoriaId) { filtroC = ' AND l.categoria_id = ?'; argsC.push(String(categoriaId)); }
@@ -280,6 +283,8 @@ router.get('/', (req, res) => {
       .all(...argsC);
     const totaisCompra = {};
     linhasC.forEach((l) => { totaisCompra[l.compra_id] = (totaisCompra[l.compra_id] || 0) + l.valor; });
+    // Anotação 61: pares de estorno PARCIAL (a compra continua gasto em parte): os dois lados ficam na categoria da compra
+    const vinculosParciais = new Set(linhasC.filter((l) => l.tipo_mov === 'estornada_parcial' && l.vinculo).map((l) => l.vinculo));
     linhasC.forEach((l) => {
       const [a, m, d] = l.data_compra.split('-').map(Number);
       const total = a * 12 + (m - 1) + (l.parcela_numero - 1);
@@ -288,6 +293,9 @@ router.get('/', (req, res) => {
       const ultimo = new Date(Date.UTC(ano, mesN, 0)).getUTCDate();
       const data = `${ano}-${String(mesN).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
       if (mes && data.slice(0, 7) !== mes) return;
+      const ehCashback = l.tipo_mov === 'cashback';
+      if ((tipo === 'entrada' || categoriaReceita) && !ehCashback) return;
+      if (tipo === 'saida' && ehCashback) return;
       doCartao.push({
         id: `cartao-${l.id}`,
         cartao: true,
@@ -297,6 +305,7 @@ router.get('/', (req, res) => {
         compra_id: l.compra_id,
         tipo_mov: l.tipo_mov || null,
         vinculo: l.vinculo || null,
+        estorno_parcial: !!(l.vinculo && vinculosParciais.has(l.vinculo)),
         divida_id: l.divida_id || null,
         descricao_base: l.descricao,
         data_compra: l.data_compra,
@@ -312,9 +321,9 @@ router.get('/', (req, res) => {
         descricao: l.total_parcelas > 1 ? `${l.descricao} (${l.parcela_numero}/${l.total_parcelas})` : l.descricao,
         valor: -l.valor,
         data,
-        categoria_id: l.categoria_id,
-        categoria_nome: l.categoria_nome,
-        categoria_receita: null,
+        categoria_id: ehCashback ? null : l.categoria_id,
+        categoria_nome: ehCashback ? null : l.categoria_nome,
+        categoria_receita: ehCashback ? CASHBACK : null,
         subcategoria: l.subcategoria || null,
         ignorada: 0,
       });
@@ -322,7 +331,9 @@ router.get('/', (req, res) => {
   }
   const limiteMes = chaveHoje();
   const noTotal = doCartao.filter((t) => mes || t.data.slice(0, 7) <= limiteMes);
-  const saidasCartao = noTotal.reduce((acc, t) => acc - t.valor, 0);
+  const saidasCartao = noTotal.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback').reduce((acc, t) => acc - t.valor, 0);
+  const entradasCartao = noTotal.filter((t) => t.tipo_mov === 'cashback').reduce((acc, t) => acc + t.valor, 0);
+  soma.entradas += entradasCartao;
   const saidasTotais = arredondar(soma.saidas + saidasCartao);
   const lista = transacoes
     .concat(doCartao)
@@ -339,7 +350,8 @@ router.get('/', (req, res) => {
       saidasCartao: arredondar(saidasCartao),
       resultado: arredondar(soma.entradas - saidasTotais),
       quantidade: soma.quantidade,
-      cartao: arredondar(doCartao.reduce((acc, t) => acc - t.valor, 0)),
+      cartao: arredondar(doCartao.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback').reduce((acc, t) => acc - t.valor, 0)),
+      entradasCartao: arredondar(entradasCartao),
       quantidadeCartao: doCartao.length,
     },
   });

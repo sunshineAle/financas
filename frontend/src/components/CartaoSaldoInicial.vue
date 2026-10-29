@@ -5,6 +5,7 @@
 import { Plus, X } from 'lucide-vue-next';
 import CampoValor from './CampoValor.vue';
 import CampoTexto from './CampoTexto.vue';
+import AjudaSecao from './AjudaSecao.vue';
 
 const modelo = defineModel({ type: Object, required: true });
 defineProps({ erros: { type: Object, default: () => ({}) } });
@@ -28,10 +29,9 @@ export const saldoInicialVazio = () => ({ faturaAberta: 0, parcelas: [] });
 
 <template>
   <div class="saldo-inicial">
-    <CampoValor v-model="modelo.faturaAberta" tipo="saida" rotulo="Fatura atual já em aberto" dica="O que já está na fatura deste mês. Entra como “Saldo inicial da fatura”." :erro="erros.faturaAberta" />
+    <CampoValor v-model="modelo.faturaAberta" tipo="saida" rotulo="Fatura atual já em aberto" dica="O que já está na fatura deste mês." dica-ao-focar :erro="erros.faturaAberta" />
     <div class="parcelas">
-      <span class="titulo">Parcelas restantes de compras antigas</span>
-      <p class="nota">Uma parcela em cada fatura, a partir da fatura atual.</p>
+      <span class="titulo">Parcelas restantes de compras antigas<AjudaSecao secao="cartoes.parcelas-restantes" /></span>
       <div v-for="(p, i) in modelo.parcelas" :key="i" class="parcela">
         <div class="linha-topo">
           <CampoTexto v-model="p.descricao" rotulo="Descrição" placeholder="Ex.: Geladeira" tema="saida" />

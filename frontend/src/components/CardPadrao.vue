@@ -14,6 +14,8 @@
 // Ações no rodapé (padrão do card da fatura): <template #rodape><BarraAcoes compacto><BotaoAcao compacto .../></BarraAcoes></template>
 // — o rodapé já compacta BarraAcoes/BotaoAcao (bolha 38px) e dispensa a linha divisória extra.
 // Exemplo: <CardPadrao titulo="Contas"><template #acoes><MenuPontos>...</MenuPontos></template> ...conteúdo... </CardPadrao>
+// ajuda (opcional): id em config/ajudaSecoes.js — "?" minúsculo ao lado do título com a explicação (anotação 64).
+import AjudaSecao from './AjudaSecao.vue';
 defineProps({
   titulo: { type: String, default: '' },
   subtitulo: { type: String, default: '' },
@@ -21,6 +23,7 @@ defineProps({
   tag: { type: String, default: 'section' },
   clicavel: { type: Boolean, default: false },
   semPadding: { type: Boolean, default: false },
+  ajuda: { type: String, default: '' },
 });
 defineEmits(['abrir']);
 </script>
@@ -28,7 +31,7 @@ defineEmits(['abrir']);
 <template>
   <component :is="tag" :class="['card-padrao', tema && 'tema-' + tema, { comAcento: tema, clicavel, semPadding }]" :tabindex="clicavel ? 0 : undefined" :role="clicavel ? 'button' : undefined" @click="clicavel && $emit('abrir')" @keydown.enter.self="clicavel && $emit('abrir')">
     <header v-if="titulo || $slots.cabecalho || $slots.acoes" class="cab">
-      <slot name="cabecalho"><div class="tit"><h2 v-if="titulo">{{ titulo }}</h2><small v-if="subtitulo">{{ subtitulo }}</small></div></slot>
+      <slot name="cabecalho"><div class="tit"><h2 v-if="titulo">{{ titulo }}<AjudaSecao v-if="ajuda" :secao="ajuda" /></h2><small v-if="subtitulo">{{ subtitulo }}</small></div></slot>
       <div v-if="$slots.acoes" class="acoes"><slot name="acoes" /></div>
     </header>
     <slot />

@@ -63,7 +63,7 @@ function montarLista(usuarioId) {
   const porMes = {};
   ops.forEach((o) => {
     const m = String(o.data).slice(0, 7);
-    if (OPERACOES_ENTRADA.includes(o.tipo)) porMes[m] = (porMes[m] || 0) + o.total;
+    if (OPERACOES_ENTRADA.includes(o.tipo) || o.tipo === 'posicao_inicial') porMes[m] = (porMes[m] || 0) + o.total;
     else if (OPERACOES_SAIDA.includes(o.tipo)) porMes[m] = (porMes[m] || 0) - o.total;
   });
   let acc = 0;
@@ -380,9 +380,69 @@ router.put('/operacoes/:id', (req, res) => {
   }
 });
 
+// --- Anotação 55: posição inicial do ativo -----------------------------------------------------------------------------------
+// Renda variável: { cotas, preco, data }. Renda fixa: { aplicado, atual, data } (atual − aplicado = rendimento até ali).
+// Não sai de nenhuma conta e não conta como aporte; o preço médio e o rendimento partem daí. Uma por ativo (refazer substitui).
+const MARCA_REND_INICIAL = 'Rendimento até a posição inicial';
+function apagarPosicaoInicial(ativoId) {
+  db.prepare("SELECT * FROM operacoes WHERE ativo_id = ? AND excluido_em IS NULL AND (tipo = 'posicao_inicial' OR (tipo = 'rendimento' AND descricao = ?))")
+    .all(ativoId, MARCA_REND_INICIAL).forEach((op) => desfazerOperacao(op));
+}
+router.post('/posicao-inicial', (req, res) => {
+  const c = req.body || {};
+  let ativo = c.ativoId ? ativoDoUsuario(c.ativoId, req.usuario.id) : null;
+  if (c.ativoId && !ativo) return res.status(404).json({ erro: 'Ativo não encontrado.' });
+  let novo = null;
+  if (!ativo) {
+    const lido = lerAtivo({ nome: String(c.nome || c.ticker || '').trim(), ticker: c.ticker, tipo: c.tipoAtivo || c.tipo, corretoraContaId: c.corretoraContaId }, req.usuario.id, null);
+    if (lido.erro) return res.status(400).json({ erro: lido.erro });
+    novo = lido.dados;
+  }
+  const tipoAtivo = ativo ? ativo.tipo : novo.tipo;
+  const dia = String(c.data || carteira.hojeStr()).slice(0, 10);
+  if (!dataValida(dia)) return res.status(400).json({ erro: 'Data inválida.' });
+  if (dia > carteira.hojeStr()) return res.status(400).json({ erro: 'A data da posição inicial não pode ser no futuro.' });
+  const variavel = COM_COTAS.includes(tipoAtivo);
+  let cotas = null; let preco = null; let total; let rend = 0;
+  if (variavel) {
+    cotas = num(c.cotas); preco = num(c.preco ?? c.precoMedio);
+    if (!(cotas > 0) || !(preco > 0)) return res.status(400).json({ erro: 'Informe a quantidade e o preço médio.' });
+    total = arredondar(cotas * preco);
+  } else {
+    total = arredondar(num(c.aplicado) || 0);
+    const atual = num(c.atual) === null ? total : arredondar(num(c.atual));
+    if (!(total > 0)) return res.status(400).json({ erro: 'Informe o valor aplicado.' });
+    if (!(atual > 0)) return res.status(400).json({ erro: 'Informe o valor atual.' });
+    rend = arredondar(atual - total);
+    if (rend < 0) return res.status(400).json({ erro: 'O valor atual menor que o aplicado ainda não é aceito: informe o atual como aplicado.' });
+  }
+  try {
+    dados.transacao(() => {
+      if (!ativo) ativo = carteira.acharOuCriarAtivo(req.usuario.id, { nome: novo.nome, ticker: novo.ticker, tipo: novo.tipo, liquidez: novo.liquidez, corretoraContaId: novo.corretora_conta_id });
+      apagarPosicaoInicial(ativo.id);
+      const reserva = carteira.buscarReserva(req.usuario.id);
+      // historico_aportes com operacao 'saldo_inicial': o patrimônio enxerga o valor; não é aporte (fora dos aportes do mês)
+      const ap = dados.inserir('historico_aportes', {
+        reserva_id: reserva.id, valor: total, tipo: ativo.tipo, operacao: 'saldo_inicial', ativo: ativo.ticker || ativo.nome,
+        quantidade: cotas, preco_unitario: preco, descricao: 'Posição inicial', conta_id: null, meta_id: null, data: dia,
+      });
+      dados.somar('reserva_liberdade', reserva.id, 'valor_atual', total);
+      dados.inserir('operacoes', { ativo_id: ativo.id, usuario_id: req.usuario.id, tipo: 'posicao_inicial', data: dia, cotas, preco, total, aporte_id: ap.id, descricao: 'Posição inicial' });
+      if (rend > 0) dados.inserir('operacoes', { ativo_id: ativo.id, usuario_id: req.usuario.id, tipo: 'rendimento', data: dia, total: rend, descricao: MARCA_REND_INICIAL });
+      const teste = consolidarAtivo(operacoesDe(ativo.id));
+      if (teste.erro) throw erro(400, `Com essa posição inicial: ${teste.erro}`);
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ erro: e.message });
+    throw e;
+  }
+  res.status(201).json({ ativoId: ativo.id, ...montarLista(req.usuario.id) });
+});
+
 router.delete('/operacoes/:id', (req, res) => {
   const op = buscarOperacao(req.params.id, req.usuario.id);
   if (!op) return res.status(404).json({ erro: 'Operação não encontrada.' });
+  if (op.tipo === 'posicao_inicial') { apagarPosicaoInicial(op.ativo_id); return res.json(montarLista(req.usuario.id)); }
   if (!op.ativo_id) return res.status(400).json({ erro: 'Esta operação é um movimento do extrato; apague a transação em Transações.' });
   const restantes = operacoesDe(op.ativo_id).filter((x) => x.id !== op.id);
   const teste = consolidarAtivo(restantes);

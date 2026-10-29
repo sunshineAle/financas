@@ -24,20 +24,41 @@ function parcelasCartao(usuarioId, { categoriaId = null } = {}) {
   if (categoriaId) { filtro = ' AND l.categoria_id = ?'; args.push(categoriaId); }
   const linhas = db
     .prepare(
-      `SELECT l.id, l.cartao_id, l.compra_id, l.valor, l.categoria_id, l.data_compra, l.parcela_numero
+      `SELECT l.id, l.cartao_id, l.compra_id, l.valor, l.categoria_id, l.data_compra, l.parcela_numero, l.tipo_mov, l.descricao
        FROM lancamentos_cartao l JOIN cartoes k ON k.id = l.cartao_id AND k.excluido_em IS NULL
        WHERE l.usuario_id = ? AND l.excluido_em IS NULL${filtro}`
     )
     .all(...args);
-  return linhas.map((l) => {
-    const [a, m, d] = l.data_compra.split('-').map(Number);
-    const total = a * 12 + (m - 1) + (l.parcela_numero - 1);
-    const ano = Math.floor(total / 12);
-    const mes = (total % 12) + 1;
-    const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-    const data = `${ano}-${pad(mes)}-${pad(Math.min(d, ultimo))}`;
-    return { ...l, data, mes: chaveDaData(data) }; // mês financeiro da data em que a parcela pesa
-  });
+  // Anotação 61: pagamento adiantado (abate a fatura) não é gasto; cashback é ENTRADA (ver entradasCartao)
+  return linhas.filter((l) => !CREDITO_FORA_DOS_GASTOS.has(l.tipo_mov)).map(comData);
+}
+const CREDITO_FORA_DOS_GASTOS = new Set(['pagamento', 'cashback']);
+function comData(l) {
+  const [a, m, d] = l.data_compra.split('-').map(Number);
+  const total = a * 12 + (m - 1) + (l.parcela_numero - 1);
+  const ano = Math.floor(total / 12);
+  const mes = (total % 12) + 1;
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  const data = `${ano}-${pad(mes)}-${pad(Math.min(d, ultimo))}`;
+  return { ...l, data, mes: chaveDaData(data) }; // mês financeiro da data em que a parcela pesa
+}
+
+// Anotação 61: cashback recebido no cartão = ENTRADA na categoria Cashback (valor positivo), no mês da data do crédito.
+const CASHBACK = 'Cashback';
+function entradasCartao(usuarioId) {
+  return db
+    .prepare(
+      `SELECT l.id, l.cartao_id, l.compra_id, l.valor, l.data_compra, l.parcela_numero, l.descricao FROM lancamentos_cartao l
+       JOIN cartoes k ON k.id = l.cartao_id AND k.excluido_em IS NULL
+       WHERE l.usuario_id = ? AND l.excluido_em IS NULL AND l.tipo_mov = 'cashback'`
+    )
+    .all(usuarioId)
+    .map((l) => ({ ...comData(l), valor: Math.abs(l.valor), categoria_receita: CASHBACK }));
+}
+// Soma das entradas de cashback por mês (só meses até o atual, como as saídas) e por categoria, para os totais.
+function entradasCartaoNoPeriodo(usuarioId, tam, chave) {
+  const hoje = chaveHoje();
+  return entradasCartao(usuarioId).filter((e) => e.mes <= hoje && e.mes.slice(0, tam) === chave).reduce((s, e) => s + e.valor, 0);
 }
 
 // Soma por mês (AAAA-MM) das parcelas que já valem nos totais (mês atual e anteriores).
@@ -62,4 +83,4 @@ function projecaoCartaoPorMes(usuarioId) {
   return Object.values(porMes).sort((x, y) => (x.mes < y.mes ? -1 : 1)).map((m) => ({ ...m, total: Math.round(m.total * 100) / 100 }));
 }
 
-module.exports = { semPagamentoDeFatura, parcelasCartao, saidasCartaoPorMes, projecaoCartaoPorMes, chaveHoje };
+module.exports = { semPagamentoDeFatura, parcelasCartao, saidasCartaoPorMes, projecaoCartaoPorMes, chaveHoje, entradasCartao, entradasCartaoNoPeriodo, CREDITO_FORA_DOS_GASTOS };

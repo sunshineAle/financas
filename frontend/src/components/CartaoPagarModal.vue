@@ -61,8 +61,8 @@ async function confirmar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" :titulo="`Registrar pagamento · ${cartao ? cartao.nome : ''}`" tema="saida" rotulo-salvar="Confirmar pagamento" :carregando="salvando" :erro="erro" @salvar="conta && confirmar()" @fechar="emit('fechar')">
-    <p class="nota">Fatura de <strong>{{ chave }}</strong> · <strong>{{ moeda(total) }}</strong>. O valor pago sai da conta escolhida e entra em Transações como pagamento de fatura.</p>
+  <FormularioModal :aberto="aberto" ajuda="cartoes.pagar-fatura" :titulo="`Registrar pagamento · ${cartao ? cartao.nome : ''}`" tema="saida" rotulo-salvar="Confirmar pagamento" :carregando="salvando" :erro="erro" @salvar="conta && confirmar()" @fechar="emit('fechar')">
+    <p class="nota">Fatura de <strong>{{ chave }}</strong> · <strong>{{ moeda(total) }}</strong></p>
     <CampoSelecao v-model="conta" rotulo="Conta de onde saiu o dinheiro" :opcoes="contas.map((c) => ({ valor: c.id, rotulo: c.nome }))" tema="saida" obrigatorio />
     <CampoValor v-model="valorPago" rotulo="Valor pago" tema="saida" />
     <template v-if="pagouMenos">

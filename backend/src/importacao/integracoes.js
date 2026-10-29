@@ -5,6 +5,12 @@ let lancamentos = null;
 try { lancamentos = require('../utils/lancamentos'); } catch (e) { lancamentos = null; }
 let reservasAuto = null;
 try { reservasAuto = require('../utils/reservasAuto'); } catch (e) { reservasAuto = null; }
+// Anotação 56: metas ligadas às caixinhas do banco
+let caixinhas = null;
+try { caixinhas = require('../utils/caixinhas'); } catch (e) { caixinhas = null; }
+function metasDaConta(usuarioId, contaId) { try { return caixinhas ? caixinhas.metasDaConta(usuarioId, contaId) : []; } catch (e) { return []; } }
+function casarCaixinha(descricao, valor, metas) { try { return caixinhas ? caixinhas.casarCaixinha(descricao, valor, metas) : null; } catch (e) { return null; } }
+function guardadoNaMeta(reservaId, metaId) { try { return caixinhas ? caixinhas.guardadoNaMeta(reservaId, metaId) : 0; } catch (e) { return 0; } }
 
 const REGEX_ESTORNO = /\b(estorno|estornado|devolu[cç][aã]o|devolvid[oa]|cancelamento|cancelad[ao]|reembolso|chargeback|cr[eé]dito (?:de )?compra)\b/i;
 
@@ -33,4 +39,24 @@ function pareceCreditoDePagamento(descricao) { return REGEX_PAG_RECEBIDO.test(St
 const REGEX_PAG_FORTE = /\b(pagamento (?:recebido|efetuado|on[- ]?line|da fatura|de fatura|fatura)|pgto\.? (?:recebido|efetuado|fatura)|pagto (?:recebido|efetuado|fatura|debito automatico)|obrigado pelo pagamento|credito de pagamento|pagamento debito automatico|d[eé]bito autom[aá]tico fatura)\b/i;
 function pareceTextoDePagamentoDaFatura(descricao) { return REGEX_PAG_FORTE.test(texto.normalizar(descricao)); }
 
-module.exports = { lancamentos: () => lancamentos, ehEstorno, detectarReserva, detectarDestino, pareceFaturaDeCartao, pareceCreditoDePagamento, pareceTextoDePagamentoDaFatura, normalizar: texto.normalizar };
+// Anotação 61: CRÉDITO na fatura do cartão pelo texto (vale em OFX, CSV, planilha e PDF, qualquer que seja o sinal).
+//  - 'estorno'   estorno, devolução, cancelamento, reembolso, chargeback
+//  - 'pagamento' pagamento da fatura (anterior ou adiantado), pgto, pagto
+//  - 'cashback'  cashback, ajuste a crédito, crédito avulso/promocional
+// Cobranças da própria fatura (IOF, juros, encargos, multa, anuidade, tarifa, seguro) nunca são crédito pelo texto.
+const RE_COBRANCA = /\b(iof|juros|encargos?|multa|mora|anuidade|tarifa|seguro|rotativo|parcelamento de fatura)\b/;
+const RE_CRED_ESTORNO = /\b(estorn\w*|devolu[cç](?:ao|oes)|devolvid[oa]|cancelament\w*|cancelad[ao]|reembolso|chargeback|contestac\w*)\b/;
+const RE_CRED_PAGAMENTO = /\b(pagamentos?|pgto|pagto|pag fatura|obrigado pelo pagamento)\b/;
+const RE_CRED_CASHBACK = /\b(cash ?back|ajuste (?:a |de )?credito|credito (?:de |em |na |por |promocional|avulso|ajuste|cashback)|bonificac\w*|^credito\b)/;
+const RE_ADIANTADO = /\b(adiantad[oa]|antecipad[oa]|antecipacao|parcial)\b/;
+function tipoDeCredito(descricao) {
+  const d = texto.normalizar(descricao);
+  if (!d || RE_COBRANCA.test(d)) return null;
+  if (RE_CRED_ESTORNO.test(d)) return 'estorno';
+  if (RE_CRED_CASHBACK.test(d)) return 'cashback';
+  if (RE_CRED_PAGAMENTO.test(d)) return 'pagamento';
+  return null;
+}
+const pareceAdiantado = (descricao) => RE_ADIANTADO.test(texto.normalizar(descricao));
+
+module.exports = { caixinhas: () => caixinhas, metasDaConta, casarCaixinha, guardadoNaMeta, lancamentos: () => lancamentos, ehEstorno, detectarReserva, detectarDestino, pareceFaturaDeCartao, pareceCreditoDePagamento, pareceTextoDePagamentoDaFatura, tipoDeCredito, pareceAdiantado, normalizar: texto.normalizar };
