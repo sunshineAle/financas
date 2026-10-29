@@ -3,7 +3,10 @@
 // -> 'Análises' recolhida. Parcelamentos e visão geral viraram componentes (CartaoParcelamentos/CartaoVisaoGeral) p/ Relatórios.
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { FileText, Wallet, ShoppingBag, Ellipsis, Check, Undo2, Pencil, Trash2, List, ArrowUpRight, ArrowDownRight, ChevronDown, FileUp, Plus } from 'lucide-vue-next';
+import { FileText, Wallet, ShoppingBag, Ellipsis, Check, Undo2, Pencil, Trash2, List, ArrowUpRight, ArrowDownRight, ChevronDown, FileUp, Plus, CreditCard, Store, ReceiptText, Landmark, HandCoins, CalendarClock } from 'lucide-vue-next';
+import IconeBandeira from '../components/IconeBandeira.vue';
+import CartaoSaldoInicial, { corpoSaldoInicial, saldoInicialVazio } from '../components/CartaoSaldoInicial.vue';
+import { reconhecerBanco, bancoPorSlug } from '../utils/catalogoBancos.js';
 import Modal from '../components/Modal.vue';
 import Carrossel from '../components/Carrossel.vue';
 import { aplicarOrdem, moverItem } from '../services/ordem.js';
@@ -234,32 +237,144 @@ const editandoId = ref(null);
 const erro = ref('');
 const erros = ref({});
 const salvando = ref(false);
-const formVazio = () => ({ nome: '', contaId: '', limite: 0, diaFechamento: '', diaVencimento: '', icone: '💳', cor: '' });
+const formVazio = () => ({ nome: '', contaId: '', limite: 0, diaFechamento: '', diaVencimento: '', icone: '💳', cor: '', tipoCredito: 'cartao', taxaJuros: '', cet: '', bandeira: '' });
 const formulario = ref(formVazio());
-function abrirNovo() { editandoId.value = null; erro.value = ''; erros.value = {}; formulario.value = formVazio(); modalAberto.value = true; }
+const saldoInicial = ref(saldoInicialVazio());
+const inicioAberto = ref(false);
+let tipoTocado = false;
+let bandeiraTocada = false;
+function abrirNovo() { editandoId.value = null; erro.value = ''; erros.value = {}; formulario.value = formVazio(); saldoInicial.value = saldoInicialVazio(); inicioAberto.value = false; tipoTocado = false; bandeiraTocada = false; modalAberto.value = true; }
 function editar(c) {
   editandoId.value = c.id; erro.value = ''; erros.value = {};
-  formulario.value = { nome: c.nome, contaId: c.contaId ?? '', limite: c.limite ?? 0, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento, icone: c.icone || '💳', cor: c.cor || '' };
+  tipoTocado = true; bandeiraTocada = true;
+  formulario.value = { nome: c.nome, contaId: c.contaId ?? '', limite: c.limite ?? 0, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento, icone: c.icone || '💳', cor: c.cor || '', tipoCredito: c.tipoCredito || 'cartao', taxaJuros: c.taxaJuros ?? '', cet: c.cet ?? '', bandeira: c.bandeira || '' };
   modalAberto.value = true;
+}
+
+// ---------- Tipo de crédito e bandeira (anotações 53 e 58) ----------
+// Cheque especial e empréstimo NÃO criam cartão: só explicam e levam à página certa (sem contar duas vezes).
+const TIPOS_CREDITO = [
+  { id: 'cartao', rotulo: 'Cartão de crédito', icone: CreditCard, exemplo: 'Nubank, Inter, Itaú' },
+  { id: 'loja', rotulo: 'Cartão de loja', icone: Store, exemplo: 'Renner, C&A, Riachuelo' },
+  { id: 'crediario', rotulo: 'Crediário / carnê', icone: ReceiptText, exemplo: 'Sparcelado, Casas Bahia, Magalu' },
+  { id: 'cheque', rotulo: 'Cheque especial', icone: Landmark, exemplo: 'Limite da conta' },
+  { id: 'emprestimo', rotulo: 'Empréstimo', icone: HandCoins, exemplo: 'Financiamento, consignado' },
+];
+const tiposVisiveis = computed(() => (editandoId.value ? TIPOS_CREDITO.slice(0, 3) : TIPOS_CREDITO));
+const tipoForm = computed(() => formulario.value.tipoCredito);
+const naoViraCartao = computed(() => tipoForm.value === 'cheque' || tipoForm.value === 'emprestimo');
+function escolherTipo(id) { tipoTocado = true; formulario.value.tipoCredito = id; erro.value = ''; }
+const BANDEIRAS = [
+  { id: 'mastercard', rotulo: 'Mastercard' }, { id: 'visa', rotulo: 'Visa' }, { id: 'elo', rotulo: 'Elo' },
+  { id: 'amex', rotulo: 'Amex' }, { id: 'hipercard', rotulo: 'Hipercard' }, { id: '', rotulo: 'Não sei' },
+];
+function escolherBandeira(id) { bandeiraTocada = true; formulario.value.bandeira = id; }
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+// Sugestão pela instituição/nome. Bancos com várias bandeiras (Itaú, Bradesco, BB...) ficam sem sugestão.
+function sugerirBandeira(nome, icone) {
+  const n = semAcento(nome);
+  if (/\bmaster/.test(n)) return 'mastercard';
+  if (/\bvisa\b/.test(n)) return 'visa';
+  if (/\belo\b/.test(n)) return 'elo';
+  if (/\bamex\b|american express/.test(n)) return 'amex';
+  if (/hipercard/.test(n)) return 'hipercard';
+  const b = String(icone || '').startsWith('banco:') ? bancoPorSlug(icone.slice(6)) : reconhecerBanco(nome);
+  const chave = semAcento(`${b?.slug || ''} ${b?.nome || ''} ${n}`);
+  if (/nubank|\bnu\b|\binter\b|banco inter|\bc6\b|picpay|will ?bank/.test(chave)) return 'mastercard';
+  if (/\bneon\b/.test(chave)) return 'visa';
+  return '';
+}
+// Sugestão do tipo pelo nome (só enquanto a pessoa não escolheu): lojas conhecidas e crediário digital.
+function sugerirTipo(nome) {
+  const n = semAcento(nome);
+  if (/sparcelado|crediario|\bcarne\b/.test(n)) return 'crediario';
+  if (/renner|\bc&a\b|\bcea\b|riachuelo|pernambucanas|marisa|hering|torra/.test(n)) return 'loja';
+  return '';
+}
+watch(() => [formulario.value.nome, formulario.value.icone], ([nome, icone]) => {
+  if (!modalAberto.value) return;
+  if (!tipoTocado) { const t = sugerirTipo(nome); if (t) formulario.value.tipoCredito = t; }
+  if (!bandeiraTocada) formulario.value.bandeira = sugerirBandeira(nome, icone);
+});
+const fmtTaxa = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+// Linha do nome abaixo do carrossel: "Renner · Cartão de loja · uso restrito à loja", "Sparcelado · Crediário · 4,9% a.m."
+const detalhesTipo = (c) => {
+  const p = [c.tipoCreditoRotulo || 'Cartão de crédito'];
+  if (c.tipoCredito === 'loja') p.push('uso restrito à loja');
+  if (c.taxaJuros > 0) p.push(`${fmtTaxa(c.taxaJuros)} a.m.`);
+  return p.join(' · ');
+};
+const nomeBandeira = (b) => BANDEIRAS.find((x) => x.id === b)?.rotulo || '';
+
+// ---------- Fatura e parcelas já em aberto (anotação 55) ----------
+const saldoModal = ref(false);
+const saldoErro = ref('');
+const saldoSalvando = ref(false);
+function abrirSaldoInicial() { saldoInicial.value = saldoInicialVazio(); saldoErro.value = ''; saldoModal.value = true; }
+async function gravarSaldoInicial(id) {
+  const corpo = corpoSaldoInicial(saldoInicial.value);
+  if (!corpo) return { ok: true, vazio: true };
+  const r = await pedir(`/api/cartoes/${id}/saldo-inicial`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const d = await r.json().catch(() => ({}));
+  return r.ok ? { ok: true } : { ok: false, erro: d.erro || 'Não foi possível lançar a fatura em aberto.' };
+}
+async function salvarSaldoInicial() {
+  saldoErro.value = '';
+  saldoSalvando.value = true;
+  try {
+    const r = await gravarSaldoInicial(cartao.value.id);
+    if (r.vazio) { saldoErro.value = 'Informe a fatura em aberto ou uma compra parcelada.'; return; }
+    if (!r.ok) { saldoErro.value = r.erro; return; }
+    saldoModal.value = false;
+    await carregarCartoes();
+  } finally { saldoSalvando.value = false; }
 }
 function fecharModal() { modalAberto.value = false; editandoId.value = null; erro.value = ''; erros.value = {}; }
 const diaOk = (v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 31;
 async function salvar() {
   erro.value = ''; erros.value = {};
   const f = formulario.value;
+  // Cheque especial e empréstimo não viram cartão: o botão leva para Contas / Dívidas.
+  if (f.tipoCredito === 'cheque' || f.tipoCredito === 'emprestimo') {
+    const destino = f.tipoCredito === 'cheque' ? '/contas' : '/dividas';
+    fecharModal();
+    router.push(destino);
+    return;
+  }
+  const crediario = f.tipoCredito === 'crediario';
   if (!f.nome.trim()) erros.value.nome = 'Informe um nome para o cartão.';
-  if (!diaOk(f.diaFechamento)) erros.value.diaFechamento = 'Dia de 1 a 31.';
+  if (!crediario && !diaOk(f.diaFechamento)) erros.value.diaFechamento = 'Dia de 1 a 31.';
   if (!diaOk(f.diaVencimento)) erros.value.diaVencimento = 'Dia de 1 a 31.';
+  const taxaOk = (v) => v === '' || v === null || (Number.isFinite(Number(String(v).replace(',', '.'))) && Number(String(v).replace(',', '.')) >= 0);
+  if (!taxaOk(f.taxaJuros)) erros.value.taxaJuros = 'Use só números, ex.: 4,9';
+  if (!taxaOk(f.cet)) erros.value.cet = 'Use só números, ex.: 79,5';
   if (Object.keys(erros.value).length) return;
   salvando.value = true;
   try {
+    const num = (v) => (v === '' || v === null ? null : Number(String(v).replace(',', '.')));
     const r = await pedir(editandoId.value ? `/api/cartoes/${editandoId.value}` : '/api/cartoes', {
       method: editandoId.value ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: f.nome, contaId: f.contaId === '' ? null : f.contaId, limite: Number(f.limite) > 0 ? Number(f.limite) : null, diaFechamento: Number(f.diaFechamento), diaVencimento: Number(f.diaVencimento), icone: f.icone, cor: f.cor || null }),
+      body: JSON.stringify({
+        nome: f.nome, contaId: f.contaId === '' ? null : f.contaId, limite: Number(f.limite) > 0 ? Number(f.limite) : null,
+        diaFechamento: crediario && !diaOk(f.diaFechamento) ? null : Number(f.diaFechamento), diaVencimento: Number(f.diaVencimento), icone: f.icone, cor: f.cor || null,
+        tipoCredito: f.tipoCredito, taxaJuros: num(f.taxaJuros), cet: num(f.cet), bandeira: crediario ? null : f.bandeira || null,
+      }),
     });
     const d = await r.json();
     if (!r.ok) { erro.value = d.erro || 'Não foi possível salvar o cartão.'; return; }
     const novo = !editandoId.value;
+    if (novo && inicioAberto.value) {
+      const s = await gravarSaldoInicial(d.id);
+      if (!s.ok) {
+        // o cartão já foi criado: reabre só a parte da fatura em aberto, com o que foi digitado e o erro
+        const guardado = saldoInicial.value;
+        fecharModal();
+        await carregarCartoes();
+        const i = cartoes.value.findIndex((c) => c.id === d.id); if (i >= 0) sel.value = i;
+        saldoInicial.value = guardado; saldoErro.value = `Cartão salvo. Falta acertar: ${s.erro}`; saldoModal.value = true;
+        return;
+      }
+    }
     salvouNoFluxo = true;
     fecharModal();
     await carregarCartoes();
@@ -302,7 +417,8 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
         <transition name="troca" mode="out-in">
           <div :key="cartao.id" class="nome-fora">
             <strong>{{ cartao.nome }}</strong>
-            <span>Cartão de crédito<template v-if="cartao.contaNome"> · paga pela {{ cartao.contaNome }}</template><template v-if="cartao.origem === 'conectada'"> · conectado</template></span>
+            <IconeBandeira v-if="cartao.bandeira" class="band-nome" :bandeira="cartao.bandeira" :tamanho="14" colorido />
+            <span>{{ detalhesTipo(cartao) }}<template v-if="cartao.contaNome"> · paga pela {{ cartao.contaNome }}</template><template v-if="cartao.origem === 'conectada'"> · conectado</template></span>
           </div>
         </transition>
 
@@ -340,6 +456,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
                     <button type="button" role="menuitem" @click="fecharMenu(); detalhe = true"><List :size="16" /> Detalhes e faturas</button>
                     <button v-if="manual" type="button" role="menuitem" @click="fecharMenu(); router.push({ path: '/importar', query: { tipo: 'fatura', id: cartao.id } })"><FileUp :size="16" /> Importar fatura</button>
                     <button v-if="manual" type="button" role="menuitem" @click="fecharMenu(); editar(cartao)"><Pencil :size="16" /> Editar cartão</button>
+                    <button v-if="manual" type="button" role="menuitem" @click="fecharMenu(); abrirSaldoInicial()"><CalendarClock :size="16" /> Fatura e parcelas já em aberto</button>
                     <button type="button" role="menuitem" class="perigo" @click="fecharMenu(); remover(cartao)"><Trash2 :size="16" /> Remover cartão</button>
                   </div>
                 </div>
@@ -355,7 +472,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 
         <CardPadrao class="extrato" titulo="Extrato" :subtitulo="`${lista.length} ${lista.length === 1 ? 'compra' : 'compras'}`" aria-label="Extrato do cartão">
           <p v-if="visto && lista.length === 0" class="nota">Nenhuma compra {{ visto.anual ? 'neste ano' : 'nesta fatura' }}.</p>
-          <CartaoLista v-else :lancamentos="lista" :categorias="categorias" :manual="manual" :cartao-nome="cartao.nome" :cartao-icone="cartao.icone" @editar="editarCompra" @remover="(l) => (removendo = l)" />
+          <CartaoLista v-else :lancamentos="lista" :categorias="categorias" :manual="manual" :cartao="cartao" :cartao-nome="cartao.nome" :cartao-icone="cartao.icone" @editar="editarCompra" @remover="(l) => (removendo = l)" />
         </CardPadrao>
 
         <CardPadrao titulo="Próximas faturas">
@@ -431,15 +548,61 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
     </Modal>
 
     <!-- Cadastro / edição -->
-    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão'" tema="saida" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar cartão'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
-      <p class="nota">Informe a instituição e escolha qual conta paga a fatura. Os dias de fechamento e vencimento definem em qual fatura cai cada compra e cada parcela.</p>
-      <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" rotulo="Instituição do cartão" placeholder="Ex: Nubank, Americanas, Magalu" padrao="💳" :erro="erros.nome" obrigatorio tema="saida" />
-      <CampoSelecao v-model="formulario.contaId" rotulo="Conta que paga a fatura" :opcoes="[{ valor: '', rotulo: 'Nenhuma (sem vínculo)' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="saida" />
-      <div class="duas-campos">
-        <CampoTexto v-model="formulario.diaFechamento" rotulo="Dia de fechamento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaFechamento" obrigatorio tema="saida" />
-        <CampoTexto v-model="formulario.diaVencimento" rotulo="Dia de vencimento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaVencimento" obrigatorio tema="saida" />
+    <FormularioModal :aberto="modalAberto" :ajuda="naoViraCartao ? '' : 'cartoes.tipo-' + tipoForm" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão ou crédito'" tema="saida" :rotulo-salvar="tipoForm === 'cheque' ? 'Ir para Contas' : tipoForm === 'emprestimo' ? 'Ir para Dívidas' : editandoId ? 'Salvar alterações' : 'Adicionar'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
+      <CampoBase rotulo="Tipo de crédito">
+        <div class="tipos-credito" role="radiogroup" aria-label="Tipo de crédito">
+          <button v-for="t in tiposVisiveis" :key="t.id" type="button" role="radio" :aria-checked="tipoForm === t.id" :class="['tipo-op', { ativo: tipoForm === t.id }]" :data-tipo="t.id" @click="escolherTipo(t.id)">
+            <component :is="t.icone" :size="18" :stroke-width="2" aria-hidden="true" />
+            <span class="tipo-txt"><strong>{{ t.rotulo }}</strong><small>{{ t.exemplo }}</small></span>
+          </button>
+        </div>
+      </CampoBase>
+
+      <div v-if="naoViraCartao" class="explica-tipo" data-explica-tipo>
+        <template v-if="tipoForm === 'cheque'">
+          <p><strong>Cheque especial não é cartão.</strong> É a sua conta ficando com saldo negativo. Para acompanhar, deixe o saldo da conta negativo em Contas: o app mostra o valor e avisa que esses juros estão entre os mais caros.</p>
+        </template>
+        <template v-else>
+          <p><strong>Empréstimo, financiamento e consignado ficam em Dívidas.</strong> Lá você registra as parcelas, os juros e o plano de quitação. Assim a mesma dívida não é contada duas vezes.</p>
+        </template>
       </div>
-      <CampoValor v-model="formulario.limite" rotulo="Limite (opcional)" tipo="saida" />
+
+      <template v-else>
+        <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" :rotulo="tipoForm === 'cartao' ? 'Instituição do cartão' : 'Loja ou instituição'" :placeholder="tipoForm === 'crediario' ? 'Ex: Sparcelado, Casas Bahia, Magalu' : tipoForm === 'loja' ? 'Ex: Renner, C&A, Riachuelo' : 'Ex: Nubank, Inter, Itaú'" padrao="💳" :erro="erros.nome" obrigatorio tema="saida" />
+        <CampoSelecao v-model="formulario.contaId" :rotulo="tipoForm === 'crediario' ? 'Conta que paga as parcelas' : 'Conta que paga a fatura'" :opcoes="[{ valor: '', rotulo: 'Nenhuma (sem vínculo)' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="saida" />
+        <div class="duas-campos">
+          <CampoTexto v-if="tipoForm !== 'crediario'" v-model="formulario.diaFechamento" rotulo="Dia de fechamento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaFechamento" obrigatorio tema="saida" dica="Define em qual fatura cai cada compra." dica-ao-focar />
+          <CampoTexto v-model="formulario.diaVencimento" rotulo="Dia de vencimento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaVencimento" obrigatorio tema="saida" />
+        </div>
+        <CampoValor v-model="formulario.limite" :rotulo="tipoForm === 'crediario' ? 'Limite da loja (opcional)' : 'Limite (opcional)'" tipo="saida" />
+
+        <CampoBase v-if="tipoForm !== 'crediario'" rotulo="Bandeira" :dica="formulario.bandeira ? `Sugerida pelo nome: ${nomeBandeira(formulario.bandeira)}. Pode trocar.` : ''">
+          <div class="bandeiras" role="radiogroup" aria-label="Bandeira">
+            <button v-for="b in BANDEIRAS" :key="b.id || 'nao-sei'" type="button" role="radio" :aria-checked="formulario.bandeira === b.id" :class="['band-op', { ativo: formulario.bandeira === b.id }]" :data-bandeira="b.id || 'nao-sei'" @click="escolherBandeira(b.id)">
+              <IconeBandeira v-if="b.id" :bandeira="b.id" :tamanho="16" colorido />
+              <span>{{ b.rotulo }}</span>
+            </button>
+          </div>
+        </CampoBase>
+
+        <div class="duas-campos">
+          <CampoTexto v-model="formulario.taxaJuros" rotulo="Juros ao mês (%)" placeholder="Ex.: 4,9" inputmode="decimal" :erro="erros.taxaJuros" dica="Opcional" tema="saida" />
+          <CampoTexto v-model="formulario.cet" rotulo="CET ao ano (%)" placeholder="Ex.: 79,5" inputmode="decimal" :erro="erros.cet" dica="Opcional" tema="saida" />
+        </div>
+
+        <section v-if="!editandoId" class="inicio-mes">
+          <button type="button" class="inicio-cab" :aria-expanded="inicioAberto" data-inicio-mes @click="inicioAberto = !inicioAberto">
+            <CalendarClock :size="17" aria-hidden="true" />
+            <span><strong>Começando no meio do mês?</strong><small>Fatura atual já em aberto e parcelas restantes</small></span>
+            <ChevronDown :size="18" class="seta" :class="{ aberta: inicioAberto }" />
+          </button>
+          <CartaoSaldoInicial v-if="inicioAberto" v-model="saldoInicial" />
+        </section>
+      </template>
+    </FormularioModal>
+
+    <FormularioModal :aberto="saldoModal" titulo="Fatura e parcelas já em aberto" ajuda="cartoes.inicio-mes" tema="saida" rotulo-salvar="Lançar no cartão" :carregando="saldoSalvando" :erro="saldoErro" @salvar="salvarSaldoInicial" @fechar="saldoModal = false">
+      <CartaoSaldoInicial v-model="saldoInicial" />
     </FormularioModal>
   </div>
 </template>
@@ -459,6 +622,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .nome-fora { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 0 2px; font-size: 13px; }
 .nome-fora strong { font-weight: 600; }
 .nome-fora span { color: var(--cor-texto-suave); }
+.nome-fora .band-nome { align-self: center; }
 .troca-enter-active, .troca-leave-active { transition: opacity var(--anim-padrao) var(--anim-curva), transform var(--anim-padrao) var(--anim-curva); }
 .troca-enter-from { opacity: 0; transform: translateX(8px); }
 .troca-leave-to { opacity: 0; transform: translateX(-8px); }
@@ -466,7 +630,7 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .acao-mais { position: relative; min-width: 0; }
 .c-fatura :deep(.acao) { padding: 2px 0; }
 .c-fatura :deep(.rot) { font-size: 10.5px; overflow-wrap: normal; word-break: normal; hyphens: none; }
-.menu-mais { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; width: 200px; display: flex; flex-direction: column; padding: 6px; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 14px; box-shadow: var(--sombra-suave); }
+.menu-mais { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; width: 240px; display: flex; flex-direction: column; padding: 6px; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 14px; box-shadow: var(--sombra-suave); }
 .menu-mais button { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; background: none; border: none; border-radius: 10px; color: var(--cor-texto); font: 500 14px var(--fonte-texto); text-align: left; cursor: pointer; }
 .menu-mais button:hover { background: var(--cor-realce); }
 .menu-mais .perigo { color: var(--cor-saida-texto); }
@@ -539,4 +703,24 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .acoes-form button { font-family: var(--fonte-texto); font-weight: 600; font-size: 14px; padding: 10px 16px; min-height: 44px; border-radius: 10px; border: none; background: var(--degrade-saida); color: var(--cor-sobre-cor); cursor: pointer; }
 .acoes-form .sec { background: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto); }
 .acoes-form .perigo-btn { background: transparent; border: 1px solid var(--cor-saida); color: var(--cor-saida-texto); }
+/* tipo de crédito e bandeira (anotações 53 e 58) */
+.tipos-credito { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tipo-op { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; text-align: left; border-radius: 14px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto-suave); cursor: pointer; font: inherit; }
+.tipo-op .tipo-txt { display: flex; flex-direction: column; min-width: 0; }
+.tipo-op strong { font-size: 13.5px; color: var(--cor-texto); font-weight: 600; }
+.tipo-op small { font-size: 11.5px; color: var(--cor-texto-suave); overflow-wrap: anywhere; }
+.tipo-op.ativo { border-color: var(--cor-saida); background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
+.tipo-op:focus-visible, .band-op:focus-visible, .inicio-cab:focus-visible { outline: 2px solid var(--cor-saida); outline-offset: 2px; }
+.explica-tipo { padding: 12px 14px; border-radius: 14px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); font-size: 13.5px; line-height: 1.45; }
+.explica-tipo p { margin: 0; }
+.bandeiras { display: flex; flex-wrap: wrap; gap: 8px; }
+.band-op { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 500 13px var(--fonte-texto); cursor: pointer; }
+.band-op.ativo { border-color: var(--cor-saida); background: var(--cor-saida-fundo); font-weight: 700; }
+.inicio-mes { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1px solid var(--cor-borda); }
+.inicio-cab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 0; background: none; border: none; color: var(--cor-texto); text-align: left; cursor: pointer; font: inherit; }
+.inicio-cab span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.inicio-cab strong { font-size: 14px; }
+.inicio-cab small { font-size: 12px; color: var(--cor-texto-suave); }
+.inicio-cab .seta { transition: transform var(--anim-padrao) var(--anim-curva); }
+.inicio-cab .seta.aberta { transform: rotate(180deg); }
 </style>

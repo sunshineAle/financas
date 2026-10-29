@@ -18,7 +18,7 @@ const props = defineProps({
   categorias: { type: Array, default: null },
   tipo: { type: String, default: 'saida' },
   rotulo: { type: String, default: 'Categoria' },
-  erro: String, dica: String, tema: String, obrigatorio: Boolean,
+  erro: String, dica: String, tema: String, obrigatorio: Boolean, dicaAoFocar: Boolean,
   vazio: { type: String, default: 'Nenhuma categoria cadastrada.' },
   automatica: { type: String, default: '' },
   permitirNova: { type: Boolean, default: true },
@@ -77,7 +77,7 @@ async function criar() {
 </script>
 
 <template>
-  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :tema="tema" :obrigatorio="obrigatorio">
+  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="tema" :obrigatorio="obrigatorio">
     <div class="grade" role="radiogroup" :aria-label="rotulo">
       <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['sf-opcao', 'cat', { ativo: String(modelValue) === '' }]" @click="emit('update:modelValue', '')">
         <span class="ic auto"><Sparkles :size="22" :stroke-width="1.8" aria-hidden="true" /></span>

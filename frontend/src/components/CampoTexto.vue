@@ -8,7 +8,7 @@ defineOptions({ inheritAttrs: false });
 defineProps({
   modelValue: { type: [String, Number], default: '' },
   rotulo: String, placeholder: String, erro: String, dica: String, tema: String,
-  obrigatorio: Boolean, multilinha: Boolean, disabled: Boolean,
+  obrigatorio: Boolean, multilinha: Boolean, disabled: Boolean, dicaAoFocar: Boolean,
   type: { type: String, default: 'text' },
 });
 defineEmits(['update:modelValue']);
@@ -16,7 +16,7 @@ const id = 'ct-' + useId();
 </script>
 
 <template>
-  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :obrigatorio="obrigatorio" :tema="tema" :para="id">
+  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :obrigatorio="obrigatorio" :tema="tema" :para="id">
     <textarea v-if="multilinha" :id="id" class="sf-entrada" rows="3" :value="modelValue" :placeholder="placeholder" :disabled="disabled" :aria-invalid="!!erro" v-bind="$attrs" @input="$emit('update:modelValue', $event.target.value)"></textarea>
     <input v-else :id="id" class="sf-entrada" :type="type" :value="modelValue" :placeholder="placeholder" :disabled="disabled" :required="obrigatorio" :aria-invalid="!!erro" v-bind="$attrs" @input="$emit('update:modelValue', $event.target.value)" />
   </CampoBase>

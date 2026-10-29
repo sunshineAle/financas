@@ -27,8 +27,15 @@ function lerDadosCartao(corpo, usuarioId) {
   const nome = String(corpo.nome || '').trim();
   if (!nome) return { erro: 'Informe um nome para o cartão.' };
 
-  const diaFechamento = Number(corpo.diaFechamento);
+  const credito = lerCredito(corpo);
+  if (credito.erro) return { erro: credito.erro };
+
   const diaVencimento = Number(corpo.diaVencimento);
+  let diaFechamento = Number(corpo.diaFechamento);
+  // Crediário não tem "fechamento" para a pessoa: sem o dia, a compra fecha ~10 dias antes do vencimento.
+  if (credito.dados.tipoCredito === 'crediario' && !diaValido(diaFechamento) && diaValido(diaVencimento)) {
+    diaFechamento = diaVencimento > 10 ? diaVencimento - 10 : diaVencimento + 18;
+  }
   if (!diaValido(diaFechamento)) return { erro: 'O dia de fechamento deve ser entre 1 e 31.' };
   if (!diaValido(diaVencimento)) return { erro: 'O dia de vencimento deve ser entre 1 e 31.' };
 
@@ -47,7 +54,51 @@ function lerDadosCartao(corpo, usuarioId) {
     contaId = conta.id;
   }
 
-  return { dados: { nome, diaFechamento, diaVencimento, limite, contaId, icone: lerIcone(corpo.icone), cor: lerCor(corpo.cor) } };
+  return { dados: { nome, diaFechamento, diaVencimento, limite, contaId, icone: lerIcone(corpo.icone), cor: lerCor(corpo.cor), ...credito.dados } };
+}
+
+// --- Tipo de crédito, juros e bandeira (anotações 53 e 58) ---------------------
+// 'cartao' = cartão de crédito; 'loja' = cartão de loja (uso restrito à loja); 'crediario' = crediário / carnê digital.
+// Cheque especial e empréstimo NÃO viram cartão (ficam em Contas e Dívidas).
+const TIPOS_CREDITO = { cartao: 'Cartão de crédito', loja: 'Cartão de loja', crediario: 'Crediário' };
+const BANDEIRAS = ['mastercard', 'visa', 'elo', 'amex', 'hipercard'];
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Migração na leitura (sem mexer no banco): sem tipo = cartão; nome com Sparcelado/crediário/carnê = crediário.
+function tipoDoCartao(cartao) {
+  if (TIPOS_CREDITO[cartao.tipo_credito]) return cartao.tipo_credito;
+  return /sparcelado|crediario|\bcarne\b/.test(semAcento(cartao.nome)) ? 'crediario' : 'cartao';
+}
+
+function numeroOpcional(v, max) {
+  if (v === undefined || v === null || v === '') return { valor: null };
+  const n = Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > max) return { erro: true };
+  return { valor: Math.round(n * 10000) / 10000 };
+}
+
+function lerCredito(corpo) {
+  const tipo = corpo.tipoCredito === undefined || corpo.tipoCredito === null || corpo.tipoCredito === '' ? 'cartao' : String(corpo.tipoCredito);
+  if (!TIPOS_CREDITO[tipo]) return { erro: 'Tipo de crédito inválido. Cheque especial fica em Contas e empréstimo fica em Dívidas.' };
+  const juros = numeroOpcional(corpo.taxaJuros, 100);
+  if (juros.erro) return { erro: 'Juros ao mês deve ser um número entre 0 e 100.' };
+  const cet = numeroOpcional(corpo.cet, 10000);
+  if (cet.erro) return { erro: 'CET ao ano deve ser um número válido.' };
+  let bandeira = semAcento(corpo.bandeira).trim() || null;
+  if (bandeira && !BANDEIRAS.includes(bandeira)) bandeira = null; // "Não sei" ou desconhecida
+  if (tipo === 'crediario') bandeira = null; // crediário não tem bandeira
+  return { dados: { tipoCredito: tipo, taxaJuros: juros.valor, cet: cet.valor, bandeira } };
+}
+
+function camposCredito(cartao) {
+  const tipo = tipoDoCartao(cartao);
+  return {
+    tipoCredito: tipo,
+    tipoCreditoRotulo: TIPOS_CREDITO[tipo],
+    taxaJuros: cartao.taxa_juros ?? null,
+    cet: cartao.cet ?? null,
+    bandeira: tipo === 'crediario' ? null : (BANDEIRAS.includes(cartao.bandeira) ? cartao.bandeira : null),
+  };
 }
 
 function buscarCartao(req, res) {
@@ -98,6 +149,7 @@ function lancamentosDoCartao(cartao) {
       cartao.dia_vencimento,
       l.parcela_numero
     ),
+    tipoMov: l.tipo_mov || null, // anotação 61: crédito (estorno_vinculado, estorno_avulso, pagamento, cashback) ou compra estornada
   }));
 }
 
@@ -169,6 +221,7 @@ function resumoDoCartao(cartao) {
     diaFechamento: cartao.dia_fechamento,
     diaVencimento: cartao.dia_vencimento,
     origem: cartao.origem,
+    ...camposCredito(cartao),
     faturaAberta: montarFatura(aberta, cartao, aberta, daAberta),
     limiteUsado: usado,
     limiteDisponivel: cartao.limite == null ? null : faturas.arredondar(cartao.limite - usado),
@@ -197,6 +250,7 @@ router.post('/', (req, res) => {
   const novo = dados.inserir('cartoes', {
     usuario_id: req.usuario.id, conta_id: d.contaId, nome: d.nome, limite: d.limite, dia_fechamento: d.diaFechamento,
     dia_vencimento: d.diaVencimento, origem: 'manual', icone: d.icone, cor: d.cor,
+    tipo_credito: d.tipoCredito, taxa_juros: d.taxaJuros, cet: d.cet, bandeira: d.bandeira,
   });
 
   req.params.id = novo.id;
@@ -216,6 +270,7 @@ router.put('/:id', (req, res) => {
 
   dados.atualizar('cartoes', cartao.id, {
     nome: d.nome, conta_id: d.contaId, limite: d.limite, dia_fechamento: d.diaFechamento, dia_vencimento: d.diaVencimento, icone: d.icone, cor: d.cor,
+    tipo_credito: d.tipoCredito, taxa_juros: d.taxaJuros, cet: d.cet, bandeira: d.bandeira,
   });
 
   res.json(resumoDoCartao(buscarCartao(req, res)));
@@ -457,6 +512,57 @@ router.post('/:id/lancamentos', (req, res) => {
   });
 });
 
+// Saldo inicial (anotação 55, cartões): para quem começa a usar o app no meio do mês.
+//  - faturaAberta: valor que já está na fatura atual → um lançamento "Saldo inicial da fatura" na fatura aberta.
+//  - parcelas: [{ descricao, valorParcela, faltam, total? }] → parcelas restantes de compras antigas, uma em cada
+//    fatura a partir da aberta. Com `total` (nº de parcelas da compra), a numeração fica certa (ex.: 8/10, 9/10, 10/10).
+router.post('/:id/saldo-inicial', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  if (cartao.origem !== 'manual') return res.status(400).json({ erro: 'Cartões conectados recebem a fatura do banco.' });
+
+  const corpo = req.body || {};
+  const aberta = chaveFaturaAberta(cartao);
+  const novos = [];
+
+  if (corpo.faturaAberta !== undefined && corpo.faturaAberta !== null && corpo.faturaAberta !== '' && Number(corpo.faturaAberta) !== 0) {
+    const v = faturas.arredondar(Number(corpo.faturaAberta));
+    if (!Number.isFinite(v) || v <= 0) return res.status(400).json({ erro: 'Informe o valor da fatura em aberto, maior que zero.' });
+    novos.push({ compraId: crypto.randomUUID(), descricao: 'Saldo inicial da fatura', valores: [v], dataCompra: hoje(), primeiraParcela: 1, total: 1 });
+  }
+
+  const parcelas = Array.isArray(corpo.parcelas) ? corpo.parcelas : [];
+  for (const p of parcelas) {
+    const descricao = String(p?.descricao || '').trim().slice(0, 120);
+    const valorParcela = faturas.arredondar(Number(p?.valorParcela));
+    const faltam = Number(p?.faltam);
+    if (!descricao) return res.status(400).json({ erro: 'Informe a descrição de cada compra parcelada.' });
+    if (!Number.isFinite(valorParcela) || valorParcela <= 0) return res.status(400).json({ erro: `Informe o valor da parcela de "${descricao}".` });
+    if (!Number.isInteger(faltam) || faltam < 1 || faltam > MAX_PARCELAS) return res.status(400).json({ erro: `Quantas parcelas faltam em "${descricao}"? De 1 a ${MAX_PARCELAS}.` });
+    let total = p?.total === undefined || p?.total === null || p?.total === '' ? faltam : Number(p.total);
+    if (!Number.isInteger(total) || total < faltam || total > MAX_PARCELAS) return res.status(400).json({ erro: `O total de parcelas de "${descricao}" deve ser pelo menos ${faltam}.` });
+    // A compra "aconteceu" (total - faltam) faturas atrás: a data é o fechamento daquela fatura, assim a
+    // próxima parcela (total - faltam + 1) cai exatamente na fatura aberta.
+    const [a, m] = aberta.split('-').map(Number);
+    const t = a * 12 + (m - 1) - (total - faltam);
+    const chaveCompra = `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+    const dataCompra = faturas.datasDaFatura(chaveCompra, cartao.dia_fechamento, cartao.dia_vencimento).fecha;
+    novos.push({ compraId: crypto.randomUUID(), descricao, valores: Array(faltam).fill(valorParcela), dataCompra, primeiraParcela: total - faltam + 1, total });
+  }
+  if (!novos.length) return res.status(400).json({ erro: 'Informe a fatura em aberto ou ao menos uma compra parcelada.' });
+
+  dados.transacao(() => {
+    novos.forEach((n) => n.valores.forEach((valor, i) => {
+      dados.inserir('lancamentos_cartao', {
+        cartao_id: cartao.id, usuario_id: req.usuario.id, compra_id: n.compraId, descricao: n.descricao, valor,
+        data_compra: n.dataCompra, parcela_numero: n.primeiraParcela + i, total_parcelas: n.total,
+      });
+    }));
+  });
+
+  res.status(201).json(resumoDoCartao(buscarCartao(req, res)));
+});
+
 // Vincula (ou desvincula, com dividaId nulo) uma compra a uma dívida.
 router.patch('/:id/lancamentos/:compraId', (req, res) => {
   const cartao = buscarCartao(req, res);
@@ -492,10 +598,12 @@ router.put('/:id/lancamentos/:compraId', (req, res) => {
     .all(cartao.id, req.params.compraId, req.usuario.id);
   if (!linhas.length) return res.status(404).json({ erro: 'Compra não encontrada.' });
 
-  const totalAtual = faturas.arredondar(linhas.reduce((t, l) => t + l.valor, 0));
+  // Anotação 61: crédito na fatura (valor negativo) edita pelo valor positivo e continua crédito
+  const credito = linhas.some((l) => l.valor < 0);
+  const totalAtual = faturas.arredondar(Math.abs(linhas.reduce((t, l) => t + l.valor, 0)));
   const corpo = req.body || {};
   const lida = lerCompra(
-    { ...corpo, parcelas: linhas.length, valor: corpo.valor === undefined ? totalAtual : corpo.valor, dataCompra: corpo.dataCompra || linhas[0].data_compra },
+    { ...corpo, parcelas: linhas.length, valor: corpo.valor === undefined ? totalAtual : Math.abs(Number(corpo.valor)), dataCompra: corpo.dataCompra || linhas[0].data_compra },
     { usuarioId: req.usuario.id }
   );
   if (lida.erro) return res.status(400).json({ erro: lida.erro });
@@ -515,12 +623,40 @@ router.put('/:id/lancamentos/:compraId', (req, res) => {
   dados.transacao(() => {
     linhas.forEach((l, i) => {
       dados.atualizar('lancamentos_cartao', l.id, {
-        descricao: c.descricao, valor: c.valores[i], data_compra: c.dataCompra, divida_id: c.dividaId,
-        categoria_id: c.categoriaId, subcategoria: c.subcategoria,
+        descricao: c.descricao, valor: credito ? -c.valores[i] : c.valores[i], data_compra: c.dataCompra, divida_id: c.dividaId,
+        categoria_id: credito && ['pagamento', 'cashback'].includes(l.tipo_mov) ? null : c.categoriaId, subcategoria: c.subcategoria,
       });
     });
   });
   res.json({ ok: true });
+});
+
+// Anotação 61 — "marcar como crédito" na edição de um lançamento do cartão (ele fica verde e abate a fatura).
+// GET  …/credito/parecidas : compras parecidas (até 90 dias antes) para ligar um estorno
+// POST …/credito            { tipo: 'estorno'|'pagamento'|'cashback', originalCompraId?, contaId?, data? }
+const lanc = require('../utils/lancamentos');
+router.get('/:id/lancamentos/:compraId/credito/parecidas', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  const l = db.prepare('SELECT * FROM lancamentos_cartao WHERE cartao_id = ? AND compra_id = ? AND usuario_id = ? AND excluido_em IS NULL ORDER BY parcela_numero LIMIT 1')
+    .get(cartao.id, req.params.compraId, req.usuario.id);
+  if (!l) return res.status(404).json({ erro: 'Lançamento não encontrado.' });
+  res.json(lanc.comprasParecidas(req.usuario.id, l));
+});
+router.post('/:id/lancamentos/:compraId/credito', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  if (cartao.origem !== 'manual') return res.status(400).json({ erro: 'Lançamentos de cartão conectado vêm do banco e não podem ser editados.' });
+  const c = req.body || {};
+  if (c.data && !faturas.dataValida(c.data)) return res.status(400).json({ erro: 'Data inválida.' });
+  try {
+    const existe = db.prepare('SELECT 1 FROM lancamentos_cartao WHERE cartao_id = ? AND compra_id = ? AND usuario_id = ? AND excluido_em IS NULL').get(cartao.id, req.params.compraId, req.usuario.id);
+    if (!existe) return res.status(404).json({ erro: 'Lançamento não encontrado.' });
+    res.json(lanc.marcarCreditoCartao(req.usuario.id, req.params.compraId, { tipo: c.tipo, originalCompraId: c.originalCompraId || null, contaId: c.contaId || null, data: c.data || null }));
+  } catch (e) {
+    if (e instanceof lanc.ErroLancamento) return res.status(e.status).json({ erro: e.message });
+    throw e;
+  }
 });
 
 router.delete('/:id/lancamentos/:compraId', (req, res) => {
@@ -549,10 +685,14 @@ router.faturasAPagar = function faturasAPagar(usuarioId) {
     });
     Object.entries(porFatura).forEach(([chave, total]) => {
       const datas = faturas.datasDaFatura(chave, cartao.dia_fechamento, cartao.dia_vencimento);
+      const cred = camposCredito(cartao);
       lista.push({
         cartaoId: cartao.id,
         cartao: cartao.nome,
         icone: cartao.icone || null,
+        tipoCredito: cred.tipoCredito,
+        tipoCreditoRotulo: cred.tipoCreditoRotulo,
+        bandeira: cred.bandeira,
         chave,
         vence: datas.vence,
         total: faturas.arredondar(total),
@@ -562,5 +702,27 @@ router.faturasAPagar = function faturasAPagar(usuarioId) {
   });
   return lista;
 };
+
+// Usado por Dívidas (anotação 60.5, juros mais caros): a última fatura fechada que já venceu e não tem pagamento
+// registrado (vai para o rotativo). Uma por cartão; devolve também a taxa do cartão, se cadastrada.
+router.faturasVencidas = function faturasVencidas(usuarioId) {
+  const cartoes = db.prepare('SELECT cartoes.*, NULL AS conta_nome, NULL AS conta_icone FROM cartoes WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId);
+  const dia = hoje();
+  const lista = [];
+  cartoes.forEach((cartao) => {
+    const aberta = chaveFaturaAberta(cartao);
+    const [a, m] = aberta.split('-').map(Number);
+    const t = a * 12 + (m - 1) - 1;
+    const chave = `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+    const datas = faturas.datasDaFatura(chave, cartao.dia_fechamento, cartao.dia_vencimento);
+    if (datas.vence >= dia || pagamentoDaFatura(cartao.id, chave)) return;
+    const total = faturas.arredondar(lancamentosDoCartao(cartao).filter((i) => i.fatura === chave).reduce((s, i) => s + i.valor, 0));
+    if (total <= 0) return;
+    const cred = camposCredito(cartao);
+    lista.push({ cartaoId: cartao.id, cartao: cartao.nome, chave, vence: datas.vence, total, taxaJuros: cred.taxaJuros, tipoCredito: cred.tipoCredito });
+  });
+  return lista;
+};
+router.tipoDoCartao = tipoDoCartao;
 
 module.exports = router;

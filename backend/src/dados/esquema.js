@@ -42,6 +42,8 @@ const TABELAS = {
       'usuario_id TEXT NOT NULL',
       'notificar_categoria_estourada INTEGER NOT NULL DEFAULT 1',
       'notificar_fatura_proxima INTEGER NOT NULL DEFAULT 1',
+      // Anotação 54: início do mês financeiro (JSON {tipo,dia|n}); vai no backup para restaurar igual em outro aparelho.
+      'inicio_mes TEXT',
     ],
     fk: { usuario_id: 'usuarios' },
     exporta: true,
@@ -202,6 +204,9 @@ const TABELAS = {
       'tipo_investimento TEXT',
       'valor_meta REAL NOT NULL',
       'prazo TEXT',
+      // Anotação 56: meta ligada a uma caixinha do banco — conta e nome como aparece no extrato (apelidos separados por ';').
+      'caixinha_conta_id TEXT',
+      'caixinha_nome TEXT',
     ],
     fk: { reserva_id: 'reserva_liberdade' },
     exporta: true,
@@ -238,6 +243,12 @@ const TABELAS = {
       'conexao_id TEXT',
       'icone TEXT',
       'cor TEXT',
+      // Onda 9 (anotações 53 e 58): tipo de crédito ('cartao' | 'loja' | 'crediario'; vazio = cartão de crédito),
+      // juros ao mês (%) e CET ao ano (%) opcionais, e a bandeira ('mastercard' | 'visa' | 'elo' | 'amex' | 'hipercard').
+      'tipo_credito TEXT',
+      'taxa_juros REAL',
+      'cet REAL',
+      'bandeira TEXT',
     ],
     fk: { usuario_id: 'usuarios', conta_id: 'contas', conexao_id: 'conexoes_pluggy' },
     exporta: true,

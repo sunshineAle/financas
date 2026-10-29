@@ -5,6 +5,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Landmark, CreditCard, FileUp, Undo2, TriangleAlert, Check, ChevronLeft, Pencil, X, Link2 } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
 import Modal from '../components/Modal.vue';
 import IconeBanco from '../components/IconeBanco.vue';
 import NovoDestinoModal from '../components/NovoDestinoModal.vue';
@@ -159,32 +160,73 @@ function mudarPeriodo(m) { periodoModo.value = m; if (m !== 'personalizado') ana
 function inverter() { analisar({ inverterSinal: !analise.value.sinalInvertido }); }
 
 // ---- edição das linhas
-const ROT = { nova: 'Nova', duplicada: 'Já existe', casada: 'Parcela já registrada', divergente: 'Valor diferente', estorno: 'Estorno', pagamento_fatura: 'Pagamento de fatura', pagamento_recebido: 'Pagamento da fatura', reserva: 'Reserva', fora_periodo: 'Fora do período' };
+const ROT = { nova: 'Nova', duplicada: 'Já existe', casada: 'Parcela já registrada', divergente: 'Valor diferente', estorno: 'Estorno', pagamento_fatura: 'Pagamento de fatura', pagamento_recebido: 'Pagamento da fatura', pagamento_adiantado: 'Pagamento adiantado', cashback: 'Cashback', reserva: 'Reserva', fora_periodo: 'Fora do período' };
 const grava = (l) => ['importar', 'transferencia', 'atualizar'].includes(l.acao);
 const visiveis = computed(() => linhas.value.filter((l) => {
   if (filtro.value === 'todas') return true;
   if (filtro.value === 'novas') return l.acao === 'importar' || l.acao === 'transferencia';
-  if (filtro.value === 'atencao') return l.confianca === 'baixa' || ['divergente', 'estorno', 'pagamento_fatura', 'reserva'].includes(l.status);
+  if (filtro.value === 'atencao') return l.confianca === 'baixa' || ['divergente', 'estorno', 'pagamento_fatura', 'pagamento_adiantado', 'cashback', 'reserva'].includes(l.status) || l.revisar;
   if (filtro.value === 'descartadas') return l.acao === 'descartar' || l.acao === 'manter';
   return true;
 }));
+// Anotação 56: linhas de caixinha (Guardar/Resgatar na meta) não são entrada nem saída; do resgate, só o rendimento entra.
+const ehCaixinha = (l) => l.status === 'reserva' && l.reserva && l.reserva.caixinha;
 const totais = computed(() => {
   const g = linhas.value.filter(grava);
-  return { qtd: g.length, entradas: g.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0), saidas: g.filter((l) => l.valor < 0).reduce((s, l) => s - l.valor, 0), descartadas: linhas.value.length - g.length };
+  const comuns = g.filter((l) => !ehCaixinha(l));
+  const rend = g.filter((l) => ehCaixinha(l) && l.reserva.metaId).reduce((s, l) => s + (Number(l.reserva.rendimento) || 0), 0);
+  if (tipo.value === 'fatura') {
+    // Anotação 61: na fatura, crédito abate a fatura; só o cashback é entrada
+    const compras = comuns.filter((l) => l.valor < 0).reduce((s, l) => s - l.valor, 0);
+    const creditos = comuns.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0);
+    return { qtd: g.length, entradas: comuns.filter((l) => l.status === 'cashback').reduce((s, l) => s + l.valor, 0), saidas: compras, creditos, liquido: compras - creditos, descartadas: linhas.value.length - g.length };
+  }
+  return { qtd: g.length, entradas: comuns.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0) + rend, saidas: comuns.filter((l) => l.valor < 0).reduce((s, l) => s - l.valor, 0), descartadas: linhas.value.length - g.length };
 });
+function escolherMetaCaixinha(l, id) {
+  const op = (l.reserva.opcoes || []).find((o) => o.id === id);
+  l.reserva.metaId = op ? op.id : null;
+  l.reserva.metaNome = op ? op.nome : null;
+  l.reserva.manual = !!op;
+  l.reserva.rendimento = 0; // separado pelo app na gravação (o que passar do guardado)
+  l.observacao = op ? `${l.valor < 0 ? 'Guardar na' : 'Resgatar da'} meta ${op.nome}: fora das entradas e saídas.` : 'Fica em A revisar (fora das entradas e saídas).';
+}
+// Anotação 55: extrato com lançamentos antes do saldo inicial da conta — mover a data de início. O valor novo desconta o que
+// este arquivo traz antes da data antiga, para o saldo de hoje continuar o mesmo depois de importar.
+const movendoInicio = ref(false);
+async function moverInicio() {
+  const a = analise.value && analise.value.antesDoSaldoInicial; if (!a) return;
+  movendoInicio.value = true; erro.value = '';
+  try {
+    const antes = linhas.value.filter((l) => grava(l) && l.data < a.data && !ehCaixinha(l)).reduce((s, l) => s + Number(l.valor), 0);
+    const valor = Math.round((Number(a.valor) - antes) * 100) / 100;
+    await api('PUT', `/api/contas/${destinoId.value}`, { saldoInicial: { data: a.primeiraData, valor } });
+    avisar(`Data de início movida para ${dataBR(a.primeiraData).slice(0, 5)} (saldo inicial ${moeda(valor)}).`, { tipo: 'ok' });
+    await analisar();
+  } catch (e) { erro.value = e.message; } finally { movendoInicio.value = false; }
+}
 const divergentes = computed(() => linhas.value.filter((l) => l.status === 'divergente').length);
 function alternar(l) {
   if (grava(l)) l.acao = 'descartar';
   else l.acao = l.status === 'divergente' ? 'atualizar' : l.transferencia ? 'transferencia' : 'importar';
 }
 function escolherDiverg(l, acao) { l.acao = acao; }
-function abrirEdicao(l) { editando.value = { ref: l, descricao: l.descricao, valor: Math.abs(l.valor), saida: l.valor < 0, data: l.data, categoriaId: l.categoriaId || '' }; }
+function abrirEdicao(l) { editando.value = { ref: l, descricao: l.descricao, valor: Math.abs(l.valor), saida: l.valor < 0, data: l.data, categoriaId: l.categoriaId || '', credito: l.status === 'pagamento_adiantado' || l.status === 'pagamento_recebido' ? 'pagamento' : l.status === 'cashback' ? 'cashback' : 'estorno' }; }
 function salvarEdicao() {
   const e = editando.value; const l = e.ref;
   l.descricao = e.descricao.trim() || l.descricao;
   l.valor = Math.round((e.saida ? -1 : 1) * Math.abs(Number(e.valor) || 0) * 100) / 100;
   l.data = e.data || l.data;
-  l.categoriaId = e.saida ? e.categoriaId || null : null;
+  l.categoriaId = e.saida || (tipo.value === 'fatura' && e.credito === 'estorno') ? e.categoriaId || null : null;
+  // Anotação 61: na fatura, ao virar crédito escolhe o tipo (estorno / pagamento adiantado / cashback)
+  if (tipo.value === 'fatura') {
+    if (e.saida) { if (['estorno', 'cashback', 'pagamento_adiantado'].includes(l.status)) { l.status = 'nova'; l.anula = null; l.credito = null; l.observacao = 'Marcada como compra.'; } }
+    else {
+      const st = e.credito === 'pagamento' ? 'pagamento_adiantado' : e.credito === 'cashback' ? 'cashback' : 'estorno';
+      if (st !== l.status) { l.status = st; l.anula = null; l.credito = { tipo: e.credito }; l.revisar = st === 'estorno'; l.observacao = st === 'estorno' ? 'Estorno sem compra ligada: reduz o gasto da categoria e fica em A revisar.' : st === 'cashback' ? 'Cashback: abate a fatura e entra como entrada em Cashback.' : 'Pagamento adiantado: abate a fatura, não é entrada nem gasto.'; }
+      if (l.acao === 'descartar' && l.status !== 'duplicada') l.acao = 'importar';
+    }
+  }
   l.categoriaAuto = false; l.confianca = 'alta';
   editando.value = null;
 }
@@ -195,6 +237,9 @@ async function confirmar() {
   erro.value = ''; carregando.value = true;
   try {
     const a = analise.value;
+    manuais.value = linhas.value.filter((l) => grava(l) && ehCaixinha(l) && l.reserva.manual && l.reserva.metaId)
+      .map((l) => ({ trecho: trechoCaixinha(l.descricao), metaId: l.reserva.metaId, metaNome: l.reserva.metaNome }))
+      .filter((m, i, arr) => arr.findIndex((x) => x.trecho.toLowerCase() === m.trecho.toLowerCase()) === i);
     resultado.value = await api('POST', '/api/importacao/confirmar', {
       formato: a.formato, nomeArquivo: nomeArq.value, banco: a.banco, destino: { tipo: tipo.value, id: destinoId.value },
       periodo: a.periodo, fatura: a.fatura ? a.fatura.chave : undefined, impressao: a.impressao, saldoExtrato: a.saldoExtrato, mapeamento: a.mapeamento, assinatura: a.assinatura,
@@ -202,9 +247,39 @@ async function confirmar() {
       linhas: linhas.value.map((l) => ({ ...l, bruto: undefined })),
     });
     etapa.value = 4;
+    avisarVinculos(resultado.value);
     try { historico.value = await api('GET', '/api/importacao/historico'); } catch { /* segue */ }
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
+// Anotação 56: aviso breve "Vinculado à meta Viagem · Desfazer" e, para escolha manual, sugestão de regra (como a anotação 52).
+function avisarVinculos(res) {
+  const vinc = (res && res.vinculadas) || [];
+  if (!vinc.length) return;
+  const metas = [...new Set(vinc.map((v) => v.metaNome))];
+  const texto = vinc.length === 1 ? `Vinculado à meta ${metas[0]}` : `${vinc.length} vinculados às metas ${metas.join(', ')}`;
+  avisar(texto, { tipo: 'ok', grupo: 'caixinha', duracao: 7000, acoes: [{ rotulo: 'Desfazer', acao: () => desfazerVinculos(vinc) }],
+    aoSumir: () => sugerirRegraCaixinha(res) });
+}
+async function desfazerVinculos(vinc) {
+  try {
+    for (const v of vinc) await api('POST', '/api/reserva/auto/desfazer', { transacaoId: v.transacaoId });
+    avisar('Vínculo desfeito: os lançamentos foram para A revisar.', { tipo: 'ok', grupo: 'caixinha', rota: '/objetivos' });
+  } catch (e) { erro.value = e.message; }
+}
+const manuais = ref([]); // escolhas manuais de meta na pré-visualização (para virar regra)
+function sugerirRegraCaixinha() {
+  const m = manuais.value.shift(); if (!m) return;
+  avisar(`Criar regra: “${m.trecho}” → meta ${m.metaNome}?`, { tipo: 'regra', grupo: 'sugestao-regra', duracao: 6000,
+    acoes: [
+      { rotulo: 'Criar regra', primaria: true, acao: async () => {
+        try { await api('POST', `/api/reserva/metas/${m.metaId}/caixinha-apelido`, { trecho: m.trecho, contaId: destinoId.value }); avisar(`Regra criada: “${m.trecho}” vai para ${m.metaNome}.`, { tipo: 'ok', grupo: 'sugestao-regra' }); }
+        catch (e) { avisar(e.message, { tipo: 'alerta', grupo: 'sugestao-regra' }); }
+      } },
+      { rotulo: 'Agora não', acao: () => {} },
+    ] });
+}
+const trechoCaixinha = (d) => String(d || '').replace(/\b(aplica[cç][aã]o|aplic|resgate|dep[oó]sito|guardar|guardado|pix|ted)\b/gi, ' ').replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || String(d || '').slice(0, 40);
+
 async function desfazer(id) {
   try { await api('DELETE', `/api/importacao/${id}`); avisar('Importação desfeita.', { tipo: 'ok' }); historico.value = await api('GET', '/api/importacao/historico'); if (resultado.value && resultado.value.importacaoId === id) resultado.value = null; }
   catch (e) { erro.value = e.message; }
@@ -216,9 +291,9 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
 
 <template>
   <div class="pagina">
-    <header class="topo">
-      <button v-if="etapa === 3" type="button" class="voltar" aria-label="Voltar" @click="voltar"><ChevronLeft :size="22" /></button>
-      <h1 class="titulo-pagina">Importar extrato ou fatura</h1>
+    <!-- O título da página fica no topo do app (TopoApp); aqui só a volta de etapa -->
+    <header v-if="etapa === 3" class="topo">
+      <button type="button" class="voltar" aria-label="Etapa anterior" title="Etapa anterior" @click="voltar"><ChevronLeft :size="22" /></button>
     </header>
 
     <p v-if="erro" class="faixa erro" role="alert"><TriangleAlert :size="18" /><span>{{ erro }}</span></p>
@@ -235,7 +310,7 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
 
     <!-- Etapa 2: destino + arquivo -->
     <template v-else-if="etapa === 2">
-      <CardPadrao :titulo="contextual ? `Importando para: ${rotuloDestino}` : tipo === 'conta' ? 'Qual conta?' : 'Qual cartão?'" :subtitulo="contextual ? '' : 'Etapa 2 de 2'">
+      <CardPadrao ajuda="importar.arquivo" :titulo="contextual ? `Importando para: ${rotuloDestino}` : tipo === 'conta' ? 'Qual conta?' : 'Qual cartão?'" :subtitulo="contextual ? '' : 'Etapa 2 de 2'">
         <label v-if="!contextual" class="campo"><span>{{ tipo === 'conta' ? 'Conta de destino' : 'Cartão de destino' }}</span>
           <span style="display:flex;align-items:center;gap:10px"><IconeBanco v-if="destinoSel" :icone="destinoSel.icone" :nome="destinoSel.nome" :padrao="tipo === 'conta' ? '🏦' : '💳'" :tamanho="32" /><select v-model="destinoId" style="flex:1"><option value="" disabled>Escolha…</option><option v-for="d in destinos" :key="d.id" :value="d.id">{{ d.nome }}</option><option value="__novo">{{ tipo === 'conta' ? '+ Novo banco/conta' : '+ Novo cartão' }}</option></select></span>
         </label>
@@ -246,8 +321,6 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
         </label>
         <p v-if="sugestao && sugestao.banco" class="dica">Banco reconhecido: <b>{{ sugestao.banco }}</b><span v-if="!contextual && sugestao.sugestoes.length"> · destino sugerido preenchido</span>.</p>
         <p v-if="sugestao && sugestao.dica" class="dica">{{ sugestao.dica }}</p>
-        <p v-if="sugestao && sugestao.formato === 'pdf'" class="dica">PDF: a leitura é genérica (data, descrição, valor). Você confere tudo na próxima tela. Se o PDF tiver senha, ela será pedida e não é guardada.</p>
-        <p v-if="tipo === 'fatura'" class="dica">Nada é gravado antes da pré-visualização. Compras já registradas, parcelas e estornos são reconhecidos sozinhos.</p>
         <button type="button" class="b-prim" :disabled="!corpoArq || !destinoId || carregando" @click="analisar()">{{ carregando ? 'Lendo…' : 'Ver pré-visualização' }}</button>
       </CardPadrao>
 
@@ -290,14 +363,23 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
           <button type="button" class="b-sec" @click="analisar()">Aplicar período</button>
         </div>
         <p class="dica">Duplicidade conferida só dentro de {{ dataBR(analise.periodo.inicio) }} a {{ dataBR(analise.periodo.fim) }} (parcelas: ±5 dias).</p>
+        <div v-if="analise.antesDoSaldoInicial && tipo === 'conta'" class="faixa alerta" data-antes-saldo-inicial>
+          <TriangleAlert :size="18" />
+          <span>Este extrato é de antes do saldo inicial. Mover a data de início para {{ dataBR(analise.antesDoSaldoInicial.primeiraData).slice(0, 5) }}?</span>
+          <button type="button" class="b-sec peq" :disabled="movendoInicio" @click="moverInicio">{{ movendoInicio ? 'Movendo…' : 'Mover data' }}</button>
+        </div>
         <p v-if="analise.leituraGenerica" class="faixa alerta"><TriangleAlert :size="18" /><span>Leitura genérica de PDF: confira as linhas marcadas e os valores antes de confirmar.</span></p>
         <p v-if="!analise.sinalFixo && tipo === 'fatura'" class="dica">Compras são tratadas como saídas. <button type="button" class="link" @click="inverter">Inverter sinais</button> se estiver ao contrário.</p>
-        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalArquivo !== undefined" class="periodo">Total da fatura no arquivo: <b>{{ moeda(analise.fatura.totalArquivo) }}</b> <small class="dica">(compras, IOF e encargos menos estornos; sem o pagamento da fatura anterior)</small></p>
+        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalArquivo !== undefined" class="periodo">Total da fatura no arquivo<AjudaSecao secao="importar.total-fatura" />: <b>{{ moeda(analise.fatura.totalArquivo) }}</b></p>
         <p v-if="analise.totalIgnoradasArquivo" class="dica">{{ analise.totalIgnoradasArquivo }} linha(s) do arquivo ignorada(s) (cabeçalhos, totais, rodapé).</p>
+        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalDeclarado !== null && analise.fatura.totalDeclarado !== undefined && Math.abs(analise.fatura.totalDeclarado - analise.fatura.totalArquivo) > 0.009" class="faixa alerta" data-total-diferente><TriangleAlert :size="18" /><span>O arquivo diz que a fatura é {{ moeda(analise.fatura.totalDeclarado) }}, mas as linhas somam {{ moeda(analise.fatura.totalArquivo) }}. Confira os créditos e os sinais.</span></p>
+        <p v-if="tipo === 'fatura' && analise.creditosPorTexto" class="dica">{{ analise.creditosPorTexto }} crédito(s) vieram com o sinal de compra e foram reconhecidos pelo nome (estorno, pagamento, cashback).</p>
         <div class="resumo">
           <div><small>A gravar</small><b>{{ totais.qtd }}</b></div>
-          <div><small>Entradas</small><b class="ent">{{ moeda(totais.entradas) }}</b></div>
-          <div><small>Saídas</small><b class="sai">{{ moeda(totais.saidas) }}</b></div>
+          <div v-if="tipo === 'fatura'"><small>Compras</small><b class="sai">{{ moeda(totais.saidas) }}</b></div>
+          <div v-if="tipo === 'fatura'" data-creditos-fatura><small>Créditos</small><b class="ent">{{ moeda(totais.creditos) }}</b></div>
+          <div v-if="tipo !== 'fatura'"><small>Entradas</small><b class="ent">{{ moeda(totais.entradas) }}</b></div>
+          <div v-if="tipo !== 'fatura'"><small>Saídas</small><b class="sai">{{ moeda(totais.saidas) }}</b></div>
           <div><small>Fora</small><b>{{ totais.descartadas }}</b></div>
         </div>
         <div class="atalhos" role="group" aria-label="Filtro">
@@ -311,11 +393,12 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
             <div class="topo-linha">
               <span class="data">{{ dataBR(l.data) }}</span>
               <span class="desc">{{ l.descricao }}<small v-if="l.parcela"> · parcela {{ l.parcela.atual }}/{{ l.parcela.total }}</small></span>
-              <b :class="l.valor < 0 ? 'sai' : 'ent'" class="valor">{{ moeda(l.valor) }}</b>
+              <b :class="ehCaixinha(l) ? 'neutro' : l.valor < 0 ? 'sai' : 'ent'" class="valor">{{ moeda(l.valor) }}</b>
             </div>
             <div class="sub-linha">
               <span :class="['selo', l.status]">{{ ROT[l.status] }}</span>
               <span v-if="l.confianca === 'baixa'" class="selo baixa">Conferir</span>
+              <span v-if="l.revisar" class="selo baixa">A revisar</span>
               <span v-if="l.categoriaNome" class="chip">{{ l.categoriaNome }}</span>
               <small v-if="l.observacao" class="obs">{{ l.observacao }}</small>
               <span class="acoes">
@@ -328,6 +411,13 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
               <button type="button" :class="{ ativo: l.acao === 'atualizar' }" @click="escolherDiverg(l, 'atualizar')">Atualizar para o valor real</button>
               <button type="button" :class="{ ativo: l.acao === 'manter' }" @click="escolherDiverg(l, 'manter')">Manter o manual</button>
               <button type="button" :class="{ ativo: l.acao === 'importar' }" @click="escolherDiverg(l, 'importar')">Criar novo</button>
+            </div>
+            <div v-if="ehCaixinha(l) && (!l.reserva.porNome || l.reserva.manual)" class="diverg" data-caixinha-escolha>
+              <label>{{ l.valor < 0 ? 'Guardar na meta' : 'Resgatar da meta' }}:
+                <select :value="l.reserva.metaId || ''" @change="(e) => escolherMetaCaixinha(l, e.target.value)">
+                  <option value="">Deixar para A revisar</option>
+                  <option v-for="o in l.reserva.opcoes" :key="o.id" :value="o.id">{{ o.nome }}</option>
+                </select></label>
             </div>
             <div v-if="l.status === 'pagamento_fatura' && l.candidatasFatura && l.candidatasFatura.length" class="diverg">
               <label>Fatura paga:
@@ -355,16 +445,21 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
         <ul class="res">
           <li><b>{{ resultado.novas }}</b> novos lançamentos<span v-if="resultado.projetadas"> (+{{ resultado.projetadas }} parcelas futuras)</span></li>
           <li v-if="resultado.atualizadas"><b>{{ resultado.atualizadas }}</b> atualizados para o valor real</li>
-          <li v-if="resultado.anuladas"><b>{{ resultado.anuladas }}</b> estorno(s) anularam a despesa original</li>
+          <li v-if="resultado.anuladas"><b>{{ resultado.anuladas }}</b> estorno(s) anularam a despesa original<span v-if="resultado.anuladasParcial"> ({{ resultado.anuladasParcial }} em parte)</span></li>
+          <li v-if="resultado.estornosRevisar" data-estornos-revisar><b>{{ resultado.estornosRevisar }}</b> estorno(s) sem a compra original: reduzem o gasto da categoria e ficam em A revisar</li>
+          <li v-if="resultado.pagamentosAdiantados"><b>{{ resultado.pagamentosAdiantados }}</b> pagamento(s) adiantado(s) abatendo a fatura<span v-if="resultado.pagamentosCasados"> · {{ resultado.pagamentosCasados }} casado(s) com o extrato da conta</span></li>
+          <li v-else-if="resultado.pagamentosCasados"><b>{{ resultado.pagamentosCasados }}</b> pagamento(s) adiantado(s) do cartão casado(s) com este extrato (não contam como gasto)</li>
+          <li v-if="resultado.cashback"><b>{{ moeda(resultado.cashback) }}</b> de cashback como entrada em Cashback</li>
           <li v-if="resultado.transferencias"><b>{{ resultado.transferencias }}</b> transferência(s) entre contas próprias</li>
           <li v-if="resultado.faturasPagas"><b>{{ resultado.faturasPagas }}</b> fatura(s) marcada(s) como paga(s)</li>
+          <li v-if="resultado.vinculadas && resultado.vinculadas.length" data-vinculadas><b>{{ resultado.vinculadas.length }}</b> guardar/resgatar vinculado(s) às metas: {{ [...new Set(resultado.vinculadas.map((v) => v.metaNome))].join(', ') }}<span v-if="resultado.vinculadas.some((v) => v.rendimento > 0)"> · rendimento de {{ moeda(resultado.vinculadas.reduce((s, v) => s + (v.rendimento || 0), 0)) }} em Rendimentos</span></li>
           <li><b>{{ resultado.ignoradas }}</b> ignorados (duplicados ou descartados)</li>
-          <li v-if="resultado.fatura" data-total-fatura>Fatura de {{ resultado.fatura.chave.split('-').reverse().join('/') }} no app: <b>{{ moeda(resultado.fatura.totalApp) }}</b> · no arquivo: <b>{{ moeda(resultado.fatura.totalArquivo) }}</b></li>
+          <li v-if="resultado.fatura" data-total-fatura>Fatura de {{ resultado.fatura.chave.split('-').reverse().join('/') }} no app: <b>{{ moeda(resultado.fatura.totalApp) }}</b> · no arquivo: <b>{{ moeda(resultado.fatura.totalArquivo) }}</b> <span :class="Math.abs(resultado.fatura.totalApp - resultado.fatura.totalArquivo) > 0.009 ? 'sai' : 'ent'">{{ Math.abs(resultado.fatura.totalApp - resultado.fatura.totalArquivo) > 0.009 ? '· não bate' : '· bate' }}</span><small v-if="resultado.fatura.compras !== undefined" class="dica" style="display:block;margin:2px 0 0">compras {{ moeda(resultado.fatura.compras) }} − créditos {{ moeda(resultado.fatura.creditos) }}</small></li>
           <li v-if="resultado.saldoAjustado"><Link2 :size="14" /> Saldo da conta acertado ({{ moeda(resultado.saldoAjustado) }})</li>
           <li v-if="resultado.perfilSalvo">Layout "{{ resultado.perfilSalvo }}" lembrado</li>
         </ul>
         <p v-for="a in resultado.avisos" :key="a" class="faixa alerta"><TriangleAlert :size="16" /><span>{{ a }}</span></p>
-        <div v-if="resultado.reservasPendentes.length" class="faixa ok"><span>{{ resultado.reservasPendentes.length }} lançamento(s) de reserva (Caixinha, Porquinho, Resgate CDB). Vincule a uma meta em Objetivos para atualizar a meta; se recusar, ficam fora do orçamento.</span><button type="button" class="b-sec peq" @click="irParaReserva">Abrir Objetivos</button></div>
+        <div v-if="resultado.reservasPendentes.length" class="faixa ok"><span>{{ resultado.reservasPendentes.length }} lançamento(s) de reserva (Caixinha, Porquinho, Resgate CDB) em A revisar. Vincule a uma meta em Objetivos para atualizar a meta; se recusar, ficam fora do orçamento.</span><button type="button" class="b-sec peq" @click="irParaReserva">Abrir Objetivos</button></div>
         <div class="linha-botoes">
           <button type="button" class="b-sec" @click="desfazer(resultado.importacaoId)"><Undo2 :size="16" /> Desfazer esta importação</button>
           <button type="button" class="b-prim" @click="novaImportacao">Importar outro arquivo</button>
@@ -378,8 +473,10 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
         <label class="campo"><span>Descrição</span><input v-model="editando.descricao" type="text" /></label>
         <label class="campo"><span>Data</span><input v-model="editando.data" type="date" /></label>
         <label class="campo"><span>Valor (R$)</span><input v-model.number="editando.valor" type="number" step="0.01" min="0" /></label>
-        <label class="marca"><input v-model="editando.saida" type="checkbox" /> É uma saída (despesa)</label>
-        <label v-if="editando.saida && tipo === 'conta' || editando.saida" class="campo"><span>Categoria</span>
+        <label class="marca"><input v-model="editando.saida" type="checkbox" /> {{ tipo === 'fatura' ? 'É uma compra (despesa)' : 'É uma saída (despesa)' }}</label>
+        <label v-if="tipo === 'fatura' && !editando.saida" class="campo" data-tipo-credito-previa><span>Que crédito é?</span>
+          <select v-model="editando.credito"><option value="estorno">Estorno de uma compra</option><option value="pagamento">Pagamento adiantado da fatura</option><option value="cashback">Cashback ou outro crédito</option></select></label>
+        <label v-if="editando.saida || (tipo === 'fatura' && editando.credito === 'estorno')" class="campo"><span>Categoria</span>
           <select v-model="editando.categoriaId"><option value="">Sem categoria</option><option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nome }}</option></select></label>
       </div>
       <template #rodape><button type="button" class="b-prim" @click="salvarEdicao">Salvar</button></template>
@@ -441,6 +538,7 @@ select, input[type='text'], input[type='number'], input[type='date'], input[type
 .resumo div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--cor-realce); font-size: 13px; }
 .resumo b { font-size: 14.5px; }
 @media (max-width: 480px) { .resumo { grid-template-columns: 1fr 1fr; } }
+.neutro { color: var(--cor-meta); }
 .ent { color: var(--cor-entrada); } .sai { color: var(--cor-saida-texto, var(--cor-saida)); }
 .linhas { list-style: none; margin: 0; padding: 0; }
 .linha { padding: 10px 14px; border-bottom: 1px solid var(--cor-borda); display: flex; flex-direction: column; gap: 6px; }
@@ -452,7 +550,7 @@ select, input[type='text'], input[type='number'], input[type='date'], input[type
 .valor { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sub-linha { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .selo { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--cor-realce); color: var(--cor-texto-suave); }
-.selo.nova { color: var(--cor-investimento); } .selo.divergente, .selo.baixa { color: var(--cor-amarelo); } .selo.estorno, .selo.pagamento_fatura, .selo.reserva { color: var(--cor-meta); }
+.selo.nova { color: var(--cor-investimento); } .selo.divergente, .selo.baixa { color: var(--cor-amarelo); } .selo.estorno, .selo.pagamento_fatura, .selo.reserva, .selo.pagamento_adiantado { color: var(--cor-meta); } .selo.cashback { color: var(--cor-entrada); }
 .chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--cor-borda); color: var(--cor-texto-suave); }
 .obs { color: var(--cor-texto-suave); font-size: 12.5px; flex: 1 1 200px; }
 .acoes { margin-left: auto; display: flex; gap: 4px; }

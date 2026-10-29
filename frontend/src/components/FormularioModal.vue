@@ -34,12 +34,13 @@ defineProps({
   erro: { type: String, default: '' },
   semCancelar: Boolean,
   largura: { type: Number, default: 520 },
+  ajuda: { type: String, default: '' }, // id em config/ajudaSecoes.js: "?" ao lado do título (anotação 64)
 });
 defineEmits(['salvar', 'fechar']);
 </script>
 
 <template>
-  <Modal :aberto="aberto" :titulo="titulo" :tema="tema" :largura="largura" @fechar="$emit('fechar')">
+  <Modal :aberto="aberto" :titulo="titulo" :tema="tema" :largura="largura" :ajuda="ajuda" @fechar="$emit('fechar')">
     <form :id="'form-' + titulo.replace(/\W+/g, '-')" class="form-corpo" novalidate @submit.prevent="$emit('salvar')">
       <slot />
       <button type="submit" class="submit-oculto" tabindex="-1" aria-hidden="true"></button>

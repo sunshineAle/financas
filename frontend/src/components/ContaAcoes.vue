@@ -1,7 +1,7 @@
 <script setup>
 // Ações da conta (BarraAcoes): Lançar transação · Transferir (em breve) · Mais ⋯ [Importar extrato, Editar, Arquivar].
 import { ref } from 'vue';
-import { Plus, ArrowLeftRight, Ellipsis, Pencil, Upload, Archive, RefreshCw } from 'lucide-vue-next';
+import { Plus, ArrowLeftRight, Ellipsis, Pencil, Upload, Archive, RefreshCw, Scale } from 'lucide-vue-next';
 import BarraAcoes from './BarraAcoes.vue';
 import BotaoAcao from './BotaoAcao.vue';
 import Modal from './Modal.vue';
@@ -10,7 +10,7 @@ defineProps({
   conectada: { type: Boolean, default: false },
   sincronizando: { type: Boolean, default: false },
 });
-const emit = defineEmits(['lancar', 'transferir', 'importar', 'editar', 'sincronizar', 'arquivar']);
+const emit = defineEmits(['lancar', 'transferir', 'importar', 'editar', 'ajustar', 'sincronizar', 'arquivar']);
 const aberto = ref(false);
 function item(ev) { aberto.value = false; emit(ev); }
 </script>
@@ -25,6 +25,7 @@ function item(ev) { aberto.value = false; emit(ev); }
     <div class="lista">
       <button type="button" @click="item('importar')"><Upload :size="18" />Importar extrato</button>
       <button v-if="!conectada" type="button" @click="item('editar')"><Pencil :size="18" />Editar conta</button>
+      <button v-if="!conectada" type="button" data-ajustar-saldo @click="item('ajustar')"><Scale :size="18" />Ajustar saldo</button>
       <button v-else type="button" :disabled="sincronizando" @click="item('sincronizar')"><RefreshCw :size="18" />{{ sincronizando ? 'Sincronizando…' : 'Sincronizar agora' }}</button>
       <button type="button" class="perigo" @click="item('arquivar')"><Archive :size="18" />Arquivar conta</button>
     </div>

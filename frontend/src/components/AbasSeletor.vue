@@ -61,7 +61,9 @@ onMounted(() => {
   medir();
   if (typeof ResizeObserver !== 'undefined' && trilho.value) { ro = new ResizeObserver(medir); ro.observe(trilho.value); }
   document.fonts?.ready?.then(medir);
-  if (!props.swipe || !raiz.value?.parentElement) return;
+  // Anotação 60.2: deslizar para trocar de aba foi retirado (conflitava com carrosséis e gestos). A prop `swipe` fica
+  // aceita para não quebrar telas antigas, mas não faz nada; a aba muda só pelo toque/teclado.
+  if (true || !props.swipe || !raiz.value?.parentElement) return;
   alvo = raiz.value.parentElement;
   alvo.addEventListener('touchstart', tocou, { passive: true });
   alvo.addEventListener('touchend', soltou, { passive: true });

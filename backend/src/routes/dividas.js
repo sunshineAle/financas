@@ -4,6 +4,7 @@ const dados = require('../dados');
 const { exigirAutenticacao } = require('../middleware/auth');
 const faturas = require('../utils/faturas');
 const util = require('../utils/dividas');
+const rotasCartoes = require('./cartoes');
 
 const router = express.Router();
 router.use(exigirAutenticacao);
@@ -149,13 +150,73 @@ router.get('/resumo', (req, res) => {
 
 // Plano para TODAS as dívidas: avalanche (maior juros primeiro) × bola de neve (menor saldo primeiro), com a ordem,
 // o valor e os juros de cada dívida. `mensal` = quanto dá para pagar por mês (padrão: soma das parcelas).
+// --- Juros mais caros (anotação 60.5) -------------------------------------------
+// Cheque especial (contas com saldo negativo) e rotativo do cartão (fatura vencida sem pagamento, ou fatura paga em
+// parte e parcelada) costumam ter os juros mais altos do mercado. Sem taxa informada, usa a referência enviada pela
+// tela (média do Bacen) ou um padrão conservador: cheque especial 8% a.m. (teto legal) e rotativo 15% a.m.
+const TAXA_CHEQUE_PADRAO = 8;
+const TAXA_ROTATIVO_PADRAO = 15;
+const FRASE_CARO = {
+  cheque: 'Cheque especial cobra juros altos todo dia em que a conta fica negativa.',
+  rotativo: 'Fatura não paga inteira vai para o rotativo, um dos juros mais caros do Brasil.',
+};
+function taxaRef(v, padrao) { const n = Number(v); return Number.isFinite(n) && n > 0 && n < 100 ? r2(n) : padrao; }
+
+function jurosMaisCaros(usuarioId, ref = {}) {
+  const taxaCheque = taxaRef(ref.cheque, TAXA_CHEQUE_PADRAO);
+  const taxaRotativo = taxaRef(ref.rotativo, TAXA_ROTATIVO_PADRAO);
+  const caros = [];
+  db.prepare("SELECT id, nome, saldo FROM contas WHERE usuario_id = ? AND excluido_em IS NULL AND saldo < 0 AND COALESCE(tipo, 'corrente') = 'corrente'")
+    .all(usuarioId).forEach((c) => {
+      caros.push({ id: `cheque:${c.id}`, tipo: 'cheque', rotulo: 'Cheque especial', nome: `Cheque especial · ${c.nome}`, contaId: c.id,
+        saldo: r2(-c.saldo), taxa: taxaCheque, taxaEstimada: true, frase: FRASE_CARO.cheque });
+    });
+  const vencidas = rotasCartoes.faturasVencidas(usuarioId);
+  vencidas.forEach((f) => {
+    const [a, m] = f.chave.split('-');
+    caros.push({ id: `rotativo:${f.cartaoId}:${f.chave}`, tipo: 'rotativo', rotulo: 'Rotativo do cartão', nome: `Fatura ${f.cartao} ${m}/${a} vencida`, cartaoId: f.cartaoId,
+      saldo: f.total, taxa: f.taxaJuros > 0 ? f.taxaJuros : taxaRotativo, taxaEstimada: !(f.taxaJuros > 0), frase: FRASE_CARO.rotativo });
+  });
+  // Fatura paga em parte e parcelada: virou dívida (faturas_pagas.divida_id). Sem taxa cadastrada, usa a do rotativo.
+  const dividasDeFatura = new Set(db.prepare('SELECT divida_id FROM faturas_pagas WHERE divida_id IS NOT NULL AND excluido_em IS NULL').all().map((l) => l.divida_id));
+  return { caros, dividasDeFatura, taxaRotativo };
+}
+
+router.get('/caros', (req, res) => {
+  const { caros, dividasDeFatura, taxaRotativo } = jurosMaisCaros(req.usuario.id, req.query || {});
+  db.prepare('SELECT * FROM dividas WHERE usuario_id = ? AND arquivada = 0 AND excluido_em IS NULL AND saldo > 0').all(req.usuario.id)
+    .filter((d) => dividasDeFatura.has(d.id) && util.situacaoEfetiva(d) !== 'quitada')
+    .forEach((d) => caros.push({ id: d.id, tipo: 'rotativo', rotulo: 'Fatura parcelada', nome: d.nome, saldo: r2(d.saldo),
+      taxa: Number(d.taxa_juros) > 0 ? Number(d.taxa_juros) : taxaRotativo, taxaEstimada: !(Number(d.taxa_juros) > 0), frase: FRASE_CARO.rotativo }));
+  caros.sort((a, b) => b.taxa - a.taxa || b.saldo - a.saldo);
+  res.json(caros);
+});
+
 router.post('/plano', (req, res) => {
+  const { caros, dividasDeFatura, taxaRotativo } = jurosMaisCaros(req.usuario.id, req.body?.taxasReferencia || {});
+  const marcas = new Map();
   const linhas = db.prepare('SELECT * FROM dividas WHERE usuario_id = ? AND arquivada = 0 AND excluido_em IS NULL AND saldo > 0').all(req.usuario.id)
-    .filter((d) => util.situacaoEfetiva(d) !== 'quitada');
+    .filter((d) => util.situacaoEfetiva(d) !== 'quitada')
+    .map((d) => {
+      if (!dividasDeFatura.has(d.id)) return d;
+      const estimada = !(Number(d.taxa_juros) > 0);
+      marcas.set(d.id, { tipo: 'rotativo', rotulo: 'Fatura parcelada', taxaEstimada: estimada, frase: FRASE_CARO.rotativo });
+      return estimada ? { ...d, taxa_juros: taxaRotativo } : d;
+    });
+  // Cheque especial e fatura vencida entram no plano como "dívidas" sem parcela fixa: mínimo = juros do mês + 10% do saldo.
+  caros.forEach((c) => {
+    marcas.set(c.id, { tipo: c.tipo, rotulo: c.rotulo, taxaEstimada: c.taxaEstimada, frase: c.frase });
+    linhas.push({ id: c.id, nome: c.nome, saldo: c.saldo, taxa_juros: c.taxa, valor_parcela: r2(c.saldo * (c.taxa / 100 + 0.1)) });
+  });
   const mensal = numeroOuNulo(req.body?.mensal);
-  const avalanche = util.planoGeral(linhas, mensal, 'avalanche');
-  const bolaDeNeve = util.planoGeral(linhas, mensal, 'neve');
-  res.json({ avalanche, bolaDeNeve, dividas: linhas.length, mensalUsado: avalanche?.orcamento ?? null });
+  // Avalanche continua ordenando SÓ pela taxa (o selo apenas destaca; não fura a fila).
+  const marcar = (p) => {
+    if (p && p.ordem) p.ordem = p.ordem.map((o) => (marcas.has(o.id) ? { ...o, caro: marcas.get(o.id) } : o));
+    return p;
+  };
+  const avalanche = marcar(util.planoGeral(linhas, mensal, 'avalanche'));
+  const bolaDeNeve = marcar(util.planoGeral(linhas, mensal, 'neve'));
+  res.json({ avalanche, bolaDeNeve, dividas: linhas.length, caros: caros.length + [...marcas.values()].filter((m) => m.rotulo === 'Fatura parcelada').length, mensalUsado: avalanche?.orcamento ?? null });
 });
 
 // Simulação de acordo (não grava nada): juros implícitos por acordo. Com `dividaId`, usa a dívida escolhida como base

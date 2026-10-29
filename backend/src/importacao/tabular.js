@@ -106,6 +106,7 @@ function lerTabela(matriz, mapeamento) {
   const anoRef = new Date().getFullYear();
   const linhas = [];
   const ignoradas = [];
+  let totalFatura = null;
   for (let i = linhaCab + 1; i < matriz.length; i++) {
     const l = matriz[i];
     if (i === linhaCab) continue;
@@ -135,6 +136,8 @@ function lerTabela(matriz, mapeamento) {
     } else descricao = limparDescricao(cDesc !== undefined ? l[cDesc] : l.filter((_, j) => j !== cData && j !== cVal).join(' '));
     const semDados = !data && valor === null;
     if (semDados) { if (limparDescricao(l.join(' '))) ignoradas.push({ linha: i + 1, texto: limparDescricao(l.join(' ')).slice(0, 120) }); continue; }
+    // Anotação 61: linha "Total da fatura" (com ou sem data) guarda o total declarado no arquivo, para conferir o sentido dos sinais
+    if (valor !== null && /\b(total (da |desta )?fatura|valor total|total a pagar)\b/.test(normalizar(l.join(' ')))) totalFatura = valor;
     if (!data || valor === null) {
       // linha parcial: cabeçalho repetido, subtotal, "saldo anterior"... fica de fora, mas é contada
       ignoradas.push({ linha: i + 1, texto: limparDescricao(l.join(' ')).slice(0, 120) });
@@ -153,7 +156,7 @@ function lerTabela(matriz, mapeamento) {
   }
   const cabecalho = linhaCab >= 0 ? matriz[linhaCab] : [];
   return {
-    linhas, ignoradas, automatico,
+    linhas, ignoradas, automatico, totalFatura,
     mapeamento: { linhaCabecalho: linhaCab >= 0 ? linhaCab : null, ...cols, descricoes: cols.descricoes },
     assinatura: assinaturaDe(matriz, linhaCab, cols),
     colunas: cabecalho,

@@ -7,7 +7,7 @@ import CampoBase from './CampoBase.vue';
 const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
   opcoes: { type: Array, default: () => [] },
-  rotulo: String, placeholder: String, erro: String, dica: String, tema: String, obrigatorio: Boolean, disabled: Boolean,
+  rotulo: String, placeholder: String, erro: String, dica: String, tema: String, obrigatorio: Boolean, disabled: Boolean, dicaAoFocar: Boolean,
 });
 const emit = defineEmits(['update:modelValue']);
 const id = 'cs-' + useId();
@@ -19,7 +19,7 @@ function mudou(e) {
 </script>
 
 <template>
-  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :tema="tema" :obrigatorio="obrigatorio" :para="id">
+  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="tema" :obrigatorio="obrigatorio" :para="id">
     <select :id="id" class="sf-entrada" :value="modelValue" :disabled="disabled" :required="obrigatorio" :aria-invalid="!!erro" @change="mudou">
       <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
       <option v-for="o in lista" :key="o.valor" :value="o.valor" :disabled="o.desabilitado">{{ o.rotulo }}</option>

@@ -11,6 +11,7 @@ import transacoes from '../../../backend/src/routes/transacoes.js';
 import reserva from '../../../backend/src/routes/reserva.js';
 import investimentos from '../../../backend/src/routes/investimentos.js';
 import regras from '../../../backend/src/routes/regras.js';
+import patrimonio from '../../../backend/src/routes/patrimonio.js';
 import relatorios from '../../../backend/src/routes/relatorios.js';
 import configuracoes from '../../../backend/src/routes/configuracoes.js';
 import cartoes from '../../../backend/src/routes/cartoes.js';
@@ -41,6 +42,7 @@ const montagem = [
   ['/api/importacao', importacao],
   ['/api/custos-fixos', custosFixos],
   ['/api/regras', regras],
+  ['/api/patrimonio', patrimonio],
 ];
 if (backup) montagem.push(['/api/backup', backup]);
 
@@ -62,6 +64,22 @@ if (!usuario) {
   globalThis.__BANCO_DEMO.salvar();
 }
 globalThis.__SESSAO_DEMO.usuario = { id: usuario.id, email: usuario.email, nome: usuario.nome };
+
+// Início do mês financeiro (anotação 54): o banco (que vai no backup) é a fonte; o localStorage é o cache que o app lê
+// ao abrir. Banco com valor → aplica no aparelho (ex.: depois de restaurar um backup). Banco vazio e aparelho com
+// escolha própria → leva para o banco (aparelhos que já usavam a Versão 0.8).
+try {
+  const cfg = db.prepare('SELECT id, inicio_mes FROM configuracoes WHERE usuario_id = ? AND excluido_em IS NULL').get(usuario.id);
+  let local = null;
+  try { local = localStorage.getItem('sf:inicio-mes'); } catch (e) { /* sem storage */ }
+  if (cfg && cfg.inicio_mes) {
+    if (cfg.inicio_mes !== local) { localStorage.setItem('sf:inicio-mes', cfg.inicio_mes); globalThis.__SF_INICIO_MES = JSON.parse(cfg.inicio_mes); }
+  } else if (local) {
+    if (cfg) db.prepare('UPDATE configuracoes SET inicio_mes = ? WHERE id = ?').run(local, cfg.id);
+    else db.prepare('INSERT INTO configuracoes (usuario_id, inicio_mes) VALUES (?, ?)').run(usuario.id, local);
+    globalThis.__BANCO_DEMO.salvar();
+  }
+} catch (e) { /* segue com o que estiver no aparelho */ }
 
 const fetchOriginal = window.fetch.bind(window);
 window.fetch = async (url, opcoes = {}) => {

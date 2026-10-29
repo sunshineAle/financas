@@ -77,8 +77,7 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" titulo="Transferência entre contas" tema="neutro" rotulo-salvar="Transferir" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
-    <p class="nota">Dinheiro que muda de uma conta sua para outra (inclusive para a corretora). Não entra nos totais do mês.</p>
+  <FormularioModal :aberto="aberto" titulo="Transferência entre contas" ajuda="transferir" tema="neutro" rotulo-salvar="Transferir" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
     <CampoValor v-model="f.valor" tema="neutro" :erro="erros.valor" autofocus />
     <CampoSelecao v-model="f.origemId" rotulo="Sai de" :opcoes="opcoesOrigem" :erro="erros.origem" />
     <button type="button" class="inverter" aria-label="Inverter origem e destino" @click="inverter"><ArrowUpDown :size="16" :stroke-width="2.2" /><span>Inverter</span></button>

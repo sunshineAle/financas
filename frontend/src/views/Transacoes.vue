@@ -7,6 +7,7 @@ import CabecalhoPagina from '../components/CabecalhoPagina.vue';
 import TopoValor from '../components/TopoValor.vue';
 import AbasSeletor from '../components/AbasSeletor.vue';
 import CardPadrao from '../components/CardPadrao.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
 import BarraAcoes from '../components/BarraAcoes.vue';
 import BotaoAcao from '../components/BotaoAcao.vue';
 import FormularioModal from '../components/FormularioModal.vue';
@@ -23,7 +24,7 @@ import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
 import { avisar } from '../services/avisos.js';
 import { abrirLancamento, lancamentoSalvo, avisoLancamento } from '../services/lancamento.js';
-import TransacoesLinha from '../components/TransacoesLinha.vue';
+import LinhaTransacao from '../components/LinhaTransacao.vue';
 import { periodo, anoInteiro, ano, escolher, MESES, MESES_CURTOS } from '../services/mes.js';
 import { corDespesa } from '../utils/coresDespesa.js';
 import { corReceita } from '../utils/coresReceita.js';
@@ -111,11 +112,17 @@ async function confirmarEstorno() {
 const podeEstornar = (t) => !t.tipo_mov && !t.ignorada && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
 const ehReserva = (t) => /^reserva_|^transferencia_corretora$/.test(String(t.tipo_mov || ''));
 const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia') && !ehReserva(t);
-const rotuloMov = { reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada' };
+const rotuloMov = { reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
+  // anotação 61: créditos na fatura do cartão
+  estorno_avulso: 'estorno a revisar', estornada_parcial: 'estornada em parte', pagamento: 'pagamento adiantado', cashback: 'cashback', pagamento_cartao: 'pagamento adiantado do cartão', pagamento_cartao_criado: 'pagamento adiantado do cartão' };
+// Créditos do cartão que CONTAM nos totais (cashback é entrada; estorno avulso e estorno parcial mexem no gasto da categoria)
+const MOV_NOS_TOTAIS = ['cashback', 'estorno_avulso', 'estornada_parcial'];
+const foraDosTotais = (t) => !!t.tipo_mov && !MOV_NOS_TOTAIS.includes(t.tipo_mov) && !(t.cartao && t.tipo_mov === 'estorno_vinculado' && t.estorno_parcial);
+const ehPagCartao = (t) => t.tipo_mov === 'pagamento_cartao' || t.tipo_mov === 'pagamento_cartao_criado';
 async function desfazerMov(t) {
   fecharMenu();
   if (!confirm(ehTransf(t) ? 'Desfazer esta transferência? Os saldos das duas contas voltam ao que eram.' : 'Desfazer este estorno? A despesa volta a contar nos totais.')) return;
-  const url = t.cartao ? `/api/transacoes/estorno-cartao/${t.vinculo}` : ehTransf(t) ? `/api/transacoes/transferencia/${t.vinculo}` : `/api/transacoes/estorno/${t.vinculo}`;
+  const url = t.cartao || ehPagCartao(t) ? `/api/transacoes/estorno-cartao/${t.vinculo}` : ehTransf(t) ? `/api/transacoes/transferencia/${t.vinculo}` : `/api/transacoes/estorno/${t.vinculo}`;
   await pedir(url, { method: 'DELETE' });
   await Promise.all([carregar(), carregarApoio()]);
 }
@@ -209,19 +216,32 @@ function irCartao(t) { router.push({ name: 'cartao-extrato', params: { id: t.car
 const editando = ref(null);
 const formEdicao = ref({ tipo: 'saida', valor: '', contaId: '', descricao: '', data: '', categoriaId: '', categoriaReceita: '', subcategoria: '', icone: '' });
 // Nas lançadas à mão o tipo pode mudar no próprio pop-up; nas do banco ele é fixo
-const edicaoEhSaida = computed(() => (editando.value ? (editando.value.origem === 'manual' ? formEdicao.value.tipo === 'saida' : editando.value.valor < 0) : true));
+const edicaoEhSaida = computed(() => (editando.value ? (editando.value.origem === 'manual' || (editando.value.cartao && editando.value.cartao_origem === 'manual') ? formEdicao.value.tipo === 'saida' : editando.value.valor < 0) : true));
 watch(() => [formEdicao.value.tipo, formEdicao.value.categoriaId, formEdicao.value.categoriaReceita], ([tp, c, r]) => {
   if (editando.value) carregarSugestoes(tp === 'saida' ? c : '', tp === 'saida' ? '' : r);
 });
 const erroEdicao = ref('');
+// Anotação 61: ao marcar um lançamento do cartão como crédito (verde), o app pergunta que crédito é.
+const credito = ref({ tipo: '', originalCompraId: '', contaId: '', parecidas: null, original: false });
+const ehCreditoCartao = computed(() => !!(editando.value && editando.value.cartao && editando.value.cartao_origem === 'manual' && formEdicao.value.tipo === 'entrada'));
+watch(() => [ehCreditoCartao.value, credito.value.tipo], async ([sim, tp]) => {
+  if (!sim || tp !== 'estorno' || credito.value.parecidas) return;
+  const t = editando.value;
+  try {
+    const r = await pedir(`/api/cartoes/${t.cartao_id}/lancamentos/${t.compra_id}/credito/parecidas`);
+    credito.value.parecidas = r.ok ? await r.json() : [];
+  } catch { credito.value.parecidas = []; }
+});
 function abrirEdicao(t) {
   fecharMenu();
   editando.value = t;
   erroEdicao.value = '';
   if (t.cartao) {
     // Compra no cartão: o pop-up edita a compra inteira (todas as parcelas), no próprio lugar
-    formEdicao.value = { tipo: 'saida', valor: t.valor_total_compra, contaId: '', descricao: t.descricao_base, data: String(t.data_compra).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: '', subcategoria: t.subcategoria || '' };
+    formEdicao.value = { tipo: t.valor < 0 ? 'saida' : 'entrada', valor: Math.abs(t.valor_total_compra), contaId: '', descricao: t.descricao_base, data: String(t.data_compra).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: '', subcategoria: t.subcategoria || '' };
     carregarSugestoes(t.categoria_id ?? '', '');
+    // Anotação 61: crédito na fatura — que crédito é (estorno, pagamento adiantado, cashback)
+    credito.value = { tipo: t.tipo_mov === 'pagamento' ? 'pagamento' : t.tipo_mov === 'cashback' ? 'cashback' : t.valor > 0 ? 'estorno' : '', originalCompraId: '', contaId: '', parecidas: null, original: t.valor > 0 };
     return;
   }
   formEdicao.value = { tipo: t.valor < 0 ? 'saida' : 'entrada', valor: Math.abs(t.valor), contaId: t.conta_id, descricao: t.descricao, data: String(t.data).slice(0, 10), categoriaId: t.categoria_id ?? '', categoriaReceita: t.categoria_receita || '', subcategoria: t.subcategoria || '', icone: t.icone || '' };
@@ -306,9 +326,22 @@ async function salvarEdicao() {
     erroEdicao.value = '';
     const corpoC = { descricao: f.descricao, valor: Number(f.valor), dataCompra: f.data, categoriaId: f.categoriaId === '' ? null : f.categoriaId, subcategoria: f.subcategoria };
     if (t.divida_id) corpoC.dividaId = t.divida_id;
+    const cr = credito.value;
+    if (f.tipo === 'entrada' && !cr.tipo) { erroEdicao.value = 'Diga que crédito é este: estorno, pagamento adiantado ou cashback.'; return; }
+    if (f.tipo === 'entrada' && cr.tipo === 'pagamento' && !cr.contaId) { erroEdicao.value = 'Escolha a conta de onde saiu o pagamento.'; return; }
     const rc = await pedir(`/api/cartoes/${t.cartao_id}/lancamentos/${t.compra_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpoC) });
     const dc = await rc.json();
     if (!rc.ok) { erroEdicao.value = dc.erro || 'Não foi possível salvar.'; return; }
+    // Anotação 61: marcar como crédito (ou voltar a compra) — o servidor liga ao estorno/pagamento/cashback
+    const mudouCredito = f.tipo === 'entrada' ? (!cr.original || cr.tipo !== (t.tipo_mov === 'pagamento' ? 'pagamento' : t.tipo_mov === 'cashback' ? 'cashback' : 'estorno') || !!cr.originalCompraId) : t.valor > 0;
+    if (mudouCredito) {
+      const corpoCr = f.tipo === 'entrada' ? { tipo: cr.tipo, originalCompraId: cr.originalCompraId || null, contaId: cr.contaId || null, data: f.data } : { tipo: 'compra' };
+      const rr = await pedir(`/api/cartoes/${t.cartao_id}/lancamentos/${t.compra_id}/credito`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpoCr) });
+      const dr = await rr.json();
+      if (!rr.ok) { erroEdicao.value = dr.erro || 'Não foi possível marcar o crédito.'; return; }
+      const msg = { estorno: cr.originalCompraId ? (dr.parcial ? 'Estorno parcial ligado à compra: só a parte estornada sai do gasto.' : 'Estorno ligado à compra: a compra deixa de contar.') : 'Estorno sem compra ligada: reduz o gasto da categoria e fica em A revisar.', pagamento: dr.casouComExtrato ? 'Pagamento adiantado casado com a saída da conta: abate a fatura e não conta como gasto.' : 'Pagamento adiantado: abate a fatura; a saída foi lançada na conta, fora dos totais.', cashback: 'Cashback: abate a fatura e entra como entrada em Cashback.', compra: 'Voltou a ser compra.' };
+      avisar(msg[corpoCr.tipo], { tipo: 'ok' });
+    }
     sugerirRegra(t, f);
     editando.value = null;
     await Promise.all([carregar(), carregarApoio()]);
@@ -409,10 +442,14 @@ function infoDe(t) {
   if (ehTransf(t)) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   // Anotação 38: Guardar/Resgatar (Caixinha, Porquinho, CDB) e transferência para corretora: dinheiro do usuário mudando de lugar.
   if (ehReserva(t)) return { chave: 'neutra-reserva', nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
-  if (t.tipo_mov) return { chave: 'neutra-estorno', nome: 'Estornos', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  if (t.tipo_mov === 'saldo_inicial' || t.tipo_mov === 'ajuste_saldo') return { chave: 'neutra-saldo', nome: 'Saldo inicial e ajustes', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  // Anotação 61: pagamento adiantado do cartão (e a saída da conta ligada a ele) é pagamento de fatura; cashback é entrada;
+  // estorno avulso / parcial do cartão fica na categoria da compra (reduz o gasto dela)
+  if (t.tipo_mov === 'pagamento' || ehPagCartao(t)) return { chave: 'neutra-fatura', nome: 'Pagamento de fatura', cor: null, icone: null, neutra: true, tipoNeutro: 'fatura' };
+  if (t.tipo_mov && !(t.cartao && (t.tipo_mov === 'cashback' || ((t.tipo_mov === 'estorno_avulso' || t.estorno_parcial) && t.categoria_id)))) return { chave: 'neutra-estorno', nome: 'Estornos', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (REGEX_FATURA.test(t.descricao || '')) return { chave: 'neutra-fatura', nome: 'Pagamento de fatura', cor: null, icone: null, neutra: true, tipoNeutro: 'fatura' };
   if (REGEX_TRANSF.test(t.descricao || '')) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
-  if (t.valor < 0) {
+  if (t.valor < 0 || (t.cartao && t.tipo_mov && t.tipo_mov !== 'cashback' && t.categoria_id)) {
     if (!t.categoria_id) return { chave: 's-0', nome: 'Sem categoria', cor: null, icone: null };
     const idx = categorias.value.findIndex((c) => c.id === t.categoria_id);
     const cat = categorias.value[idx];
@@ -457,7 +494,7 @@ const gruposPorCategoria = computed(() => {
   const mapa = new Map();
   transacoes.value.filter((t) => t.ignorada !== 1).forEach((t) => {
     const info = infoDe(t);
-    if (!mapa.has(info.chave)) mapa.set(info.chave, { chave: info.chave, info, itens: [], total: 0, tipo: info.neutra ? 'neutro' : t.valor < 0 ? 'saida' : 'entrada' });
+    if (!mapa.has(info.chave)) mapa.set(info.chave, { chave: info.chave, info, itens: [], total: 0, tipo: info.neutra ? 'neutro' : info.chave.startsWith('s-') ? 'saida' : info.chave.startsWith('e-') ? 'entrada' : t.valor < 0 ? 'saida' : 'entrada' });
     const g = mapa.get(info.chave);
     g.itens.push(t); g.total += t.valor;
   });
@@ -484,6 +521,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
     <template #corpo>
     <div v-deslizar-mes class="area-mes">
       <TopoValor tema="entrada" :variante="1" rotulo="Saldo do mês" :periodo="periodoTxt" :valor="saldoAnim" :linhas="[{ rotulo: 'Entradas', valor: entradasAnim }, { rotulo: 'Saídas', valor: saidasAnim }]">
+        <template #rotulo>Saldo do mês<AjudaSecao v-if="resumo.quantidadeCartao" secao="transacoes.cartao" /></template>
         <div class="sobra">
           <BarraDegrade :pct="sobra.pct" de="var(--entrada-ceu-medio)" ate="var(--cor-sobre-cor)" :altura="8" />
           <span class="sobra-texto">{{ sobra.texto }}</span>
@@ -503,9 +541,6 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <CampoSelecao v-model="filtroTipo" rotulo="Tipo" :opcoes="[{ valor: '', rotulo: 'Entradas e saídas' }, { valor: 'entrada', rotulo: 'Só entradas' }, { valor: 'saida', rotulo: 'Só saídas' }]" />
       </CardPadrao>
 
-      <p v-if="resumo.quantidadeCartao" class="nota-cartao">
-        {{ resumo.quantidadeCartao }} compra(s) no cartão de crédito ({{ moeda(resumo.cartao) }}) aparecem na lista. As compras no cartão contam na data da compra. Pagar a fatura não conta como gasto de novo.
-      </p>
 
       <p v-if="aviso" class="aviso-ok">
         {{ aviso.texto }}
@@ -534,7 +569,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
               <span v-if="g.total !== 0" class="total-grupo numero-tabular" :class="g.total < 0 ? 'neg' : 'pos'">{{ g.total < 0 ? '−' : '+' }} {{ moeda(Math.abs(g.total)) }}</span>
             </header>
             <CardPadrao class="cartao-lista" sem-padding>
-              <TransacoesLinha v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" @abrir="abrirEdicao" @menu="abrirMenu" />
+              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
             </CardPadrao>
           </section>
         </template>
@@ -573,7 +608,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
                   <ChevronDown :size="18" :stroke-width="2" class="seta-cat" :class="{ aberta: abertas[g.chave] }" />
                 </button>
                 <div v-if="abertas[g.chave]" class="cat-itens">
-                  <TransacoesLinha v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" mostrar-data @abrir="abrirEdicao" @menu="abrirMenu" />
+                  <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
                 </div>
               </div>
             </CardPadrao>
@@ -593,19 +628,36 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
     </div>
 
     <!-- Detalhes / edição -->
-    <FormularioModal :aberto="!!editando" titulo="Detalhes da transação" :tema="edicaoEhSaida ? 'saida' : 'entrada'" :erro="erroEdicao" rotulo-cancelar="Fechar" @salvar="salvarEdicao" @fechar="editando = null">
+    <FormularioModal :aberto="!!editando" titulo="Detalhes da transação" ajuda="transacoes.editar" :tema="edicaoEhSaida ? 'saida' : 'entrada'" :erro="erroEdicao" rotulo-cancelar="Fechar" @salvar="salvarEdicao" @fechar="editando = null">
       <template v-if="editando">
         <p class="origem-tx">
           <span :class="['tag-tipo', edicaoEhSaida ? 'saida' : 'entrada']">{{ edicaoEhSaida ? 'Saída' : 'Entrada' }}</span>
-          <span class="nota" v-if="editando.cartao">{{ editando.cartao_origem === 'manual' ? `Compra no cartão ${editando.conta_nome}${editando.total_parcelas > 1 ? ` em ${editando.total_parcelas}x` : ''}: a edição vale para a compra inteira.` : 'Compra de cartão conectado: vem do banco e não pode ser editada.' }}</span>
-          <span class="nota" v-else>{{ editando.origem === 'manual' ? 'Lançada manualmente: tudo pode ser editado.' : 'Veio do banco (Open Finance): só categoria e subcategoria podem mudar.' }}</span>
-          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }} · fora dos totais</span>
+          <span class="nota" v-if="editando.cartao">{{ `Cartão ${editando.conta_nome}${editando.total_parcelas > 1 ? ` · ${editando.total_parcelas}x` : ''}${editando.cartao_origem === 'manual' ? '' : ' · do banco'}` }}</span>
+          <span class="nota" v-else>{{ editando.origem === 'manual' ? 'Lançada à mão' : 'Do banco (Open Finance)' }}</span>
+          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
           <span v-else-if="editando.ignorada" class="selo-ignorada">ignorada</span>
         </p>
-        <p v-if="editando.tipo_mov && !editando.cartao" class="nota">Faz parte de uma {{ ehTransf(editando) ? 'transferência entre contas' : 'despesa estornada' }}: valor, tipo e conta não mudam aqui. Para refazer, desfaça pelo menu ⋮ e lance de novo.</p>
-        <template v-if="(editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && !editando.tipo_mov)">
+        <template v-if="(editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && (!editando.tipo_mov || ['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(editando.tipo_mov)))">
           <CampoTipo v-if="!editando.cartao" v-model="formEdicao.tipo" />
-          <CampoValor v-model="formEdicao.valor" :tipo="edicaoEhSaida ? 'saida' : 'entrada'" :rotulo="editando.cartao ? 'Valor total da compra' : 'Valor'" />
+          <CampoTipo v-else-if="editando.total_parcelas === 1" v-model="formEdicao.tipo" rotulo="Na fatura é" :opcoes="[{ id: 'saida', rotulo: 'Compra', tema: 'saida' }, { id: 'entrada', rotulo: 'Crédito', tema: 'entrada' }]" data-marcar-credito />
+          <div v-if="ehCreditoCartao" class="credito-cartao" data-credito-cartao>
+            <p class="nota">Crédito abate a fatura. Que crédito é este?</p>
+            <label v-for="o in [['estorno', 'Estorno de uma compra', 'Anula a compra (ou parte dela)'], ['pagamento', 'Pagamento adiantado da fatura', 'Não é entrada nem gasto'], ['cashback', 'Cashback ou outro crédito', 'Entra como entrada em Cashback']]" :key="o[0]" class="opcao-credito" :class="{ ativa: credito.tipo === o[0] }">
+              <input v-model="credito.tipo" type="radio" name="tipo-credito" :value="o[0]" />
+              <span><b>{{ o[1] }}</b><small>{{ o[2] }}</small></span>
+            </label>
+            <label v-if="credito.tipo === 'estorno'" class="campo-credito"><span>Compra estornada</span>
+              <select v-model="credito.originalCompraId" data-compra-estornada>
+                <option value="">{{ credito.parecidas === null ? 'Procurando compras parecidas…' : 'Não sei / não está no app (fica em A revisar)' }}</option>
+                <option v-for="c in credito.parecidas || []" :key="c.compraId" :value="c.compraId">{{ c.descricao }} · {{ dataCurta(c.data) }} · {{ moeda(c.valor) }}</option>
+              </select></label>
+            <label v-if="credito.tipo === 'pagamento'" class="campo-credito"><span>De qual conta saiu?</span>
+              <select v-model="credito.contaId" data-conta-pagamento>
+                <option value="" disabled>Escolha a conta…</option>
+                <option v-for="c in contas" :key="c.id" :value="c.id">{{ c.nome }}</option>
+              </select></label>
+          </div>
+          <CampoValor v-model="formEdicao.valor" :tipo="edicaoEhSaida ? 'saida' : 'entrada'" :rotulo="editando.cartao ? (formEdicao.tipo === 'entrada' ? 'Valor do crédito' : 'Valor total da compra') : 'Valor'" />
           <CampoTexto v-model="formEdicao.descricao" rotulo="Descrição" />
           <CampoData v-model="formEdicao.data" :rotulo="editando.cartao ? 'Data da compra' : 'Data'" />
           <p v-if="editando.cartao" class="nota">Cartão: {{ editando.conta_nome }} · parcela {{ editando.descricao.match(/\((\d+\/\d+)\)$/)?.[1] || '1/1' }} nesta linha</p>
@@ -617,8 +669,8 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <div><dt>Data</dt><dd>{{ dataCurta(editando.data) }}</dd></div>
           <div><dt>Conta</dt><dd>{{ editando.conta_nome }}</dd></div>
         </dl>
-        <CampoCategoria v-if="edicaoEhSaida" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
-        <CampoCategoria v-else :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
+        <CampoCategoria v-if="edicaoEhSaida || (ehCreditoCartao && credito.tipo === 'estorno')" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
+        <CampoCategoria v-else-if="!editando.cartao" :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
         <CampoTexto v-model="formEdicao.subcategoria" rotulo="Subcategoria" maxlength="80" list="sugestoes-sub" autocomplete="off" placeholder="Ex: Hortifruti, Uber do trabalho" />
         <CampoIconeItem v-if="!editando.cartao" v-model="formEdicao.icone" :tipo="formEdicao.tipo" :descricao="formEdicao.descricao" />
       </template>
@@ -627,15 +679,13 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 
     <RegraModal :aberto="regraAberta" :inicial="sugestaoRegra ? sugestaoRegra.inicial : {}" tipo-fixo @fechar="regraAberta = false" @salvo="regraCriada" />
 
-    <FormularioModal :aberto="!!estornando" titulo="Estornar lançamento" tema="neutro" rotulo-salvar="Estornar" :erro="erroEstorno" @salvar="confirmarEstorno" @fechar="estornando = null">
+    <FormularioModal :aberto="!!estornando" titulo="Estornar lançamento" ajuda="transacoes.estorno" tema="neutro" rotulo-salvar="Estornar" :erro="erroEstorno" @salvar="confirmarEstorno" @fechar="estornando = null">
       <template v-if="estornando">
         <p class="nota">
           <strong>{{ estornando.cartao ? estornando.descricao_base : estornando.descricao }}</strong>
-          ({{ moeda(Math.abs(estornando.cartao ? estornando.valor_total_compra : estornando.valor)) }}): use para estorno, cancelamento ou devolução.
-          A despesa original e o estorno ficam ligados e saem dos totais; {{ estornando.cartao ? 'a compra deixa de pesar nas faturas.' : 'o valor volta ao saldo da conta.' }}
+          · {{ moeda(Math.abs(estornando.cartao ? estornando.valor_total_compra : estornando.valor)) }}
         </p>
         <CampoData v-if="!estornando.cartao" v-model="dataEstorno" rotulo="Data do estorno" atalhos />
-        <p class="nota">Dá para desfazer depois pelo menu ⋮.</p>
       </template>
     </FormularioModal>
   </div>
@@ -668,9 +718,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .total-grupo { font-size: 12px; font-weight: 600; }
 .pos { color: var(--txt-entrada); }
 .neg { color: var(--txt-saida); }
-.cartao-lista :deep(.linha) { margin: 0 6px; }
+.cartao-lista :deep(.linha-tx) { margin: 0 6px; }
 .cartao-lista { padding-block: 4px; }
-.cartao-lista :deep(.linha + .linha) { border-top: 1px solid var(--cor-borda); border-radius: 0 0 14px 14px; }
+.cartao-lista :deep(.linha-tx + .linha-tx) { border-top: 1px solid var(--cor-borda); border-radius: 0 0 14px 14px; }
 
 .cartao-mes { display: flex; flex-direction: column; gap: 10px; text-align: left; color: var(--cor-texto); font-weight: 500; }
 .mes-topo { display: flex; align-items: center; gap: 10px; }
@@ -715,6 +765,15 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .tag-tipo { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
 .tag-tipo.entrada { background: var(--cor-entrada-fundo); color: var(--txt-entrada); }
 .tag-tipo.saida { background: var(--cor-saida-fundo); color: var(--txt-saida); }
+.credito-cartao { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); }
+.credito-cartao .nota { margin: 0; }
+.opcao-credito { display: flex; gap: 10px; align-items: center; min-height: 48px; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--cor-borda); cursor: pointer; }
+.opcao-credito.ativa { border-color: var(--cor-entrada); }
+.opcao-credito input { width: 18px; height: 18px; accent-color: var(--cor-entrada); flex: none; }
+.opcao-credito span { display: flex; flex-direction: column; gap: 1px; font-size: 14px; min-width: 0; }
+.opcao-credito small { color: var(--cor-texto-suave); font-size: 12.5px; }
+.campo-credito { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 500; }
+.campo-credito select { font: 15px var(--fonte-texto); min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); max-width: 100%; }
 .selo-ignorada { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--cor-borda); color: var(--cor-texto-suave); }
 .menu-pontos { position: fixed; z-index: 60; width: 160px; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; box-shadow: var(--sombra-suave); }
 .menu-pontos button { background: transparent; border: none; color: var(--cor-texto); text-align: left; font-family: inherit; font-size: 14px; font-weight: 500; padding: 12px 10px; border-radius: 8px; cursor: pointer; }

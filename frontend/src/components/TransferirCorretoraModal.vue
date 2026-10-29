@@ -32,12 +32,11 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" titulo="Transferir para a corretora" tema="investimento" :carregando="salvando" :erro="erro" rotulo-salvar="Transferir" @salvar="salvar" @fechar="emit('fechar')">
+  <FormularioModal :aberto="aberto" titulo="Transferir para a corretora" ajuda="transferir" tema="investimento" :carregando="salvando" :erro="erro" rotulo-salvar="Transferir" @salvar="salvar" @fechar="emit('fechar')">
     <CampoSelecao v-model="f.origem" rotulo="Conta de origem (banco)" :opcoes="origens" tema="investimento" />
     <CampoSelecao v-model="f.corretora" rotulo="Corretora" :opcoes="destinos" tema="investimento" />
     <CampoValor v-model="f.valor" rotulo="Valor" tema="investimento" />
     <CampoData v-model="f.data" rotulo="Data" atalhos tema="investimento" />
-    <p class="nota">Transferência entre contas próprias: não conta como gasto nem como receita.</p>
   </FormularioModal>
 </template>
 

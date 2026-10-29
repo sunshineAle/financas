@@ -301,7 +301,7 @@ onMounted(carregarCategorias);
 
     <FormularioModal :aberto="!!editando" :titulo="tipoEdicao === 'receita' ? 'Editar categoria de receita' : 'Editar categoria'" :tema="tipoEdicao === 'receita' ? 'entrada' : 'saida'" :erro="erroEdicao" @salvar="salvarEdicao" @fechar="editando = null">
       <CampoTexto v-model="formEdicao.nome" rotulo="Nome" obrigatorio :tema="tipoEdicao === 'receita' ? 'entrada' : 'saida'" />
-      <CampoValor v-if="tipoEdicao === 'despesa'" v-model="tetoEdit" rotulo="Teto mensal (opcional)" tipo="saida" dica="Deixe R$ 0,00 para ficar sem teto." />
+      <CampoValor v-if="tipoEdicao === 'despesa'" v-model="tetoEdit" rotulo="Teto mensal (opcional)" tipo="saida" dica="Deixe R$ 0,00 para ficar sem teto." dica-ao-focar />
       <CampoBase rotulo="Ícone"><SeletorIconeCategoria v-model="formEdicao.icone" :tipo="tipoEdicao === 'receita' ? 'entrada' : 'saida'" :nome="formEdicao.nome" :automatico="false" /></CampoBase>
       <CampoBase :rotulo="`Cor (${tipoEdicao === 'receita' ? 'verdes' : 'paleta de despesas'})`"><SeletorCor v-model="formEdicao.cor" :paleta="tipoEdicao === 'receita' ? PALETA_RECEITA : PALETA_DESPESA" /></CampoBase>
     </FormularioModal>
@@ -309,7 +309,7 @@ onMounted(carregarCategorias);
     <FormularioModal :aberto="mostrarFormulario" :titulo="formulario.tipo === 'receita' ? 'Nova categoria de receita' : 'Nova categoria de despesa'" :tema="formulario.tipo === 'receita' ? 'entrada' : 'saida'" rotulo-salvar="Salvar categoria" :erro="erro" @salvar="criarCategoria" @fechar="mostrarFormulario = false">
       <CampoTipo v-model="formulario.tipo" :opcoes="opcoesTipo" />
       <CampoTexto v-model="formulario.nome" rotulo="Nome" obrigatorio :placeholder="formulario.tipo === 'receita' ? 'Ex: Salário, Freela' : 'Ex: Delivery, Transporte'" :tema="formulario.tipo === 'receita' ? 'entrada' : 'saida'" />
-      <CampoValor v-if="formulario.tipo === 'despesa'" v-model="tetoNovo" rotulo="Teto mensal (opcional)" tipo="saida" dica="Deixe R$ 0,00 para ficar sem teto." />
+      <CampoValor v-if="formulario.tipo === 'despesa'" v-model="tetoNovo" rotulo="Teto mensal (opcional)" tipo="saida" dica="Deixe R$ 0,00 para ficar sem teto." dica-ao-focar />
       <CampoBase rotulo="Ícone"><SeletorIconeCategoria v-model="formulario.icone" :tipo="formulario.tipo === 'receita' ? 'entrada' : 'saida'" :nome="formulario.nome" /></CampoBase>
       <CampoBase :rotulo="`Cor (${formulario.tipo === 'receita' ? 'verdes' : 'paleta de despesas'})`"><SeletorCor v-model="formulario.cor" :paleta="formulario.tipo === 'receita' ? PALETA_RECEITA : PALETA_DESPESA" :padrao="formulario.tipo === 'receita' ? PALETA_RECEITA[0] : PALETA_DESPESA[0]" /></CampoBase>
     </FormularioModal>

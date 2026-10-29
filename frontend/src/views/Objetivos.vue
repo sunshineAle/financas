@@ -11,9 +11,10 @@ const ABAS = [
   { id: 'metas', rotulo: 'Metas' },
   { id: 'investimentos', rotulo: 'Investimentos' },
 ];
-const aba = ref('metas');
 // Extrato da meta (?meta=<id>) e detalhe do ativo (?ativo=<id>) abrem dentro de Objetivos; o botão voltar do navegador fecha.
 const route = useRoute();
+// ?aba=investimentos abre direto na aba Investimentos (vindo do detalhe do Patrimônio no Início)
+const aba = ref(route.query.aba === 'investimentos' ? 'investimentos' : 'metas');
 const metaAberta = computed(() => String(route.query.meta || ''));
 const ativoAberto = computed(() => String(route.query.ativo || ''));
 const emDetalhe = computed(() => !!(metaAberta.value || ativoAberto.value));

@@ -6,7 +6,7 @@ import CampoBase from './CampoBase.vue';
 const props = defineProps({
   modelValue: { type: String, default: '' },
   rotulo: { type: String, default: 'Data' },
-  erro: String, dica: String, tema: String, obrigatorio: Boolean, disabled: Boolean,
+  erro: String, dica: String, tema: String, obrigatorio: Boolean, disabled: Boolean, dicaAoFocar: Boolean,
   min: String, max: String, atalhos: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
@@ -17,7 +17,7 @@ const ontem = () => { const d = new Date(); d.setDate(d.getDate() - 1); return i
 </script>
 
 <template>
-  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :tema="tema" :obrigatorio="obrigatorio" :para="id">
+  <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="tema" :obrigatorio="obrigatorio" :para="id">
     <input :id="id" class="sf-entrada" type="date" :value="modelValue" :min="min" :max="max" :disabled="disabled" :required="obrigatorio" :aria-invalid="!!erro" @input="emit('update:modelValue', $event.target.value)" />
     <div v-if="atalhos" class="atalhos">
       <button type="button" :class="{ on: modelValue === hoje() }" @click="emit('update:modelValue', hoje())">Hoje</button>

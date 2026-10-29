@@ -20,7 +20,11 @@ function referencia(linhas) {
   let periodo = null;
   const mp = texto.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*(?:a|até|-|à)\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
   if (mp) periodo = { inicio: parseData(mp[1]), fim: parseData(mp[2]) };
-  return { vencimento: venc, ano: ano ? +ano : null, periodo };
+  // Anotação 61: total declarado da fatura ("Total da fatura R$ 196,75"), para conferir o sentido dos sinais e o total importado
+  let total = null;
+  const mt = texto.match(/(?:total\s+(?:da|desta)\s+fatura|valor\s+total(?:\s+da\s+fatura)?|total\s+a\s+pagar)[^\d\n−-]{0,30}([-−]?\s*(?:R\$\s*)?[-−]?\d{1,3}(?:\.\d{3})*,\d{2})/i);
+  if (mt) { const v = parseValor(mt[1].replace(/R\$\s*/, '').replace('−', '-').replace(/\s+/g, '')); if (v !== null) total = v; }
+  return { vencimento: venc, ano: ano ? +ano : null, periodo, total };
 }
 
 function valorDoToken(tok) {
@@ -83,7 +87,7 @@ function parsePdf(linhasTexto) {
   if (!saida.length) throw new Error('Não reconheci lançamentos neste PDF (esperava linhas com data, descrição e valor). Tente OFX, CSV ou planilha, ou escolha outro PDF.');
   return {
     linhas: saida, ignoradas,
-    meta: { formato: 'pdf', vencimento: ref.vencimento, inicio: ref.periodo ? ref.periodo.inicio : null, fim: ref.periodo ? ref.periodo.fim : null, sinalNormalizado: algumExplicito && saida.every((s) => s.sinalExplicito) },
+    meta: { formato: 'pdf', vencimento: ref.vencimento, totalFatura: ref.total, inicio: ref.periodo ? ref.periodo.inicio : null, fim: ref.periodo ? ref.periodo.fim : null, sinalNormalizado: algumExplicito && saida.every((s) => s.sinalExplicito) },
   };
 }
 

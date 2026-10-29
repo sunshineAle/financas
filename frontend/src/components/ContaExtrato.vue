@@ -1,10 +1,9 @@
 <script setup>
-import { iconeDoItem } from '../utils/iconesCategoria.js';
-// Extrato da conta agrupado por data (visão anual: por mês). Linhas no padrão da lista de Transações:
-// ícone da categoria, descrição, categoria, valor com sinal e menu ⋮.
+// Extrato da conta agrupado por data (visão anual: por mês). Cada linha é a LinhaTransacao (anotação 53),
+// a mesma de Transações: ícone com selo do banco, meio de pagamento, categoria, valor com sinal e menu ⋮.
 import { computed } from 'vue';
-import IconeCategoria from './IconeCategoria.vue';
-import MenuPontos from './MenuPontos.vue';
+import LinhaTransacao from './LinhaTransacao.vue';
+import { infoTransacao } from '../utils/infoTransacao.js';
 
 const props = defineProps({
   transacoes: { type: Array, default: () => [] },
@@ -40,12 +39,7 @@ const grupos = computed(() => {
     total: itens.filter((t) => !t.ignorada).reduce((s, t) => s + t.valor, 0),
   }));
 });
-const catDe = (t) => props.categorias.find((c) => c.id === t.categoria_id);
-const nomeCat = (t) => t.categoria_nome || t.categoria_receita || 'Sem categoria';
-// Anotação 37: ícone do item (escolhido ou reconhecido pela descrição) antes do ícone da categoria; resgate com ícone próprio.
-const iconeDe = (t) => (/^reserva_/.test(String(t.tipo_mov || '')) ? (t.valor > 0 ? 'cat-entrada-resgate' : 'cat-grupo-financas') : '')
-  || t.icone || (t.valor < 0 ? iconeDoItem(t.descricao, 'saida') : null) || (t.valor < 0 ? catDe(t)?.icone : null) || '';
-const corDe = (t) => (t.valor < 0 ? catDe(t)?.cor : '') || '';
+const infoDe = (t) => infoTransacao(t, { categorias: props.categorias });
 const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
 </script>
 
@@ -58,19 +52,11 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
         <h3>{{ g.rotulo }}</h3>
         <span class="numero-tabular total">{{ sinal(g.total) }} {{ moeda.format(Math.abs(g.total)) }}</span>
       </header>
-      <div v-for="t in g.itens" :key="t.id" class="linha" :class="{ ignorada: t.ignorada }" tabindex="0" role="button" :aria-label="`Abrir ${t.descricao} em Transações`" @click="emit('abrir', t)" @keydown.enter="emit('abrir', t)">
-        <IconeCategoria :valor="iconeDe(t)" :tipo="t.valor < 0 ? 'saida' : 'entrada'" :cor="corDe(t)" :tamanho="40" />
-        <span class="textos">
-          <span class="descricao">{{ t.descricao }}</span>
-          <span class="secundario">{{ nomeCat(t) }}<span v-if="t.ignorada" class="chip">ignorada</span></span>
-        </span>
-        <span class="valor numero-tabular" :class="t.valor < 0 ? 'negativo' : 'positivo'">{{ sinal(t.valor) }} {{ moeda.format(Math.abs(t.valor)) }}</span>
-        <span class="menu" @click.stop @keydown.enter.stop>
-          <MenuPontos rotulo="Opções da transação">
-            <button type="button" @click="emit('abrir', t)">Ver em Transações</button>
-          </MenuPontos>
-        </span>
-      </div>
+      <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" rotulo-abrir="abrir em Transações" @abrir="emit('abrir', t)">
+        <template #menu>
+          <button type="button" @click="emit('abrir', t)">Ver em Transações</button>
+        </template>
+      </LinhaTransacao>
     </section>
   </div>
 </template>
@@ -81,17 +67,4 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
 .grupo header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 6px 2px; }
 .grupo h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); text-transform: capitalize; letter-spacing: 0.02em; }
 .total { font-size: 12px; color: var(--cor-texto-suave); }
-.linha { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 36px; align-items: center; gap: 10px; padding: 10px 0 10px 4px; min-height: 56px; border-radius: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; }
-.linha:hover, .linha:focus-visible { background: var(--cor-realce); outline: none; }
-.textos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.descricao { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; line-height: 1.3; }
-.secundario { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; font-size: 12px; color: var(--cor-texto-suave); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conta { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.chip { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--cor-borda); flex: none; }
-.valor { font-family: var(--fonte-display); font-weight: 600; font-size: 15px; white-space: nowrap; text-align: right; }
-.valor.positivo { color: var(--cor-entrada); }
-.valor.negativo { color: var(--cor-saida); }
-.menu { display: grid; place-items: center; width: 44px; height: 44px; }
-.linha.ignorada { opacity: 0.5; }
-.linha.ignorada .descricao { text-decoration: line-through; }
 </style>

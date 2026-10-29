@@ -174,8 +174,7 @@ async function excluir() {
     <AbasSeletor v-model="aba" :abas="ABAS" tema="saida" bloco />
 
     <template v-if="aba === 'essenciais'">
-      <p class="explica">Gastos do mês que <b>mudam de valor</b>: luz, água, gás, mercado, farmácia, transporte. O app estima pela média dos últimos 6 meses da categoria. Lazer, restaurante e delivery ficam de fora.</p>
-      <CardPadrao v-if="sugestoes.length" titulo="Sugestões" subtitulo="categorias com gasto em quase todos os meses" data-sugestoes-ess>
+      <CardPadrao v-if="sugestoes.length" titulo="Sugestões" ajuda="custos.sugestoes" data-sugestoes-ess>
         <ul class="lista">
           <li v-for="x in sugestoes" :key="x.categoriaId" class="linha sug">
             <IconeCategoria :valor="x.icone || ''" tipo="saida" :cor="x.cor || ''" :tamanho="40" />
@@ -185,7 +184,7 @@ async function excluir() {
           </li>
         </ul>
       </CardPadrao>
-      <CardPadrao titulo="Seus essenciais" :subtitulo="essAtivos.length ? `${essAtivos.length} no custo de vida` : ''" data-essenciais>
+      <CardPadrao titulo="Seus essenciais" ajuda="custos.essenciais" :subtitulo="essAtivos.length ? `${essAtivos.length} no custo de vida` : ''" data-essenciais>
         <p v-if="!carregando && !ess.itens.length" class="vazio">Nenhum essencial ainda. Adicione as categorias que você paga todo mês com valor que muda (luz, água, mercado…).</p>
         <ul v-else class="lista">
           <li v-for="i in essAtivos" :key="i.id" class="linha">
@@ -206,7 +205,6 @@ async function excluir() {
             <button type="button" class="pausa" :aria-label="`Voltar ${i.nome} ao custo de vida`" title="Voltar ao custo de vida" @click="alternarEss(i)"><Power :size="18" :stroke-width="1.9" /></button>
           </li>
         </ul>
-        <p class="nota">Pago = já há gasto da categoria neste mês. Parcelas de cartão e de dívidas não entram no custo de vida (são temporárias), só na projeção.</p>
       </CardPadrao>
     </template>
 
@@ -235,7 +233,7 @@ async function excluir() {
     </CardPadrao>
     </template>
 
-    <CardPadrao v-if="proj" titulo="Projeção do mês seguinte" :subtitulo="proj.rotulo">
+    <CardPadrao v-if="proj" titulo="Projeção do mês seguinte" ajuda="custos.projecao" :subtitulo="proj.rotulo">
       <ul class="proj">
         <li><span>Custos fixos ({{ proj.custosFixos.quantidade }})</span><b class="num"><Valor :valor="proj.custosFixos.total" /></b></li>
         <li v-if="proj.essenciais"><span>Essenciais estimados ({{ proj.essenciais.quantidade }})</span><b class="num"><Valor :valor="proj.essenciais.total" /></b></li>
@@ -243,7 +241,6 @@ async function excluir() {
         <li><span>Parcelas de dívidas e acordos ({{ proj.parcelasDividas.quantidade }})</span><b class="num"><Valor :valor="proj.parcelasDividas.total" /></b></li>
         <li class="total"><span>= Saídas previstas</span><b class="num"><Valor :valor="proj.total" /></b></li>
       </ul>
-      <p class="nota">Só entra o que está cadastrado. Gastos não essenciais (lazer, restaurante, delivery) ficam de fora.</p>
     </CardPadrao>
 
     <FormularioModal :aberto="aberto" :titulo="editandoId ? 'Editar custo fixo' : 'Novo custo fixo'" tema="saida" :carregando="salvando" :erro="erroGeral" @salvar="salvar" @fechar="aberto = false">

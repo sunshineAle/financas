@@ -16,6 +16,7 @@ import cartoes from '../../backend/src/routes/cartoes.js';
 import importacao from '../../backend/src/routes/importacao.js';
 import custosFixos from '../../backend/src/routes/custosFixos.js';
 import regras from '../../backend/src/routes/regras.js';
+import patrimonio from '../../backend/src/routes/patrimonio.js';
 import auth from './stubs/auth-routes.cjs';
 import openFinance from './stubs/open-finance.cjs';
 import { semearDados } from './seed.js';
@@ -36,6 +37,7 @@ const montagem = [
   ['/api/importacao', importacao],
   ['/api/custos-fixos', custosFixos],
   ['/api/regras', regras],
+  ['/api/patrimonio', patrimonio],
 ];
 
 export async function chamar(metodo, url, corpo) {

@@ -11,6 +11,33 @@ const { TIPOS_INVESTIMENTO, TIPOS_LIQUIDEZ_RAPIDA, MSG_SO_LIQUIDEZ_RAPIDA, liqui
 const carteira = require('../utils/carteiraDb');
 const { detectarReservaAutomatica } = require('../utils/reservasAuto');
 const { NOME_RESGATES, garantirCategoriaReceita } = require('../utils/categoriasReceita');
+const caixinhas = require('../utils/caixinhas');
+
+// Anotação 55 — "Já guardado em" (saldo inicial da meta): um lançamento por meta em historico_aportes, operacao 'saldo_inicial'.
+// NÃO é Guardar (não conta no ritmo nem nos aportes do mês) e não sai de nenhuma conta; entra no acumulado da meta.
+function saldoInicialDaMeta(reservaId, metaId) {
+  return db.prepare("SELECT * FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND operacao = 'saldo_inicial' AND excluido_em IS NULL ORDER BY rowid DESC LIMIT 1").get(reservaId, metaId) || null;
+}
+function definirSaldoInicialMeta(reserva, meta, { data, valor }) {
+  const v = arredondar(Number(valor) || 0);
+  const atual = saldoInicialDaMeta(reserva.id, meta.id);
+  const r = dados.buscar('reserva_liberdade', reserva.id);
+  if (atual) {
+    if (!v) {
+      dados.excluir('historico_aportes', atual.id);
+      dados.atualizar('reserva_liberdade', r.id, { valor_atual: arredondar(r.valor_atual - atual.valor) });
+      return;
+    }
+    dados.atualizar('historico_aportes', atual.id, { valor: v, data });
+    dados.atualizar('reserva_liberdade', r.id, { valor_atual: arredondar(r.valor_atual - atual.valor + v) });
+  } else if (v) {
+    dados.inserir('historico_aportes', {
+      reserva_id: reserva.id, valor: v, tipo: meta.tipo_investimento || 'cdi', operacao: 'saldo_inicial', ativo: null,
+      descricao: 'Saldo inicial da meta', conta_id: null, meta_id: meta.id, data,
+    });
+    dados.atualizar('reserva_liberdade', r.id, { valor_atual: arredondar(r.valor_atual + v) });
+  }
+}
 
 // CDI diário (% ao dia útil, série 12 do Bacen) enviado pela tela (?cdiDiario=0.0545), que lê o cache do Bacen no aparelho.
 function lerCdi(req) {
@@ -72,7 +99,7 @@ function infoPrazo(meta, atingido, reservaId, hojeStr) {
   const ini = new Date(ay, am - 3, 1);
   const desde = `${ini.getFullYear()}-${String(ini.getMonth() + 1).padStart(2, '0')}-01`;
   const { total } = db
-    .prepare('SELECT COALESCE(SUM(valor), 0) AS total FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND data >= ? AND excluido_em IS NULL')
+    .prepare("SELECT COALESCE(SUM(valor), 0) AS total FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND data >= ? AND excluido_em IS NULL AND operacao <> 'saldo_inicial'")
     .get(reservaId, meta.id, desde);
   const ritmo = arredondar(Math.max(0, total) / 3);
   if (meses === 0) return { status: 'atrasado', falta, meses_restantes: 0, necessario_mes: falta, ritmo_mes: ritmo };
@@ -144,8 +171,11 @@ function montarResposta(reserva, usuarioId, cdi = null) {
     .all(reserva.id)
     .map((m) => {
       const atingido = arredondar(porMeta[m.id] || 0);
+      const si = saldoInicialDaMeta(reserva.id, m.id);
       return {
         ...m,
+        saldo_inicial_valor: si ? si.valor : null,
+        saldo_inicial_data: si ? String(si.data).slice(0, 10) : null,
         tipo_rotulo: m.tipo_investimento ? TIPOS_INVESTIMENTO[m.tipo_investimento] || m.tipo_investimento : null,
         valor_atingido: atingido,
         saldo_restante: arredondar(Math.max(0, m.valor_meta - atingido)),
@@ -245,7 +275,26 @@ function lerMeta(corpo, atual) {
     if (corpo.prazo && !dataValida(corpo.prazo)) return { erro: 'Prazo inválido.' };
     prazo = corpo.prazo || null;
   }
-  return { dados: { valor, nome, icone, tipo, prazo } };
+  // Anotação 55: "Já guardado em" (data + valor). undefined = não mexe; valor 0 = apaga.
+  let inicial;
+  if (corpo.saldoInicial !== undefined && corpo.saldoInicial !== null) {
+    const v = Number(corpo.saldoInicial.valor) || 0;
+    const dia = String(corpo.saldoInicial.data || carteira.hojeStr()).slice(0, 10);
+    if (v < 0) return { erro: 'O valor já guardado não pode ser negativo.' };
+    if (!dataValida(dia)) return { erro: 'Data do valor já guardado inválida.' };
+    if (dia > carteira.hojeStr()) return { erro: 'A data do valor já guardado não pode ser no futuro.' };
+    inicial = { data: dia, valor: v };
+  }
+  // Anotação 56: meta ligada à caixinha do banco (conta + nome no extrato; apelidos separados por ';').
+  let caixinha;
+  if (corpo.caixinha !== undefined) {
+    if (!corpo.caixinha || !corpo.caixinha.contaId) caixinha = { conta: null, nome: null };
+    else {
+      const nomeCx = String(corpo.caixinha.nome || '').split(';').map((a) => a.trim()).filter(Boolean).join('; ').slice(0, 300);
+      caixinha = { conta: String(corpo.caixinha.contaId), nome: nomeCx || null };
+    }
+  }
+  return { dados: { valor, nome, icone, tipo, prazo, inicial, caixinha } };
 }
 
 function sincronizarMetaPrincipal(reserva) {
@@ -259,7 +308,16 @@ router.post('/metas', (req, res) => {
   const lida = lerMeta(req.body || {}, null);
   if (lida.erro) return res.status(400).json({ erro: lida.erro });
   const d = lida.dados;
-  dados.inserir('metas_reserva', { reserva_id: reserva.id, nome: d.nome, icone: d.icone || '🎯', tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo });
+  if (d.caixinha && d.caixinha.conta && !db.prepare('SELECT 1 AS x FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(d.caixinha.conta, req.usuario.id)) {
+    return res.status(400).json({ erro: 'Conta da caixinha não encontrada.' });
+  }
+  dados.transacao(() => {
+    const m = dados.inserir('metas_reserva', {
+      reserva_id: reserva.id, nome: d.nome, icone: d.icone || '🎯', tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo,
+      caixinha_conta_id: d.caixinha ? d.caixinha.conta : null, caixinha_nome: d.caixinha ? d.caixinha.nome : null,
+    });
+    if (d.inicial && d.inicial.valor) definirSaldoInicialMeta(reserva, m, d.inicial);
+  });
   res.status(201).json(montarResposta(reserva, req.usuario.id, lerCdi(req)));
 });
 
@@ -272,10 +330,21 @@ router.put('/metas/:id', (req, res) => {
   const d = lida.dados;
   // Trocar o tipo de uma meta com aportes de outro tipo deixaria a meta incoerente
   if (d.tipo && d.tipo !== atual.tipo_investimento) {
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM historico_aportes WHERE meta_id = ? AND tipo != ? AND excluido_em IS NULL').get(atual.id, d.tipo);
+    const { n } = db.prepare("SELECT COUNT(*) AS n FROM historico_aportes WHERE meta_id = ? AND tipo != ? AND excluido_em IS NULL AND operacao <> 'saldo_inicial'").get(atual.id, d.tipo);
     if (n > 0) return res.status(400).json({ erro: 'Esta meta já tem lançamentos de outro tipo de investimento.' });
   }
-  dados.atualizar('metas_reserva', atual.id, { nome: d.nome, icone: d.icone, tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo });
+  if (d.caixinha && d.caixinha.conta && !db.prepare('SELECT 1 AS x FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(d.caixinha.conta, req.usuario.id)) {
+    return res.status(400).json({ erro: 'Conta da caixinha não encontrada.' });
+  }
+  dados.transacao(() => {
+    dados.atualizar('metas_reserva', atual.id, {
+      nome: d.nome, icone: d.icone, tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo,
+      ...(d.caixinha ? { caixinha_conta_id: d.caixinha.conta, caixinha_nome: d.caixinha.nome } : {}),
+    });
+    const si = saldoInicialDaMeta(reserva.id, atual.id);
+    if (si && d.tipo && si.tipo !== d.tipo) dados.atualizar('historico_aportes', si.id, { tipo: d.tipo });
+    if (d.inicial) definirSaldoInicialMeta(reserva, dados.buscar('metas_reserva', atual.id), d.inicial);
+  });
   sincronizarMetaPrincipal(reserva);
   res.json(montarResposta(dados.buscar('reserva_liberdade', reserva.id), req.usuario.id, lerCdi(req)));
 });
@@ -388,6 +457,7 @@ router.put('/aportes/:id', (req, res) => {
   const reserva = buscarOuCriarReserva(req.usuario.id);
   const antigo = buscarAporte(req, reserva);
   if (!antigo) return res.status(404).json({ erro: 'Lançamento não encontrado.' });
+  if (antigo.operacao === 'saldo_inicial') return res.status(400).json({ erro: 'Mude o valor já guardado em Editar meta.' });
 
   const lida = lerAporte(req.body, req.usuario.id);
   if (lida.erro) return res.status(400).json({ erro: lida.erro });
@@ -444,13 +514,14 @@ router.get('/metas/:id/extrato', (req, res) => {
     .prepare('SELECT id, data, valor, operacao, ativo, tipo, descricao, quantidade, preco_unitario FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND excluido_em IS NULL')
     .all(reserva.id, meta.id)
     .map((l) => ({
-      id: l.id, data: String(l.data).slice(0, 10), tipo: l.valor < 0 ? 'resgatar' : 'guardar', valor: l.valor,
+      id: l.id, data: String(l.data).slice(0, 10), tipo: l.operacao === 'saldo_inicial' ? 'saldo_inicial' : l.valor < 0 ? 'resgatar' : 'guardar', valor: l.valor,
       ativo: l.ativo || TIPOS_INVESTIMENTO[l.tipo] || l.tipo, descricao: l.descricao || null, simulado: false,
     }));
   db.prepare("SELECT id, data, total, descricao FROM operacoes WHERE meta_id = ? AND tipo = 'rendimento' AND excluido_em IS NULL").all(meta.id).forEach((o) =>
     linhas.push({ id: o.id, data: String(o.data).slice(0, 10), tipo: 'rendimento', valor: o.total, ativo: null, descricao: o.descricao || null, simulado: false })
   );
   const atingido = arredondar(linhas.filter((l) => l.tipo !== 'rendimento').reduce((t, l) => t + l.valor, 0));
+  linhas.forEach((l) => { if (l.tipo === 'saldo_inicial') { l.ativo = null; l.descricao = 'Já estava guardado (não saiu de nenhuma conta)'; } });
   const rend = rendimentoDaMeta(meta, atingido, reserva.id, cdi, hojeStr);
   if (rend.rendimento_simulado > 0) {
     linhas.push({ id: null, data: hojeStr, tipo: 'rendimento', valor: rend.rendimento_simulado, ativo: null, descricao: 'Rendimento estimado pelo CDI (100%)', simulado: true });
@@ -483,6 +554,19 @@ router.get('/auto/pendentes', (req, res) => {
     )
     .all(req.usuario.id, desde);
   const pendentes = [];
+  // Anotação 56: caixinhas sem o nome no extrato com mais de uma meta ligada à conta (já fora dos totais): opções = metas da conta
+  db.prepare(
+    `SELECT t.id, t.descricao, t.valor, t.data, t.conta_id, c.nome AS conta_nome FROM transacoes t LEFT JOIN contas c ON c.id = t.conta_id
+     WHERE t.usuario_id = ? AND t.excluido_em IS NULL AND t.tipo_mov = 'reserva_pendente' ORDER BY t.data DESC, t.rowid DESC`
+  ).all(req.usuario.id).forEach((t) => {
+    const sentido = t.valor < 0 ? 'guardar' : 'resgatar';
+    const opcoes = caixinhas.metasDaConta(req.usuario.id, t.conta_id).map((m) => ({ id: m.id, nome: m.nome }));
+    pendentes.push({
+      transacao: { ...t, data: String(t.data).slice(0, 10) },
+      deteccao: { produto: 'Caixinha', sentido, tipoInvestimento: 'cdb', rotulo: `${sentido === 'guardar' ? 'Aplicação' : 'Resgate'} Caixinha`, ativo: 'Caixinha', caixinha: true },
+      opcoes, trecho: caixinhas.trechoDaDescricao(t.descricao),
+    });
+  });
   for (const t of linhas) {
     const d = detectarReservaAutomatica(t.descricao);
     if (!d) continue;
@@ -507,6 +591,33 @@ router.post('/auto/decidir', (req, res) => {
   if (!t) return res.status(404).json({ erro: 'Transação não encontrada.' });
   if (db.prepare('SELECT 1 AS x FROM operacoes WHERE transacao_id = ? AND excluido_em IS NULL').get(t.id)) {
     return res.status(409).json({ erro: 'Esta transação já foi tratada.' });
+  }
+  // Anotação 56: caixinha pendente (sem o nome no extrato): vincula pela regra da caixinha; `regra: true` guarda o trecho da
+  // descrição como apelido da caixinha da meta (as próximas vão sozinhas).
+  if (t.tipo_mov === 'reserva_pendente') {
+    const sentido = t.valor < 0 ? 'guardar' : 'resgatar';
+    try {
+      if (acao === 'vincular') {
+        const meta = db.prepare('SELECT * FROM metas_reserva WHERE id = ? AND reserva_id = ? AND excluido_em IS NULL').get(String(metaId || ''), reserva.id);
+        if (!meta) return res.status(400).json({ erro: 'Escolha uma meta.' });
+        let regra = null;
+        dados.transacao(() => {
+          caixinhas.vincularTransacao(req.usuario.id, reserva, t, meta, { sentido, rendimento: (req.body || {}).rendimento });
+          if ((req.body || {}).regra) { const trecho = caixinhas.trechoDaDescricao(t.descricao); caixinhas.acrescentarApelido(meta, t.conta_id, trecho); regra = trecho; }
+        });
+        return res.status(201).json({ ...montarResposta(dados.buscar('reserva_liberdade', reserva.id), req.usuario.id, lerCdi(req)), regra });
+      }
+      if (acao === 'recusar') dados.atualizar('transacoes', t.id, { tipo_mov: 'reserva_recusada', revisao: 'recusado' });
+      else if (acao === 'comum' || acao === 'externo') {
+        const campos = { ignorada: 0, tipo_mov: null, revisao: acao };
+        if (acao === 'externo' && t.valor > 0) campos.categoria_receita = garantirCategoriaReceita(req.usuario.id, NOME_RESGATES, 'cat-entrada-resgate');
+        dados.atualizar('transacoes', t.id, campos);
+      } else return res.status(400).json({ erro: 'Escolha uma opção.' });
+      return res.status(201).json(montarResposta(dados.buscar('reserva_liberdade', reserva.id), req.usuario.id, lerCdi(req)));
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ erro: e.message });
+      throw e;
+    }
   }
   const det = detectarReservaAutomatica(t.descricao);
   if (!det) return res.status(400).json({ erro: 'Esta transação não parece uma reserva automática.' });
@@ -574,6 +685,32 @@ router.post('/auto/decidir', (req, res) => {
     throw e;
   }
   res.status(201).json(montarResposta(dados.buscar('reserva_liberdade', reserva.id), req.usuario.id, lerCdi(req)));
+});
+
+// Anotação 56 — escolha manual vira regra: { trecho, contaId } acrescenta o trecho como apelido da caixinha da meta.
+router.post('/metas/:id/caixinha-apelido', (req, res) => {
+  const reserva = buscarOuCriarReserva(req.usuario.id);
+  const meta = db.prepare('SELECT * FROM metas_reserva WHERE id = ? AND reserva_id = ? AND excluido_em IS NULL').get(req.params.id, reserva.id);
+  if (!meta) return res.status(404).json({ erro: 'Meta não encontrada.' });
+  const contaId = (req.body || {}).contaId ? String(req.body.contaId) : null;
+  if (contaId && !db.prepare('SELECT 1 AS x FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(contaId, req.usuario.id)) return res.status(400).json({ erro: 'Conta não encontrada.' });
+  try {
+    const m = caixinhas.acrescentarApelido(meta, contaId, (req.body || {}).trecho);
+    res.json({ ok: true, caixinha_nome: m.caixinha_nome });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ erro: e.message });
+    throw e;
+  }
+});
+
+// Anotação 56 — "Desfazer" do aviso "Vinculado à meta Viagem": tira o Guardar/Resgatar da meta (e a linha de rendimento) e
+// devolve a transação para A revisar (fora dos totais). { transacaoId }
+router.post('/auto/desfazer', (req, res) => {
+  const t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String((req.body || {}).transacaoId || ''), req.usuario.id);
+  if (!t) return res.status(404).json({ erro: 'Transação não encontrada.' });
+  if (!caixinhas.desvincularTransacao(t)) return res.status(400).json({ erro: 'Esta transação não está vinculada a uma meta.' });
+  const reserva = buscarOuCriarReserva(req.usuario.id);
+  res.json(montarResposta(dados.buscar('reserva_liberdade', reserva.id), req.usuario.id, lerCdi(req)));
 });
 
 module.exports = router;

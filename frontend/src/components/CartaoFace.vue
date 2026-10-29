@@ -4,7 +4,8 @@
 // (tom sobre tom) e cortados na borda direita, selo de tipo no canto superior esquerdo, Usado · Disponível · Total · % e barra fina, rodapé Fecha · Vence. Sem número do cartão e sem nome
 // (o nome fica fora do card, abaixo do carrossel).
 import { computed, ref, onMounted } from 'vue';
-import { CreditCard } from 'lucide-vue-next';
+import { CreditCard, Store, ReceiptText } from 'lucide-vue-next';
+import IconeBandeira from './IconeBandeira.vue';
 import { bancoPorSlug, reconhecerBanco } from '../utils/catalogoBancos.js';
 
 const props = defineProps({
@@ -48,6 +49,10 @@ const claro = computed(() => {
   return (0.299 * r + 0.587 * g + 0.114 * b) > 170;
 });
 
+// Tipo de crédito (anotação 58): selo no canto; a bandeira fica no canto oposto (crediário não tem bandeira)
+const tipo = computed(() => props.cartao.tipoCredito || 'cartao');
+const seloTipo = computed(() => ({ cartao: { texto: 'Cartão de crédito', icone: CreditCard }, loja: { texto: 'Cartão de loja', icone: Store }, crediario: { texto: 'Crediário', icone: ReceiptText } }[tipo.value] || { texto: 'Cartão de crédito', icone: CreditCard }));
+
 const pct = computed(() => (props.cartao.limite > 0 ? Math.min(100, (props.cartao.limiteUsado / props.cartao.limite) * 100) : 0));
 const pronto = ref(false);
 onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
@@ -61,7 +66,11 @@ onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
       <span v-else class="iniciais">{{ iniciais }}</span>
     </div>
 
-    <span class="selo"><CreditCard :size="14" :stroke-width="2" /> Cartão de crédito</span>
+    <div class="topo">
+      <span class="selo"><component :is="seloTipo.icone" :size="14" :stroke-width="2" /> {{ seloTipo.texto }}</span>
+      <IconeBandeira v-if="cartao.bandeira && tipo !== 'crediario'" class="bandeira" :bandeira="cartao.bandeira" :tamanho="22" />
+      <span v-else-if="tipo === 'loja'" class="selo leve">uso restrito à loja</span>
+    </div>
 
     <div class="centro">
       <span class="rotulo">Usado</span>
@@ -97,6 +106,9 @@ onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
 .logo img { width: 74%; height: 74%; object-fit: contain; opacity: 0.5; mix-blend-mode: soft-light; filter: saturate(0.4); }
 .logo .emoji { font-size: clamp(60px, 28cqw, 108px); line-height: 1; opacity: 0.45; filter: grayscale(1); margin-right: 18%; }
 .logo .iniciais { font-family: var(--fonte-display); font-weight: 800; font-size: clamp(48px, 22cqw, 84px); letter-spacing: -0.04em; color: var(--txt); opacity: 0.3; margin-right: 22%; }
+.topo { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.bandeira { color: var(--txt); opacity: 0.92; }
+.selo.leve { background: transparent; border: 1px solid var(--tom); font-weight: 500; white-space: nowrap; }
 .selo { position: relative; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--tom); color: var(--txt); }
 .centro { position: relative; display: flex; flex-direction: column; gap: 2px; max-width: 100%; min-width: 0; }
 .metricas { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--txt-suave); }

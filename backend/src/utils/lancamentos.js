@@ -210,16 +210,156 @@ function estornarCompraCartao(usuarioId, compraId, { descricao } = {}) {
   return { vinculo, compraId: novaCompra, parcelas: linhas.length };
 }
 
+// Desfaz o vínculo de um crédito do cartão. 'estorno' (espelho criado pelo app) é apagado; o resto volta ao normal:
+// estorno importado/marcado à mão, pagamento adiantado e cashback continuam como crédito comum (valor negativo), a compra
+// estornada volta a contar. Do lado da conta (pagamento adiantado): a saída criada pelo app sai (o saldo volta); a que
+// veio do extrato volta a ser saída comum.
 function desfazerEstornoCartao(usuarioId, vinculo) {
   const linhas = db.prepare('SELECT * FROM lancamentos_cartao WHERE usuario_id = ? AND vinculo = ? AND excluido_em IS NULL').all(usuarioId, String(vinculo));
   if (!linhas.length) falha('Estorno não encontrado.', 404);
+  const daConta = db.prepare("SELECT * FROM transacoes WHERE usuario_id = ? AND vinculo = ? AND excluido_em IS NULL AND tipo_mov IN ('pagamento_cartao', 'pagamento_cartao_criado')").all(usuarioId, String(vinculo));
   dados.transacao(() => {
     linhas.forEach((l) => {
       if (l.tipo_mov === 'estorno') dados.excluir('lancamentos_cartao', l.id);
       else dados.atualizar('lancamentos_cartao', l.id, { tipo_mov: null, vinculo: null });
     });
+    daConta.forEach((t) => {
+      if (t.tipo_mov === 'pagamento_cartao_criado') { somarSaldo(t.conta_id, -t.valor); dados.excluir('transacoes', t.id); }
+      else dados.atualizar('transacoes', t.id, { tipo_mov: null, vinculo: null, ignorada: 0 });
+    });
   });
   return linhas.length;
+}
+
+// ---------------------------------------------------------------- créditos na fatura do cartão (anotação 61)
+// Modelo (o mesmo do estorno de cartão): crédito = lançamento com valor NEGATIVO em lancamentos_cartao (abate a fatura).
+//  tipo_mov do crédito: 'estorno' (espelho criado pelo app) | 'estorno_vinculado' (crédito do arquivo/marcado à mão ligado à
+//  compra) | 'estorno_avulso' (estorno sem a compra: reduz o gasto da categoria e fica "A revisar") | 'pagamento' (pagamento
+//  adiantado: abate a fatura, não é gasto nem entrada) | 'cashback' (abate a fatura e é ENTRADA na categoria Cashback).
+//  tipo_mov da compra: 'estornada' (estorno total) | 'estornada_parcial' (estorno de parte do valor; o resto continua gasto).
+//  Pagamento adiantado + saída da conta: mesmo `vinculo`; a saída fica fora dos totais (ignorada = 2) com tipo_mov
+//  'pagamento_cartao' (veio do extrato) ou 'pagamento_cartao_criado' (criada aqui, ao marcar à mão).
+const CASHBACK = 'Cashback';
+function garantirCashback(usuarioId) {
+  try { return require('./categoriasReceita').garantirCategoriaReceita(usuarioId, CASHBACK, 'cat-entrada-cashback'); } catch (e) { return CASHBACK; }
+}
+
+// Liga o crédito (estorno) à compra original. Parcial quando o crédito é menor que a compra.
+// Uma compra pode receber mais de um estorno parcial: todos ficam no mesmo vínculo e, quando a soma chega ao valor da compra,
+// ela passa a 'estornada'.
+function ligarEstornoCartao(est, ori, { vinculo = null } = {}) {
+  let ja = 0;
+  if (ori.tipo_mov === 'estornada_parcial' && ori.vinculo) {
+    vinculo = ori.vinculo;
+    ja = db.prepare("SELECT COALESCE(SUM(-valor), 0) AS s FROM lancamentos_cartao WHERE vinculo = ? AND id <> ? AND valor < 0 AND excluido_em IS NULL").get(vinculo, est.id).s;
+  }
+  vinculo = vinculo || dados.novoId();
+  const parcial = ja + Math.abs(est.valor) < Math.abs(ori.valor) - 0.005;
+  dados.atualizar('lancamentos_cartao', est.id, { tipo_mov: 'estorno_vinculado', vinculo, categoria_id: ori.categoria_id || est.categoria_id || null });
+  dados.atualizar('lancamentos_cartao', ori.id, { tipo_mov: parcial ? 'estornada_parcial' : 'estornada', vinculo });
+  return { vinculo, parcial };
+}
+
+// Liga o pagamento adiantado (no cartão) à saída da conta: a saída sai dos totais (o saldo da conta continua valendo).
+function ligarPagamentoCartao(lanc, t, { vinculo = dados.novoId() } = {}) {
+  tirarDosTotais(t);
+  dados.atualizar('transacoes', t.id, { tipo_mov: 'pagamento_cartao', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null });
+  dados.atualizar('lancamentos_cartao', lanc.id, { vinculo });
+  return { vinculo };
+}
+
+// Saída de uma conta que parece ser o pagamento adiantado (mesmo valor, até 5 dias), ainda solta.
+function procurarSaidaDoPagamento(usuarioId, { contaId = null, valor, data }) {
+  const v = Math.abs(Number(valor));
+  const ms = (d) => Date.parse(`${String(d).slice(0, 10)}T12:00:00Z`);
+  return db
+    .prepare(`SELECT * FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND valor < 0 AND tipo_mov IS NULL AND ignorada = 0
+      AND id NOT IN (SELECT transacao_id FROM faturas_pagas WHERE transacao_id IS NOT NULL AND excluido_em IS NULL)${contaId ? ' AND conta_id = ?' : ''}`)
+    .all(...(contaId ? [usuarioId, String(contaId)] : [usuarioId]))
+    .filter((t) => Math.abs(Math.abs(t.valor) - v) < 0.005 && Math.abs(ms(t.data) - ms(data)) <= 5 * 86400000)
+    .sort((a, b) => Math.abs(ms(a.data) - ms(data)) - Math.abs(ms(b.data) - ms(data)))[0] || null;
+}
+
+// Compras do mesmo cartão que podem ter sido estornadas por este crédito: até 90 dias antes, valor maior ou igual,
+// ainda sem estorno; as de descrição mais parecida e valor igual primeiro.
+function comprasParecidas(usuarioId, credito, { limite = 8 } = {}) {
+  const v = Math.abs(credito.valor);
+  const limpar = (s) => new Set(semAcento(s).replace(/\b(estorno|estornado|devolucao|cancelamento|cancelada|reembolso|cred|credito|parcial)\b/g, ' ').split(/[^a-z0-9]+/).filter((p) => p.length >= 3));
+  const alvo = limpar(credito.descricao);
+  const ms = (d) => Date.parse(`${String(d).slice(0, 10)}T12:00:00Z`);
+  const porCompra = new Map();
+  db.prepare('SELECT * FROM lancamentos_cartao WHERE usuario_id = ? AND cartao_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL AND valor > 0 AND compra_id <> ?')
+    .all(usuarioId, credito.cartao_id, credito.compra_id)
+    .forEach((l) => {
+      const c = porCompra.get(l.compra_id) || { compraId: l.compra_id, id: l.id, descricao: l.descricao, data: l.data_compra, valor: 0, categoriaId: l.categoria_id || null, parcelas: l.total_parcelas };
+      c.valor = arredondar(c.valor + l.valor);
+      porCompra.set(l.compra_id, c);
+    });
+  return [...porCompra.values()]
+    .filter((c) => c.valor + 0.005 >= v && ms(c.data) <= ms(credito.data_compra) + 86400000 && ms(credito.data_compra) - ms(c.data) <= 90 * 86400000)
+    .map((c) => ({ ...c, nota: [...limpar(c.descricao)].filter((p) => alvo.has(p)).length, igual: Math.abs(c.valor - v) < 0.005 }))
+    .sort((a, b) => b.nota - a.nota || (b.igual ? 1 : 0) - (a.igual ? 1 : 0) || ms(b.data) - ms(a.data))
+    .slice(0, limite);
+}
+
+// "Marcar como crédito" (edição manual de um lançamento do cartão). tipo:
+//  'estorno'   + originalCompraId (opcional): liga à compra (total ou parcial); sem compra, fica estorno avulso (A revisar)
+//  'pagamento' + contaId: pagamento adiantado; casa com a saída da conta (mesmo valor, até 5 dias) ou cria a saída
+//  'cashback'  : abate a fatura e entra em Cashback
+//  'compra'    : desfaz (volta a ser compra/despesa)
+function marcarCreditoCartao(usuarioId, compraId, { tipo, originalCompraId = null, contaId = null, data = null } = {}) {
+  const linhas = db.prepare('SELECT * FROM lancamentos_cartao WHERE usuario_id = ? AND compra_id = ? AND excluido_em IS NULL ORDER BY parcela_numero').all(usuarioId, String(compraId));
+  if (!linhas.length) falha('Lançamento não encontrado.', 404);
+  if (linhas.length > 1) falha('Crédito na fatura não tem parcelas: este lançamento está parcelado.');
+  const l = linhas[0];
+  if (l.tipo_mov && !['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(l.tipo_mov)) falha('Este lançamento já está ligado a um estorno.');
+  if (!['estorno', 'pagamento', 'cashback', 'compra'].includes(tipo)) falha('Escolha que crédito é este.');
+  if (tipo === 'compra') {
+    // desfaz a marcação: volta a ser compra (despesa) comum
+    dados.transacao(() => {
+      if (l.vinculo) desfazerEstornoCartao(usuarioId, l.vinculo);
+      dados.atualizar('lancamentos_cartao', l.id, { valor: Math.abs(l.valor), tipo_mov: null, vinculo: null });
+    });
+    return { tipo };
+  }
+  const valor = -Math.abs(l.valor);
+  let resultado = { tipo };
+  dados.transacao(() => {
+    if (l.vinculo) desfazerEstornoCartao(usuarioId, l.vinculo); // reclassificar: solta o vínculo anterior
+    dados.atualizar('lancamentos_cartao', l.id, { valor, tipo_mov: null, vinculo: null });
+    const cred = { ...l, valor, tipo_mov: null, vinculo: null };
+    if (tipo === 'cashback') {
+      garantirCashback(usuarioId);
+      dados.atualizar('lancamentos_cartao', l.id, { tipo_mov: 'cashback', categoria_id: null, subcategoria: null });
+    } else if (tipo === 'pagamento') {
+      const conta = contaDoUsuario(contaId, usuarioId);
+      if (!conta) falha('Escolha a conta de onde saiu o pagamento.');
+      dados.atualizar('lancamentos_cartao', l.id, { tipo_mov: 'pagamento', categoria_id: null, subcategoria: null });
+      const t = procurarSaidaDoPagamento(usuarioId, { contaId: conta.id, valor, data: data || l.data_compra });
+      if (t) { ligarPagamentoCartao(cred, t); resultado.casouComExtrato = true; } else {
+        const cartao = db.prepare('SELECT nome FROM cartoes WHERE id = ?').get(l.cartao_id);
+        const vinculo = dados.novoId();
+        dados.inserir('transacoes', {
+          conta_id: conta.id, usuario_id: usuarioId, descricao: `Pagamento adiantado da fatura ${cartao ? cartao.nome : ''}`.trim(), valor, data: data || l.data_compra,
+          origem: 'manual', ignorada: 2, tipo_mov: 'pagamento_cartao_criado', vinculo,
+        });
+        somarSaldo(conta.id, valor);
+        dados.atualizar('lancamentos_cartao', l.id, { vinculo });
+        resultado.criouSaida = true;
+      }
+    } else {
+      const ori = originalCompraId
+        ? db.prepare('SELECT * FROM lancamentos_cartao WHERE usuario_id = ? AND compra_id = ? AND cartao_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL AND valor > 0 ORDER BY parcela_numero LIMIT 1').get(usuarioId, String(originalCompraId), l.cartao_id)
+        : null;
+      if (originalCompraId && !ori) falha('A compra escolhida não está mais disponível para estorno.');
+      if (ori) {
+        const total = db.prepare('SELECT SUM(valor) AS s FROM lancamentos_cartao WHERE compra_id = ? AND excluido_em IS NULL').get(ori.compra_id).s;
+        if (Math.abs(valor) > total + 0.005) falha('O estorno é maior que a compra escolhida.');
+        resultado = { ...resultado, ...ligarEstornoCartao(cred, { ...ori, valor: total }) };
+      } else dados.atualizar('lancamentos_cartao', l.id, { tipo_mov: 'estorno_avulso' });
+    }
+  });
+  return resultado;
 }
 
 // Sugere a despesa original de um estorno (usado pela importação): mesma conta, valor igual e oposto,
@@ -332,4 +472,5 @@ module.exports = {
   ErroLancamento, ehTransferencia, ehLinhaDeEstorno, criarTransferencia, converterEmTransferencia, desfazerPar, vincularEstorno, estornarTransacao,
   estornarCompraCartao, desfazerEstornoCartao, procurarOriginalDoEstorno, ehEstorno, pagarDividaComTransacao,
   desfazerPagamentoDaTransacao, listarVinculaveis, detectarDestino, tirarDosTotais, devolverAosTotais, somarSaldo,
+  CASHBACK, garantirCashback, ligarEstornoCartao, ligarPagamentoCartao, procurarSaidaDoPagamento, comprasParecidas, marcarCreditoCartao,
 };

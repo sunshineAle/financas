@@ -130,7 +130,7 @@ function tecla(e) {
       </div>
       <button type="button" class="aba" aria-live="polite" :aria-label="`${rotuloPeriodo}. Tocar para escolher o ano`" :aria-expanded="menuAno" data-aba-mes @click="abrirAnos" @pointerdown.stop>
         <b class="aba-mes">{{ aba.topo }}<ChevronDown :size="12" :stroke-width="2.4" class="aba-seta" /></b>
-        <small class="aba-ano">{{ intervaloTxt && !passosPrevia ? intervaloTxt : mostrarAno }}</small>
+        <small class="aba-ano">{{ mostrarAno }}</small>
       </button>
       <i class="base" aria-hidden="true"></i>
     </div>
@@ -146,6 +146,8 @@ function tecla(e) {
       </transition>
     </div>
     <div v-if="menuAno" class="menu-ano" role="listbox" aria-label="Escolher o ano" data-menu-ano>
+      <!-- Anotação 57: o período do mês financeiro aparece aqui (e na legenda do card de topo), não embaixo do mês. -->
+      <p v-if="intervaloTxt" class="mes-fin">Mês financeiro: {{ intervaloTxt }}<RouterLink to="/mais/financas" @click="menuAno = false">mudar</RouterLink></p>
       <button v-for="a in anos" :key="a" type="button" role="option" :aria-selected="a === ano" :class="{ ativo: a === ano }" @click="escolherAno(a)">
         {{ a }}<small v-if="a === anoAtual">atual</small><Check v-if="a === ano" :size="14" :stroke-width="2.4" />
       </button>
@@ -233,6 +235,8 @@ function tecla(e) {
 .menu-ano button { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: none; border-radius: 10px; background: none; color: var(--cor-texto); font: 600 15px var(--fonte-texto); cursor: pointer; text-align: left; }
 .menu-ano button:hover { background: var(--cor-realce); }
 .menu-ano button.ativo { color: var(--mes-cor); background: color-mix(in srgb, var(--mes-cor) 10%, transparent); }
+.mes-fin { margin: 2px 4px 6px; padding: 0 8px 8px; border-bottom: 1px solid var(--cor-borda); font-size: 12px; line-height: 1.4; color: var(--cor-texto-suave); white-space: nowrap; display: flex; gap: 8px; align-items: baseline; }
+.mes-fin a { color: var(--mes-cor, var(--cor-primaria)); font-weight: 600; text-decoration: underline; }
 .menu-ano small { font-size: 11px; font-weight: 500; color: var(--cor-texto-suave); }
 .menu-ano svg { margin-left: auto; }
 .menu-fundo { position: fixed; inset: 0; z-index: 29; }

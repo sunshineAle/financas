@@ -109,6 +109,41 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
   const emAberto = faturasEmAberto(usuarioId);
   const contas = db.prepare('SELECT id, nome FROM contas WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId);
   const nomeTitular = (db.prepare('SELECT nome FROM usuarios WHERE id = ?').get(usuarioId) || {}).nome || null;
+  // Anotação 56: metas ligadas a caixinhas desta conta. O guardado de cada meta anda junto com as linhas (em ordem de data)
+  // para a pré-visualização já separar o rendimento dos resgates.
+  // Anotação 61: pagamentos adiantados lançados no cartão e ainda sem a saída da conta ligada
+  const adiantados = db.prepare(
+    `SELECT l.id, l.cartao_id, l.valor, l.data_compra, k.nome AS cartao_nome FROM lancamentos_cartao l JOIN cartoes k ON k.id = l.cartao_id AND k.excluido_em IS NULL
+     WHERE l.usuario_id = ? AND l.excluido_em IS NULL AND l.tipo_mov = 'pagamento' AND l.vinculo IS NULL`
+  ).all(usuarioId);
+  const adiantadosUsados = new Set();
+  const pagamentoAdiantadoSolto = (l) => {
+    const a = adiantados.find((x) => !adiantadosUsados.has(x.id) && mesmoValor(-x.valor, -l.valor) && Math.abs(T.diasEntre(x.data_compra, l.data)) <= 5
+      && (integ.pareceFaturaDeCartao(l.descricao) || /\b(pag|pgto|pagto|cart)/.test(integ.normalizar(l.descricao)) || T.semelhanca(l.descricao, x.cartao_nome) >= 0.34));
+    if (a) adiantadosUsados.add(a.id);
+    return a || null;
+  };
+  const metasCaixinha = integ.metasDaConta(usuarioId, conta.id);
+  const caixinhaPorIdx = new Map();
+  if (metasCaixinha.length) {
+    const guardado = {};
+    metasCaixinha.forEach((m) => { guardado[m.id] = integ.guardadoNaMeta(m.reserva_id, m.id); });
+    linhas.filter((l) => !l.foraPeriodo && !casamento.has(l.idx)).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)))
+      .forEach((l) => {
+        const c = integ.casarCaixinha(l.descricao, l.valor, metasCaixinha);
+        if (!c) return;
+        let rendimento = 0;
+        if (c.meta) {
+          const g = guardado[c.meta.id] || 0;
+          if (c.sentido === 'guardar') guardado[c.meta.id] = faturas.arredondar(g + Math.abs(l.valor));
+          else {
+            rendimento = g > 0 ? faturas.arredondar(Math.max(0, Math.abs(l.valor) - g)) : 0;
+            guardado[c.meta.id] = faturas.arredondar(Math.max(0, g - (Math.abs(l.valor) - rendimento)));
+          }
+        }
+        caixinhaPorIdx.set(l.idx, { ...c, rendimento });
+      });
+  }
 
   const saida = linhas.map((l) => {
     const r = {
@@ -131,6 +166,25 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       const c = categorizarTransacao(l.descricao, categorias, { usuarioId, valor: l.valor, contaId: conta.id });
       if (c) { r.categoriaId = c; r.categoriaNome = nomeCat[c]; r.categoriaAuto = true; }
     }
+    // Anotação 56: caixinha do banco ligada a uma meta (Guardar/Resgatar fora das entradas e saídas)
+    const cx = caixinhaPorIdx.get(l.idx);
+    if (cx) {
+      const v = Math.abs(l.valor);
+      r.status = 'reserva';
+      r.categoriaId = null; r.categoriaNome = null; r.categoriaAuto = false;
+      r.reserva = {
+        caixinha: true, sentido: cx.sentido, produto: 'Caixinha', porNome: cx.porNome,
+        metaId: cx.meta ? cx.meta.id : null, metaNome: cx.meta ? cx.meta.nome : null,
+        rotulo: `${cx.sentido === 'guardar' ? 'Guardar' : 'Resgatar'}${cx.meta ? ' · ' + cx.meta.nome : ''}`,
+        rendimento: cx.rendimento || 0,
+        opcoes: cx.opcoes.map((m) => ({ id: m.id, nome: m.nome })),
+      };
+      const reais = (n) => n.toFixed(2).replace('.', ',');
+      if (cx.meta && cx.sentido === 'guardar') r.observacao = `Guardar na meta ${cx.meta.nome}: não conta como saída.`;
+      else if (cx.meta) r.observacao = `Resgatar da meta ${cx.meta.nome}: não conta como entrada${cx.rendimento > 0 ? `; o rendimento de R$ ${reais(cx.rendimento)} entra em Rendimentos` : ''}.`;
+      else r.observacao = `${cx.sentido === 'guardar' ? 'Aplicação' : 'Resgate'} sem o nome da caixinha (R$ ${reais(v)}): escolha a meta ou deixe para A revisar.`;
+      return r;
+    }
     // estorno / cancelamento / devolução (crédito) anula a despesa original
     if (l.valor > 0 && integ.ehEstorno(l.descricao)) {
       r.status = 'estorno';
@@ -147,6 +201,17 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       return r;
     }
     // pagamento de fatura do cartão (sai da conta)
+    // Anotação 61: pagamento ADIANTADO já lançado na fatura (crédito 'pagamento' ainda sem a saída da conta): casa com ele,
+    // e a saída não conta como gasto (nem dobra o pagamento)
+    const adiant = l.valor < 0 ? pagamentoAdiantadoSolto(l) : null;
+    if (adiant) {
+      r.status = 'pagamento_fatura';
+      r.fatura = { adiantadoId: adiant.id, cartaoId: adiant.cartao_id, cartaoNome: adiant.cartao_nome, chave: null, total: Math.abs(adiant.valor) };
+      r.candidatasFatura = [];
+      r.observacao = `Pagamento adiantado da fatura do ${adiant.cartao_nome} (já está na fatura): não conta como gasto.`;
+      r.categoriaId = null; r.categoriaNome = null; r.categoriaAuto = false;
+      return r;
+    }
     if (l.valor < 0 && integ.pareceFaturaDeCartao(l.descricao)) {
       // Todas as faturas abertas viram opção (as de valor igual primeiro). Se nenhuma bate o valor, mas há uma que vence
       // perto da data do pagamento, ela é sugerida: sem o vínculo o pagamento contaria como gasto EM CIMA das compras do
@@ -195,11 +260,22 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
     .filter((e) => !restos.has(e.id));
   const consumidos = new Set();
   const casamento = new Map();
-  // Pagamento da fatura anterior: fica fora da fatura (crédito "Pagamento recebido" ou, com descrição inequívoca, qualquer sinal)
+  // Pagamento da fatura (crédito "Pagamento recebido" ou, com descrição inequívoca, qualquer sinal). Anotação 61: o pagamento
+  // da fatura ANTERIOR fica de fora (como na 0.8); o pagamento ADIANTADO desta fatura (texto "adiantado/antecipado" ou
+  // feito mais de 5 dias depois do vencimento da fatura anterior) abate esta fatura, sem ser entrada nem gasto.
   const ehPagamento = (l) => (l.valor > 0
-    ? integ.pareceCreditoDePagamento(l.descricao) && !integ.ehEstorno(l.descricao)
+    ? l.tipoCredito === 'pagamento' || (integ.pareceCreditoDePagamento(l.descricao) && !integ.ehEstorno(l.descricao) && !l.tipoCredito)
     : integ.pareceTextoDePagamentoDaFatura(l.descricao));
+  const vencAnterior = (() => {
+    if (!fatura) return null;
+    const [a, m] = fatura.split('-').map(Number); const t = a * 12 + (m - 1) - 1;
+    return faturas.datasDaFatura(`${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`, cartao.dia_fechamento, cartao.dia_vencimento).vence;
+  })();
   const dentro = linhas.filter((l) => !l.foraPeriodo && !ehPagamento(l));
+  // Pela data, só é adiantado se não deixar a fatura negativa (pagamento maior que as compras é da fatura anterior)
+  const liquidoSemPagamentos = dentro.reduce((s, l) => s - l.valor, 0);
+  const ehAdiantado = (l) => ehPagamento(l) && l.valor > 0 && (integ.pareceAdiantado(l.descricao)
+    || (!!vencAnterior && T.diasEntre(vencAnterior, l.data) > 5 && l.valor <= liquidoSemPagamentos + 0.005));
   const chaveDe = (l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero);
   const dataParcela = (l) => T.somarMeses(l.data_compra, l.parcela_numero - 1);
   const compras = dentro.filter((l) => l.valor < 0);
@@ -251,7 +327,8 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
   });
 
   // Créditos (estornos) já lançados antes: valor negativo no cartão, mesma data (±1 dia), um para um
-  dentro.filter((l) => l.valor > 0 && !casamento.has(l.idx)).forEach((l) => {
+  // (inclui pagamento adiantado e cashback já gravados, que também ficam negativos no cartão)
+  linhas.filter((l) => !l.foraPeriodo && l.valor > 0 && !casamento.has(l.idx) && (!ehPagamento(l) || ehAdiantado(l))).forEach((l) => {
     const e = lancs.find((x) => !consumidos.has(x.id) && x.valor < 0 && mesmoValor(-x.valor, l.valor) && Math.abs(T.diasEntre(x.data_compra, l.data)) <= 1);
     if (e) { consumidos.add(e.id); casamento.set(l.idx, { e: { ...e, valor: -e.valor }, tipo: 'duplicada' }); }
   });
@@ -259,6 +336,91 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
   const categorias = categoriasDoUsuario(usuarioId);
   const nomeCat = Object.fromEntries(categorias.map((c) => [c.id, c.nome]));
   const anuladas = new Set(); // compras do arquivo já ligadas a um estorno (um estorno para cada compra)
+  const restante = new Map(); // anotação 61: quanto de cada compra ainda pode ser estornado (estorno parcial anula só parte)
+  const reais = (n) => Number(n).toFixed(2).replace('.', ',');
+  const dataBr = (d) => String(d).slice(0, 10).split('-').reverse().join('/');
+
+  // Pagamento adiantado: a saída correspondente no extrato de alguma conta (mesmo valor, até 5 dias), ainda solta
+  let saidasConta = null;
+  const usadasConta = new Set();
+  function pagamentoNaConta(l) {
+    if (!saidasConta) {
+      saidasConta = db.prepare(
+        `SELECT t.id, t.descricao, t.valor, substr(t.data, 1, 10) AS data, t.conta_id, c.nome AS conta_nome FROM transacoes t
+         JOIN contas c ON c.id = t.conta_id AND c.excluido_em IS NULL
+         WHERE t.usuario_id = ? AND t.excluido_em IS NULL AND t.valor < 0 AND t.tipo_mov IS NULL AND t.ignorada = 0
+           AND t.id NOT IN (SELECT transacao_id FROM faturas_pagas WHERE transacao_id IS NOT NULL AND excluido_em IS NULL)`
+      ).all(usuarioId);
+    }
+    const t = saidasConta
+      .filter((x) => !usadasConta.has(x.id) && mesmoValor(-x.valor, l.valor) && Math.abs(T.diasEntre(x.data, l.data)) <= 5)
+      .filter((x) => integ.pareceFaturaDeCartao(x.descricao) || /\b(pag|pgto|pagto|cart)/i.test(integ.normalizar(x.descricao)) || T.semelhanca(x.descricao, cartao.nome) >= 0.34)
+      .sort((a, b) => Math.abs(T.diasEntre(a.data, l.data)) - Math.abs(T.diasEntre(b.data, l.data)))[0];
+    if (!t) return null;
+    usadasConta.add(t.id);
+    return { transacaoId: t.id, contaId: t.conta_id, contaNome: t.conta_nome, data: t.data, descricao: t.descricao };
+  }
+
+  // Anotação 61: crédito na fatura (valor positivo aqui) — pagamento adiantado, cashback ou estorno
+  function classificarCredito(l, r) {
+    const tipo = l.tipoCredito || (integ.ehEstorno(l.descricao) ? 'estorno' : null);
+    if (ehAdiantado(l)) {
+      r.status = 'pagamento_adiantado'; r.credito = { tipo: 'pagamento' };
+      r.pagamento = pagamentoNaConta(l);
+      r.observacao = r.pagamento
+        ? `Pagamento adiantado: abate a fatura, não é entrada nem gasto. Casa com "${r.pagamento.descricao}" de ${dataBr(r.pagamento.data)} na conta ${r.pagamento.contaNome}.`
+        : 'Pagamento adiantado: abate a fatura, não é entrada nem gasto. Ao importar o extrato da conta, a saída casa com ele.';
+      return r;
+    }
+    if (tipo === 'cashback') {
+      r.status = 'cashback'; r.credito = { tipo: 'cashback' }; r.categoriaReceita = 'Cashback';
+      r.observacao = 'Cashback: abate a fatura e entra como entrada em Cashback.';
+      return r;
+    }
+    // estorno / devolução / cancelamento (ou crédito sem palavra-chave): procura a compra original, até 90 dias antes
+    r.status = 'estorno'; r.credito = { tipo: 'estorno' };
+    const alvo = limparEstorno(l.descricao);
+    const nota = (valorCompra, desc, data) => ({ exato: mesmoValor(valorCompra, l.valor) ? 1 : 0, sim: T.semelhanca(alvo, desc), dias: T.diasEntre(String(data).slice(0, 10), l.data) });
+    const serve = (c) => c.sim >= 0.34 && c.dias >= 0 && c.dias <= 90;
+    const cands = [];
+    lancs.filter((e) => !consumidos.has(e.id) && !e.tipo_mov && e.valor > 0).forEach((e) => {
+      const resta = restante.has(`e${e.id}`) ? restante.get(`e${e.id}`) : e.valor;
+      if (resta + 0.005 < l.valor) return;
+      const c = { tipo: 'existente', e, chave: `e${e.id}`, valorOriginal: e.valor, resta, ...nota(e.valor, e.descricao, e.data_compra) };
+      if (serve(c)) cands.push(c);
+    });
+    dentro.filter((o) => o.idx !== l.idx && o.valor < 0 && !casamento.has(o.idx) && !anuladas.has(o.idx)).forEach((o) => {
+      const resta = restante.has(`l${o.idx}`) ? restante.get(`l${o.idx}`) : -o.valor;
+      if (resta + 0.005 < l.valor) return;
+      const c = { tipo: 'linha', o, chave: `l${o.idx}`, valorOriginal: -o.valor, resta, ...nota(-o.valor, o.descricao, o.data) };
+      if (serve(c)) cands.push(c);
+    });
+    cands.sort((a, b) => b.exato - a.exato || b.sim - a.sim || a.dias - b.dias);
+    const best = cands[0];
+    if (best) {
+      const parcial = l.valor < best.valorOriginal - 0.005;
+      const sobra = faturas.arredondar(best.resta - l.valor);
+      restante.set(best.chave, sobra);
+      const desc = best.tipo === 'existente' ? best.e.descricao : best.o.descricao;
+      const data = best.tipo === 'existente' ? best.e.data_compra : best.o.data;
+      if (sobra <= 0.005) { if (best.tipo === 'existente') consumidos.add(best.e.id); else anuladas.add(best.o.idx); }
+      r.anula = best.tipo === 'existente'
+        ? { tipo: 'existente', id: best.e.id, descricao: desc, valor: best.e.valor, data, parcial }
+        : { tipo: 'linha', idx: best.o.idx, descricao: desc, valor: best.o.valor, data, parcial };
+      const catId = best.tipo === 'existente' ? best.e.categoria_id : categorizarTransacao(best.o.descricao, categorias);
+      if (catId && nomeCat[catId]) { r.categoriaId = catId; r.categoriaNome = nomeCat[catId]; }
+      r.observacao = parcial
+        ? `Estorno parcial: anula R$ ${reais(l.valor)} da compra "${desc}" de ${dataBr(data)} (sobra R$ ${reais(best.valorOriginal - l.valor)} de gasto).`
+        : `Anula a compra "${desc}" de ${dataBr(data)}${best.tipo === 'linha' ? ' (deste arquivo)' : ''}.`;
+      return r;
+    }
+    r.revisar = true;
+    const c = categorizarTransacao(alvo, categorias);
+    if (c) { r.categoriaId = c; r.categoriaNome = nomeCat[c]; r.categoriaAuto = true; }
+    r.observacao = 'Estorno sem a compra original (até 90 dias antes): reduz os gastos da categoria e fica em A revisar.';
+    return r;
+  }
+
   const saida = linhas.map((l) => {
     const r = {
       idx: l.idx, data: l.data, descricao: l.descricao, valor: l.valor, fitid: l.fitid || null, confianca: l.confianca, bruto: l.bruto,
@@ -266,40 +428,33 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
       categoriaId: null, categoriaNome: null, categoriaAuto: false, observacao: '',
     };
     if (l.foraPeriodo) { r.status = 'fora_periodo'; r.acao = 'descartar'; r.observacao = 'Fora do período escolhido.'; return r; }
-    if (ehPagamento(l)) { r.status = 'pagamento_recebido'; r.acao = 'descartar'; r.observacao = 'Pagamento da fatura: não é compra, fica de fora.'; return r; }
+    if (l.creditoPorTexto) r.creditoPorTexto = true;
+    if (ehPagamento(l) && !ehAdiantado(l)) {
+      r.status = 'pagamento_recebido'; r.acao = 'descartar'; r.observacao = 'Pagamento da fatura anterior: não é compra nem entrada, fica de fora.';
+      if (l.valor > 0) r.pagamento = pagamentoNaConta(l); // dados para, se a pessoa disser que foi adiantado, casar com o extrato
+      return r;
+    }
     const p = parcelaDe(l);
     if (p) r.parcela = { atual: p.atual, total: p.total };
     const m = casamento.get(l.idx);
     if (m) {
       r.existente = { id: m.e.id, descricao: m.e.descricao, valor: -m.e.valor, data: m.e.data_compra, parcela: m.e.total_parcelas > 1 ? `${m.e.parcela_numero}/${m.e.total_parcelas}` : null };
-      if (m.tipo === 'duplicada') { r.status = 'duplicada'; r.acao = 'descartar'; r.observacao = 'Compra já registrada.'; }
+      if (m.tipo === 'duplicada') { r.status = 'duplicada'; r.acao = 'descartar'; r.observacao = l.valor > 0 ? 'Crédito já registrado.' : 'Compra já registrada.'; }
       else if (m.tipo === 'casada') { r.status = 'casada'; r.acao = 'manter'; r.observacao = `Parcela ${m.e.parcela_numero}/${m.e.total_parcelas} já registrada (valor dentro da tolerância).`; }
       else { r.status = 'divergente'; r.acao = 'atualizar'; r.observacao = `A parcela registrada é ${m.e.valor.toFixed(2).replace('.', ',')}; a fatura traz ${(-l.valor).toFixed(2).replace('.', ',')}.`; }
       return r;
     }
-    if (l.valor > 0) {
-      // crédito que não é pagamento: estorno, devolução, cashback...
-      r.status = 'estorno';
-      const ori = lancs.find((e) => !consumidos.has(e.id) && !e.tipo_mov && mesmoValor(e.valor, l.valor) && e.data_compra <= l.data && T.semelhanca(limparEstorno(l.descricao), e.descricao) >= 0.34);
-      if (ori) {
-        consumidos.add(ori.id);
-        r.anula = { tipo: 'existente', id: ori.id, descricao: ori.descricao, valor: ori.valor, data: ori.data_compra };
-        r.observacao = `Anula a compra "${ori.descricao}" de ${ori.data_compra}.`;
-      } else {
-        const par = dentro.find((o) => o.idx !== l.idx && o.valor < 0 && mesmoValor(-o.valor, l.valor) && T.semelhanca(limparEstorno(l.descricao), o.descricao) >= 0.34 && !casamento.has(o.idx) && !anuladas.has(o.idx));
-        if (par) anuladas.add(par.idx);
-        if (par) { r.anula = { tipo: 'linha', idx: par.idx, descricao: par.descricao, valor: par.valor, data: par.data }; r.observacao = `Anula "${par.descricao}" do mesmo arquivo.`; }
-        else r.observacao = 'Crédito/estorno sem compra original encontrada: entra como crédito na fatura.';
-      }
-      return r;
-    }
+    if (l.valor > 0) return classificarCredito(l, r);
     const c = categorizarTransacao(l.descricao, categorias, { usuarioId, valor: l.valor, contaId: null });
     if (c) { r.categoriaId = c; r.categoriaNome = nomeCat[c]; r.categoriaAuto = true; }
     return r;
   });
   // Total da fatura segundo o arquivo (compras + IOF/encargos − créditos; sem o pagamento da fatura anterior)
-  const totalArquivo = faturas.arredondar(saida.filter((r) => r.status !== 'fora_periodo' && r.status !== 'pagamento_recebido').reduce((s, r) => s - r.valor, 0));
-  return { linhas: saida, totalArquivo };
+  const contam = saida.filter((r) => r.status !== 'fora_periodo' && r.status !== 'pagamento_recebido');
+  const totalArquivo = faturas.arredondar(contam.reduce((s, r) => s - r.valor, 0));
+  const somaCompras = faturas.arredondar(contam.filter((r) => r.valor < 0).reduce((s, r) => s - r.valor, 0));
+  const somaCreditos = faturas.arredondar(contam.filter((r) => r.valor > 0).reduce((s, r) => s + r.valor, 0));
+  return { linhas: saida, totalArquivo, compras: somaCompras, creditos: somaCreditos };
 }
 
 module.exports = { classificarConta, classificarFatura, faturasEmAberto, dentroDaTolerancia, categoriasDoUsuario, restosDeImportacaoDesfeita, JANELA_DIAS };

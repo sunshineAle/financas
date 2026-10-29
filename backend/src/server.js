@@ -23,6 +23,7 @@ const backupRoutes = require('./routes/backup');
 const importacaoRoutes = require('./routes/importacao');
 const custosFixosRoutes = require('./routes/custosFixos');
 const regrasRoutes = require('./routes/regras');
+const patrimonioRoutes = require('./routes/patrimonio');
 const { iniciarSincronizacaoAgendada } = require('./jobs/sincronizarContas');
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/api/backup', backupRoutes);
 app.use('/api/importacao', importacaoRoutes);
 app.use('/api/custos-fixos', custosFixosRoutes);
 app.use('/api/regras', regrasRoutes);
+app.use('/api/patrimonio', patrimonioRoutes);
 
 // Placeholder para as próximas etapas do roteiro (dashboard, contas, etc.)
 app.get('/api/health', (req, res) => res.json({ ok: true }));

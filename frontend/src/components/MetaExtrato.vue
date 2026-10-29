@@ -9,7 +9,7 @@ import BotaoAcao from './BotaoAcao.vue';
 import MenuPontos from './MenuPontos.vue';
 import IconeCategoria from './IconeCategoria.vue';
 import Valor from './Valor.vue';
-import { PiggyBank, ArrowUpFromLine, ArrowDownToLine, TrendingUp, ChevronLeft } from 'lucide-vue-next';
+import { PiggyBank, ArrowUpFromLine, ArrowDownToLine, TrendingUp, ChevronLeft, Flag } from 'lucide-vue-next';
 import { api, comCdi, moeda, dataBR, infoCdi } from '../services/investimentos.js';
 
 const props = defineProps({
@@ -35,8 +35,8 @@ watch(() => [props.metaId, props.versao], carregar);
 const nomeExibir = (n) => (/reserva de emerg[êe]ncia/i.test(n || '') ? 'Reserva de Liberdade' : n);
 const ROTULO_PRAZO = { adiantado: 'Adiantado', no_ritmo: 'No ritmo', atrasado: 'Atrasado', concluida: 'Concluída' };
 const prazoBR = (t) => { const [a, m] = String(t || '').slice(0, 10).split('-'); return `${m}/${a}`; };
-const ROTULO = { guardar: 'Guardar', resgatar: 'Resgatar', rendimento: 'Rendimento' };
-const icones = { guardar: ArrowDownToLine, resgatar: ArrowUpFromLine, rendimento: TrendingUp };
+const ROTULO = { guardar: 'Guardar', resgatar: 'Resgatar', rendimento: 'Rendimento', saldo_inicial: 'Saldo inicial da meta' };
+const icones = { guardar: ArrowDownToLine, resgatar: ArrowUpFromLine, rendimento: TrendingUp, saldo_inicial: Flag };
 const nota = computed(() => extrato.value?.nota || 'Rendimentos simulados com dados públicos do Bacen');
 const origemCdi = computed(() => (infoCdi().origem === 'snapshot' || infoCdi().origem === 'estimativa' ? ' (valor aproximado, sem conexão com o Bacen)' : ''));
 </script>
@@ -78,7 +78,10 @@ const origemCdi = computed(() => (infoCdi().origem === 'snapshot' || infoCdi().o
           <span class="s">{{ dataBR(l.data) }}<template v-if="l.descricao"> · {{ l.descricao }}</template></span>
         </span>
         <span :class="['v', 'numero-tabular', l.valor < 0 ? 'neg' : 'pos']">{{ l.valor > 0 ? '+' : '' }}{{ moeda(l.valor) }}</span>
-        <MenuPontos v-if="l.id && l.tipo !== 'rendimento'">
+        <MenuPontos v-if="l.id && l.tipo === 'saldo_inicial'">
+          <button type="button" @click="emit('editar-meta', extrato.meta.id)">Editar valor já guardado</button>
+        </MenuPontos>
+        <MenuPontos v-else-if="l.id && l.tipo !== 'rendimento'">
           <button type="button" @click="emit('editar-lancamento', l.id)">Editar</button>
           <button type="button" class="perigo" @click="emit('apagar-lancamento', l.id)">Apagar</button>
         </MenuPontos>

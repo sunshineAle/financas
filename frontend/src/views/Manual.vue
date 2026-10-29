@@ -1,6 +1,7 @@
 <script setup>
 // Manual / Tutorial: passo a passo curto de cada parte do sistema. Seções recolhíveis (uma aberta por vez).
-import { ref } from 'vue';
+import { ref, onMounted, nextTick, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { Landmark, CreditCard, FileText, ReceiptText, Target, Tags, CloudUpload, ArrowLeftRight, ChevronDown, Rocket, CalendarClock } from 'lucide-vue-next';
 
 const SECOES = [
@@ -68,7 +69,12 @@ const SECOES = [
     'Em Perfil você vê quando foi o último backup.',
   ] },
 ];
-const aberta = ref('comeco');
+// "Ver no manual" (balões de ajuda, anotação 64) chega com ?secao=<id>: abre e rola até essa seção.
+const rota = useRoute();
+const pedida = String(rota.query.secao || '');
+const aberta = ref(SECOES.some((s) => s.id === pedida) ? pedida : 'comeco');
+onMounted(() => { if (pedida) nextTick(() => document.getElementById('manual-' + pedida)?.scrollIntoView({ block: 'start' })); });
+watch(() => rota.query.secao, (s) => { if (s && SECOES.some((x) => x.id === s)) { aberta.value = String(s); nextTick(() => document.getElementById('manual-' + s)?.scrollIntoView({ block: 'start' })); } });
 const alternar = (id) => { aberta.value = aberta.value === id ? '' : id; };
 </script>
 
@@ -76,7 +82,7 @@ const alternar = (id) => { aberta.value = aberta.value === id ? '' : id; };
   <div class="pagina">
     <h1 class="titulo-pagina">Manual</h1>
     <p class="intro">Um guia rápido, em passos curtos. Toque em um assunto para abrir.</p>
-    <section v-for="s in SECOES" :key="s.id" class="secao" :class="{ aberta: aberta === s.id }">
+    <section v-for="s in SECOES" :id="'manual-' + s.id" :key="s.id" class="secao" :class="{ aberta: aberta === s.id }">
       <button type="button" class="cab" :aria-expanded="aberta === s.id" @click="alternar(s.id)">
         <span class="quadro"><component :is="s.icone" :size="20" :stroke-width="1.8" /></span>
         <b>{{ s.titulo }}</b>

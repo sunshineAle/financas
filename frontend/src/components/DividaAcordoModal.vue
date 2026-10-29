@@ -119,13 +119,12 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" :titulo="editar ? `Editar acordo${alvo ? ' · ' + alvo.nome : ''}` : f.dividaId ? 'Acordo para a dívida' : 'Adicionar acordo'" tema="saida" :rotuloSalvar="editar ? 'Salvar alterações' : 'Salvar acordo'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
-    <CampoSelecao v-if="!editar" v-model="f.dividaId" :opcoes="opcoes" rotulo="Qual dívida simular e aplicar?" dica="Escolha uma dívida existente para renegociar, ou crie um novo acordo." />
-    <p v-else class="nota">Os pagamentos já feitos continuam abatendo o acordo: só o saldo e as parcelas são recalculados.</p>
+  <FormularioModal :aberto="aberto" ajuda="dividas.acordo" :titulo="editar ? `Editar acordo${alvo ? ' · ' + alvo.nome : ''}` : f.dividaId ? 'Acordo para a dívida' : 'Adicionar acordo'" tema="saida" :rotuloSalvar="editar ? 'Salvar alterações' : 'Salvar acordo'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
+    <CampoSelecao v-if="!editar" v-model="f.dividaId" :opcoes="opcoes" rotulo="Qual dívida simular e aplicar?" dica="Uma dívida existente ou um acordo novo." dica-ao-focar />
     <template v-if="!f.dividaId">
       <CampoTexto v-model="f.nome" rotulo="Nome do acordo" placeholder="Ex: Acordo Serasa · Banco X" obrigatorio />
-      <CampoTexto v-model="f.credor" rotulo="Credor — opcional" placeholder="Ex: Banco X, Magalu" dica="Quem cobra a dívida hoje (banco, loja, empresa de cobrança)." />
-      <CampoSelecao v-model="f.origem" :opcoes="opcoesOrigem" rotulo="Origem da dívida" dica="De onde ela veio. A situação já fica 'Em acordo'." />
+      <CampoTexto v-model="f.credor" rotulo="Credor — opcional" placeholder="Ex: Banco X, Magalu" dica="Quem cobra a dívida hoje (banco, loja, empresa de cobrança)." dica-ao-focar />
+      <CampoSelecao v-model="f.origem" :opcoes="opcoesOrigem" rotulo="Origem da dívida" dica="De onde ela veio. A situação já fica 'Em acordo'." dica-ao-focar />
       <CampoSelecao v-model="f.negativada" :opcoes="[{ valor: 'sim', rotulo: 'Sim, negativada (SPC/Serasa)' }, { valor: 'nao', rotulo: 'Não' }]" rotulo="Está negativada?" />
     </template>
     <CampoValor v-model="f.valorBase" tipo="saida" rotulo="Valor da dívida (original ou à vista)" />
