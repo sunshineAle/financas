@@ -4,6 +4,7 @@ const db = require('../db');
 const { exigirAutenticacao } = require('../middleware/auth');
 
 const cartoesRouter = require('./cartoes');
+const { calcularPatrimonio } = require('./patrimonio');
 const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
 const { semPagamentoDeFatura, parcelasCartao, chaveHoje: chaveMesHoje } = require('../utils/cartaoMeses');
 
@@ -26,23 +27,11 @@ function mesesEntre(passados, futuros) {
 router.get('/', exigirAutenticacao, (req, res) => {
   const usuarioId = req.usuario.id;
 
-  const { totalContas } = db
-    .prepare('SELECT COALESCE(SUM(saldo), 0) AS totalContas FROM contas WHERE usuario_id = ? AND excluido_em IS NULL')
-    .get(usuarioId);
-
-  const { totalDividas } = db
-    .prepare('SELECT COALESCE(SUM(saldo), 0) AS totalDividas FROM dividas WHERE usuario_id = ? AND arquivada = 0 AND excluido_em IS NULL')
-    .get(usuarioId);
-
-  let reserva = db.prepare('SELECT * FROM reserva_liberdade WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId);
-  const reservaLiberdade = reserva ? reserva.valor_atual : 0;
-
   // Patrimônio líquido (decisão de 23/10/2026) = contas + Reserva/investimentos − faturas abertas − dívidas.
-  // Compra no cartão entra uma vez, como fatura aberta (a fatura paga sai daqui e a saída já está na conta).
-  // Mesma base do "Total devido" da tela Dívidas: fatura aberta de cada cartão + saldo das dívidas.
-  const faturasAbertasLista = cartoesRouter.faturasAPagar(usuarioId).filter((f) => f.aberta);
-  const totalFaturasAbertas = Math.round(faturasAbertasLista.reduce((s, f) => s + f.total, 0) * 100) / 100;
-  const patrimonioLiquido = Math.round((totalContas + reservaLiberdade - totalFaturasAbertas - totalDividas) * 100) / 100;
+  // Cálculo ÚNICO em routes/patrimonio.js (anotação 60): o mesmo número do detalhe "Patrimônio" (GET /api/patrimonio).
+  const pat = calcularPatrimonio(usuarioId);
+  const { totalContas, totalDividas, reservaLiberdade, totalFaturasAbertas, patrimonioLiquido } = pat;
+  const patrimonioConfere = pat.confere;
 
   // Top 3 dívidas por urgência (risco de negativação primeiro) e, dentro
   // da mesma urgência, maior taxa de juros primeiro (avalanche) — mesma
@@ -250,6 +239,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     periodo,
     reservaResumo,
     patrimonioLiquido,
+    patrimonioConfere,
     totalContas,
     totalDividas,
     totalFaturasAbertas,

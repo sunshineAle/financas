@@ -33,6 +33,7 @@ import { computed, onMounted, onBeforeUnmount } from 'vue';
 import { ArrowDown, ArrowUp, Equal } from 'lucide-vue-next';
 import BotaoOlho from './BotaoOlho.vue';
 import { ocultar, topoValorMontados, MASCARA } from '../services/privacidade.js';
+import { intervaloTxt } from '../services/mes.js';
 
 const props = defineProps({
   tema: { type: String, default: 'neutro', validator: (v) => ['entrada', 'saida', 'meta', 'investimento', 'neutro'].includes(v) },
@@ -45,6 +46,10 @@ const props = defineProps({
   sinal: { type: String, default: 'auto' },
   semOlho: { type: Boolean, default: false }, // sem o botão de olho (ocultar valores) no canto do card
 });
+// Anotação 57: com o mês financeiro fora do dia 1, a legenda mostra o período real ("Saldo do mês · 07/10 a 08/11")
+// no lugar do nome do mês. O filtro de meses mostra só o ano embaixo do mês.
+const periodoMostrado = computed(() => (props.periodo && intervaloTxt.value ? intervaloTxt.value : props.periodo));
+
 onMounted(() => { topoValorMontados.value += 1; });
 onBeforeUnmount(() => { topoValorMontados.value -= 1; });
 // tamanho (px), deslocamentos e rotação da assinatura por variante
@@ -94,7 +99,7 @@ const negativo = computed(() => estado.value === 'neg');
       <slot name="lateral" />
       <BotaoOlho v-if="!semOlho" claro :tamanho="34" />
     </div>
-    <span class="rotulo"><slot name="rotulo">{{ rotulo }}</slot><span v-if="periodo" class="periodo"> · {{ periodo }}</span></span>
+    <span class="rotulo"><slot name="rotulo">{{ rotulo }}</slot><span v-if="periodoMostrado" class="periodo"> · {{ periodoMostrado }}</span></span>
     <strong class="valor numero-tabular" :class="{ negativo }">
       <span v-if="estado" class="sinal-ico" aria-hidden="true"><ArrowUp v-if="estado === 'neg'" :size="15" :stroke-width="2.6" /><ArrowDown v-else-if="estado === 'pos'" :size="15" :stroke-width="2.6" /><Equal v-else :size="15" :stroke-width="2.6" /></span>
       <span v-if="estado" class="so-leitor">{{ ROTULO_ESTADO[estado] }}: </span><slot name="valor">{{ valorTxt }}</slot>

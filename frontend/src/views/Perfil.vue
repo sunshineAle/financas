@@ -117,8 +117,8 @@ async function enviarSenha() {
 const rotaRegras = computed(() => (router.getRoutes().some((r) => r.path === '/regras') ? '/regras' : '/orcamento?aba=regras'));
 const FINANCAS = computed(() => [
   { rotulo: 'Custo de vida', sub: 'fixos e essenciais do mês, e a projeção do mês seguinte', icone: CalendarClock, rota: '/custos-fixos' },
-  { rotulo: 'Categorias', sub: 'criar, editar, cores e ícones', icone: Tags, rota: '/orcamento' },
-  { rotulo: 'Orçamento por categoria', sub: 'quanto planeja gastar em cada uma', icone: GaugeIcon, rota: '/orcamento' },
+  { rotulo: 'Quanto guardar', sub: 'meta e valor por mês da Reserva de Liberdade', icone: Wallet, rota: '/mais/reserva' },
+  { rotulo: 'Categorias', sub: 'criar, editar, cores, ícones e orçamento', icone: Tags, rota: '/orcamento' },
   { rotulo: 'Regras de categorização', sub: 'o app aprende: "Padaria do José" vai para Mercado', icone: ListChecks, rota: rotaRegras.value },
 ]);
 
@@ -180,8 +180,10 @@ const exemploInicio = computed(() => {
   return `Ex.: o mês de ${['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][h.getMonth()]} vai de ${dm(de)} a ${dm(ate)}.`;
 });
 const inicioMudou = computed(() => JSON.stringify(cfgInicio.value) !== JSON.stringify(lerInicio().tipo === 'dia' && Number(lerInicio().dia) === 1 ? { tipo: 'dia', dia: 1 } : lerInicio()));
-function salvarInicio() {
+async function salvarInicio() {
   gravarInicio(cfgInicio.value);
+  // vai também para o banco, que entra no backup (anotação 54)
+  try { await fetch('/api/configuracoes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ inicioMes: cfgInicio.value }) }); } catch { /* fica no aparelho */ }
   avisar(`Mês financeiro começa no ${descreverInicio(cfgInicio.value)}.`, { tipo: 'ok' });
   setTimeout(() => location.reload(), 700); // recarrega para todas as telas usarem o novo período
 }
@@ -263,6 +265,21 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
     <!-- 2. Minhas finanças -->
     <section v-if="secao === 'financas'" id="financas" class="secao" aria-labelledby="h-financas">
       <h2 id="h-financas">Minhas finanças</h2>
+      <CardPadrao subtitulo="quando começa o seu mês">
+        <div class="bloco" data-inicio-mes>
+          <div class="linha fixa"><span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Início do mês financeiro</b><small>use o dia em que o salário costuma cair: o que entra e o que sai até o próximo pagamento fica no mesmo mês</small></span></div>
+          <PerfilAbas v-model="inicioTipo" :opcoes="TIPOS_INICIO" rotulo="Início do mês financeiro" />
+          <label v-if="inicioTipo === 'dia'" class="linha">
+            <span class="texto"><b>Dia do mês</b></span>
+            <select v-model="inicioDia" aria-label="Dia em que o mês começa">
+              <option v-for="d in 27" :key="d" :value="String(d + 1)">Dia {{ d + 1 }}</option>
+              <option value="ultimo">Último dia do mês</option>
+            </select>
+          </label>
+          <p class="nota">{{ inicioTipo === 'util' ? 'Conta só dias úteis: sem sábados, domingos e feriados nacionais. ' : '' }}{{ exemploInicio }} Vale para o Saldo do mês, o filtro de meses, o orçamento, o Custo de vida e o Quanto guardar. Vai junto no backup.</p>
+          <button v-if="inicioMudou" type="button" class="botao-prim" data-salvar-inicio @click="salvarInicio">Salvar e recarregar</button>
+        </div>
+      </CardPadrao>
       <CardPadrao>
         <div class="linhas">
           <button v-for="i in FINANCAS" :key="i.rotulo" type="button" class="linha atalho" @click="router.push(i.rota)">
@@ -353,21 +370,6 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
         <div class="bloco">
           <div class="linha fixa"><span class="quadro"><Zap :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Animações</b><small>menos movimento nas telas e gráficos</small></span></div>
           <PerfilAbas :model-value="movimento" :opcoes="MOVIMENTOS" rotulo="Animações" @update:model-value="definirMovimento" />
-        </div>
-      </CardPadrao>
-      <CardPadrao subtitulo="quando começa o seu mês">
-        <div class="bloco" data-inicio-mes>
-          <div class="linha fixa"><span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span><span class="texto"><b>Início do mês financeiro</b><small>use o dia em que o salário costuma cair: o que entra e o que sai até o próximo pagamento fica no mesmo mês</small></span></div>
-          <PerfilAbas v-model="inicioTipo" :opcoes="TIPOS_INICIO" rotulo="Início do mês financeiro" />
-          <label v-if="inicioTipo === 'dia'" class="linha">
-            <span class="texto"><b>Dia do mês</b></span>
-            <select v-model="inicioDia" aria-label="Dia em que o mês começa">
-              <option v-for="d in 27" :key="d" :value="String(d + 1)">Dia {{ d + 1 }}</option>
-              <option value="ultimo">Último dia do mês</option>
-            </select>
-          </label>
-          <p class="nota">{{ inicioTipo === 'util' ? 'Conta só dias úteis: sem sábados, domingos e feriados nacionais. ' : '' }}{{ exemploInicio }} Vale para o Saldo do mês, o filtro de meses, o orçamento, o Custo de vida e o Quanto guardar.</p>
-          <button v-if="inicioMudou" type="button" class="botao-prim" data-salvar-inicio @click="salvarInicio">Salvar e recarregar</button>
         </div>
       </CardPadrao>
     </section>

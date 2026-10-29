@@ -15,11 +15,13 @@ const { categorizarTransacao } = require('../utils/categorizacao');
 // (tela Categorias). Aqui só a lista de nomes, para os formulários.
 const { nomesCategoriasReceita, listarCategoriasReceita, garantirGeralDespesa, NOME_GERAL } = require('../utils/categoriasReceita');
 const regrasMotor = require('../utils/regras');
+const { meioDaTransacao } = require('../utils/meioPagamento');
+const { detectarReservaAutomatica } = require('../utils/reservasAuto');
 
 router.get('/categorias-receita', (req, res) => res.json(nomesCategoriasReceita(req.usuario.id)));
 
 const SELECT_TRANSACAO = `
-  SELECT t.*, c.nome AS conta_nome, c.icone AS conta_icone, cat.nome AS categoria_nome
+  SELECT t.*, c.nome AS conta_nome, c.icone AS conta_icone, c.cor AS conta_cor, c.tipo AS conta_tipo, cat.nome AS categoria_nome
   FROM transacoes t
   JOIN contas c ON c.id = t.conta_id
   LEFT JOIN categorias_orcamento cat ON cat.id = t.categoria_id AND cat.excluido_em IS NULL`;
@@ -181,6 +183,34 @@ router.delete('/estorno-cartao/:vinculo', tratar((req, res) => {
   res.json({ ok: true });
 }));
 
+// Anotação 53 (linha de transação): completa cada item com o que a linha mostra além dos dados da transação:
+//  - meio: 'credito' | 'crediario' | 'debito' | 'pix' | 'boleto' | 'dinheiro' | 'transferencia' | null (utils/meioPagamento);
+//  - recorrente: true quando a descrição traz o nome de um custo fixo ativo (não há ligação gravada entre os dois);
+//  - a_revisar: true quando é guardar/resgatar reconhecido no extrato e ainda sem decisão (mesma regra de /api/reserva/auto/pendentes).
+// Os dados do selo já vêm no SELECT: conta_nome, conta_icone, conta_cor (conta ou cartão), cartao_bandeira e cartao_tipo_credito.
+const semAcento = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+function completarParaLinha(usuarioId, lista) {
+  if (!lista.length) return lista;
+  const fixos = db.prepare('SELECT nome FROM custos_fixos WHERE usuario_id = ? AND excluido_em IS NULL AND ativo = 1').all(usuarioId)
+    .map((f) => semAcento(f.nome)).filter((n) => n.length >= 4);
+  const desde = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  let pagasFatura = null;
+  lista.forEach((t) => {
+    t.meio = meioDaTransacao({ ...t, tipo_credito: t.cartao_tipo_credito });
+    const d = semAcento(t.descricao_base || t.descricao);
+    t.recorrente = t.valor < 0 && !t.tipo_mov && fixos.some((n) => d.includes(n));
+    t.a_revisar = false;
+    if (!t.cartao && !t.tipo_mov && !t.revisao && !t.ignorada && String(t.data).slice(0, 10) >= desde) {
+      const det = detectarReservaAutomatica(t.descricao);
+      if (det && ((det.sentido === 'guardar' && t.valor < 0) || (det.sentido === 'resgatar' && t.valor > 0))) {
+        if (!pagasFatura) pagasFatura = new Set(db.prepare('SELECT transacao_id FROM faturas_pagas WHERE transacao_id IS NOT NULL AND excluido_em IS NULL').all().map((r) => r.transacao_id));
+        t.a_revisar = !pagasFatura.has(t.id);
+      }
+    }
+  });
+  return lista;
+}
+
 // Lista com filtros opcionais: ?mes=2026-09 &contaId=3 &tipo=entrada|saida
 // Sem "mes", traz as 200 mais recentes. O resumo (entradas, saídas e
 // resultado) é calculado sobre tudo que passou pelo filtro, não só sobre a
@@ -239,7 +269,8 @@ router.get('/', (req, res) => {
     if (categoriaId) { filtroC = ' AND l.categoria_id = ?'; argsC.push(String(categoriaId)); }
     const linhasC = db
       .prepare(
-        `SELECT l.*, k.nome AS cartao_nome, k.icone AS cartao_icone, k.origem AS cartao_origem, cat.nome AS categoria_nome
+        `SELECT l.*, k.nome AS cartao_nome, k.icone AS cartao_icone, k.cor AS cartao_cor, k.origem AS cartao_origem,
+                k.bandeira AS cartao_bandeira, k.tipo_credito AS cartao_tipo_credito, cat.nome AS categoria_nome
          FROM lancamentos_cartao l
          JOIN cartoes k ON k.id = l.cartao_id AND k.excluido_em IS NULL
          LEFT JOIN categorias_orcamento cat ON cat.id = l.categoria_id AND cat.excluido_em IS NULL
@@ -274,6 +305,10 @@ router.get('/', (req, res) => {
         conta_id: null,
         conta_nome: l.cartao_nome,
         conta_icone: l.cartao_icone || null,
+        conta_cor: l.cartao_cor || null,
+        cartao_bandeira: l.cartao_bandeira || null,
+        cartao_tipo_credito: l.cartao_tipo_credito || null,
+        parcela_numero: l.parcela_numero,
         descricao: l.total_parcelas > 1 ? `${l.descricao} (${l.parcela_numero}/${l.total_parcelas})` : l.descricao,
         valor: -l.valor,
         data,
@@ -293,6 +328,7 @@ router.get('/', (req, res) => {
     .concat(doCartao)
     .sort((x, y) => (x.data < y.data ? 1 : x.data > y.data ? -1 : 0))
     .slice(0, 500);
+  completarParaLinha(req.usuario.id, lista);
 
   res.json({
     transacoes: lista,

@@ -18,7 +18,7 @@ import DashRosca from '../components/DashRosca.vue';
 import Valor from '../components/Valor.vue';
 import PrevisaoSaldo from '../components/PrevisaoSaldo.vue';
 import { moedaTotal } from '../services/privacidade.js';
-import { periodo, anoInteiro, rotuloPeriodo } from '../services/mes.js';
+import { periodo, anoInteiro, rotuloPeriodo, intervaloTxt } from '../services/mes.js';
 import { corReceita, PALETA_RECEITA } from '../utils/coresReceita.js';
 import { corDespesa } from '../utils/coresDespesa.js';
 
@@ -197,7 +197,7 @@ onMounted(async () => {
           <strong class="palco-valor" :class="{ negativo: saldoDoMes < 0 }"><DashNumero :valor="saldoDoMes" /></strong>
           <BotaoOlho class="olho-valor" :tamanho="36" />
         </span>
-        <span class="palco-rotulo">{{ rotuloSaldoPeriodo }} <span class="periodo">· {{ rotuloPeriodo }}</span></span>
+        <span class="palco-rotulo">{{ rotuloSaldoPeriodo }} <span class="periodo">· {{ intervaloTxt || rotuloPeriodo }}</span></span>
       </div>
       <div class="palco-orbe" :style="{ transform: `translate3d(0, ${deslocamento.toFixed(1)}px, 0)` }">
         <Orbe :partes="partesOrbe" :tamanho="460" />
