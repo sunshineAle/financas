@@ -41,7 +41,9 @@ const ehPwa = !!import.meta.env.VITE_PWA;
 
 import { SECOES_PERFIL as SECOES } from '../config/perfilSecoes.js';
 import { lerInicio, gravarInicio, descreverInicio, intervaloDoMes } from '../utils/mesFinanceiro.js';
-const secao = computed(() => String(route.params.secao || 'perfil'));
+// Homologação 1.0, seção 13: no PC a seção também abre DENTRO do painel da foto (<Perfil secao-fixa="seguranca" embutido />).
+const propsPerfil = defineProps({ secaoFixa: { type: String, default: '' }, embutido: { type: Boolean, default: false } });
+const secao = computed(() => String(propsPerfil.secaoFixa || route.params.secao || 'perfil'));
 const tituloSecao = computed(() => (SECOES.find((x) => x.id === secao.value) || SECOES[0]).rotulo);
 
 // ---- 1. Perfil ----
@@ -237,7 +239,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
 </script>
 
 <template>
-  <div class="pagina">
+  <div class="pagina" :class="{ embutida: propsPerfil.embutido }">
     <h1 class="so-leitor">{{ tituloSecao }}</h1>
 
 

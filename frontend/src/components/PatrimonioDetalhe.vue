@@ -152,7 +152,7 @@ const mesFatura = (chave) => {
           </li>
           <li class="bloco" :class="{ vazio: !b.itens.length }">
             <div class="bloco-topo">
-              <Anel :pct="pct(b.total)" :tamanho="44" :espessura="13" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]">
+              <Anel :pct="pct(b.total)" :tamanho="48" :espessura="12" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]">
                 <span class="anel-pct numero-tabular">{{ pct(b.total) }}%</span>
               </Anel>
               <button type="button" class="bloco-info" :aria-expanded="!!abertos[b.chave]" :disabled="!b.itens.length" @click="alternar(b.chave)">
@@ -239,26 +239,30 @@ const mesFatura = (chave) => {
 .barra-rotulo span { flex: 1; }
 .barra-rotulo small { color: var(--cor-texto-suave); min-width: 34px; text-align: right; }
 
-.blocos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.bloco { border: 1px solid var(--cor-borda); border-radius: 14px; background: var(--cor-fundo-elevado); overflow: hidden; }
-.bloco-topo { display: flex; align-items: center; gap: 10px; padding: 8px 6px 8px 10px; }
+.blocos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+/* Blocos no padrão dos cards do Início (homologação 1.0, 29/10 22h24): card destacado, colunas alinhadas
+   [anel | nome e quantidade | total | abrir] e itens alinhados com a coluna do nome */
+.bloco { border: 1px solid var(--cor-card-borda, var(--cor-borda)); border-radius: var(--raio-card, 16px); background: var(--cor-card); overflow: hidden; box-shadow: var(--sombra-suave, none); }
+.bloco-topo { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto 40px; align-items: center; column-gap: 12px; padding: 12px 6px 12px 14px; }
+.bloco-total { font-family: var(--fonte-display); font-size: 16px !important; font-weight: 700; text-align: right; }
 .anel-pct { font-size: 0.62rem; font-weight: 600; color: var(--cor-texto-suave); }
 .bloco-info {
   flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 44px; justify-content: center;
   background: none; border: 0; padding: 0; color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer;
 }
 .bloco-info:disabled { cursor: default; }
-.bloco-nome { font-weight: 600; font-size: 0.95rem; }
+.bloco-nome { font-family: var(--fonte-display); font-weight: 600; font-size: 15.5px; }
 .bloco-info small { color: var(--cor-texto-suave); font-size: 0.75rem; }
 .bloco.vazio .bloco-nome, .bloco.vazio .bloco-total { color: var(--cor-texto-suave); }
 .bloco-total { font-size: 0.95rem; white-space: nowrap; }
-.ir {
+.ir { width: 40px !important;
   display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px;
   background: none; border: 0; color: var(--cor-texto-suave); cursor: pointer;
 }
 .ir:hover { background: var(--cor-realce); color: var(--cor-texto); }
 
-.itens { list-style: none; margin: 0; padding: 4px 12px 10px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--cor-borda); }
+.itens { list-style: none; margin: 0 14px; padding: 6px 0 10px; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--cor-borda); }
+.itens li + li { border-top: 1px solid color-mix(in srgb, var(--cor-borda) 55%, transparent); }
 .itens li { display: block; padding-top: 4px; font-size: 0.92rem; }
 .item-linha { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 4px; border: 0; border-radius: 12px; background: none; color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
 .item-linha:hover { background: var(--cor-realce); }

@@ -14,6 +14,7 @@ import CampoDataPilula from './CampoDataPilula.vue';
 import CampoParcelasPilula from './CampoParcelasPilula.vue';
 import CampoSubcategoria from './CampoSubcategoria.vue';
 import CampoDivida from './CampoDivida.vue';
+import CampoPagamento from './CampoPagamento.vue';
 import CampoConta from './CampoConta.vue';
 import CampoSelecao from './CampoSelecao.vue';
 import CampoCategoria from './CampoCategoria.vue';
@@ -221,15 +222,16 @@ function transferenciaFeita(t) {
       </template>
     </CampoValor>
     <CampoTexto v-model="f.descricao" rotulo="Descrição" placeholder="Ex: Mercado, Salário, Pix do João" :erro="erros.descricao" />
-    <CampoTipo v-if="f.tipo === 'saida' && !noCartao && !noConta" v-model="f.pagamento" rotulo="Forma de pagamento" :opcoes="[{ id: 'conta', rotulo: 'Débito / Pix', tema: 'saida', icone: Landmark }, { id: 'cartao', rotulo: 'Cartão de crédito', tema: 'saida', icone: CreditCard }]" />
+    <!-- "Pagou com" único (29/10 22h24): contas, cartões de crédito, de loja e crediários numa lista que expande -->
+    <CampoPagamento v-if="!noCartao && !noConta" v-model:conta-id="f.contaId" v-model:cartao-id="f.cartaoId" v-model:meio="f.pagamento"
+      :contas="contas" :cartoes="f.tipo === 'saida' ? cartoesManuais : []" :rotulo="f.tipo === 'entrada' ? 'Recebeu em' : 'Pagou com'" :erro="erros.conta" :tema="f.tipo" />
     <template v-if="usaCartao">
-      <p v-if="cartoesManuais.length === 0" class="nota">Nenhum cartão manual cadastrado. Cartões conectados pelo Open Finance recebem as compras sozinhos; cadastre um cartão em Cartões para lançar à mão.</p>
+      <p v-if="cartoesManuais.length === 0" class="nota">Nenhum cartão cadastrado para lançar à mão. Cadastre em Cartões.</p>
       <template v-else>
-        <CampoSelecao v-model="f.cartaoId" rotulo="Cartão" :opcoes="cartoesManuais.map((c) => ({ valor: c.id, rotulo: c.nome }))" :disabled="noCartao" />
         <p v-if="previa" class="previa">{{ previa.parcelas }}x de {{ moeda(previa.valorParcela) }} · começa na fatura de {{ rotuloFatura(previa.primeiraFatura.chave) }} e termina em {{ rotuloFatura(previa.ultimaFatura) }}. Entra sozinho na fatura do cartão.</p>
       </template>
     </template>
-    <CampoConta v-else v-model="f.contaId" :rotulo="f.tipo === 'entrada' ? 'Conta que recebe' : 'Conta'" :contas="contasCampo" :erro="erros.conta" />
+    <CampoConta v-else-if="noConta" v-model="f.contaId" :rotulo="f.tipo === 'entrada' ? 'Conta que recebe' : 'Conta'" :contas="contasCampo" :erro="erros.conta" />
     <p v-if="destinoPix && destinoPix.tipo === 'propria' && !usaCartao" class="dica-pix propria">
       Parece um Pix/TED para uma conta sua{{ destinoPix.contaNome ? ` (${destinoPix.contaNome})` : '' }}: isso é uma transferência, não uma despesa.
       <button type="button" class="botao-icone" @click="virarTransferencia">Lançar como transferência</button>

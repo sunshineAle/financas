@@ -1,50 +1,48 @@
 <script setup>
-// Painel do perfil (anotação 62): o mesmo conteúdo no celular e no PC/web, aberto pela FOTO do perfil no topo.
-//  - Celular: folha que sobe da base (Modal).  - PC/web: painel lateral à DIREITA, por cima da página.
-// Conteúdo: topo (foto, nome e "Perfil" para editar) · avisos, quando houver · atalhos em cartões
-// (Custo de vida, Quanto guardar, Regras de categorização, Início do mês financeiro) · lista (Minhas finanças, Dados e backup,
-// Segurança, Aparência e avisos, Sobre o app, Apoie o desenvolvedor) · rodapé: Bloquear agora.
-// Com "ocultar valores" ligado, os valores em R$ dos avisos ficam escondidos.
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
-import {
-  X, CalendarClock, TriangleAlert, Info, ChevronRight, Pencil, PiggyBank, Wand2, CalendarDays,
-  Wallet, DatabaseBackup, ShieldCheck, SlidersHorizontal, Heart, Lock,
-} from 'lucide-vue-next';
+// Painel do perfil, aberto pela FOTO no topo (anotação 62; homologação 1.0, seções 13 e 21).
+//  - Celular: folha que sobe da base; cada item da lista abre a página dele (como antes).
+//  - PC/web: painel FLUTUANTE ancorado na foto (canto superior direito, não centralizado). Ao escolher um item da lista,
+//    o conteúdo troca DENTRO do painel, com seta de voltar — nunca abre página inteira com laterais vazias.
+// Conteúdo: topo (foto, nome, Perfil) · avisos · PerfilConteudo (atalhos em blocos + Início do mês · Tema e Animações ·
+// lista) · rodapé Bloquear agora. Com "ocultar valores" ligado, os valores em R$ dos avisos ficam escondidos.
+import { ref, computed, watch, nextTick, onUnmounted, defineAsyncComponent } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { X, CalendarClock, TriangleAlert, Info, Pencil, Lock, ArrowLeft } from 'lucide-vue-next';
 import AvatarMini from './AvatarMini.vue';
 import Modal from './Modal.vue';
+import PerfilConteudo from './PerfilConteudo.vue';
 import { ocultar, MASCARA } from '../services/privacidade.js';
 import { inicialDe, nomeExibido } from '../services/perfil.js';
 import { visiveis, dispensarAviso } from '../services/notificacoes.js';
 import { ehCelular } from '../services/layout.js';
 import { bloquear, modoPWA } from '../services/acesso.js';
 
+const Perfil = defineAsyncComponent(() => import('../views/Perfil.vue'));
+const Apoie = defineAsyncComponent(() => import('../views/Apoie.vue'));
+
 const props = defineProps({ aberto: { type: Boolean, default: false }, usuario: { type: Object, default: null } });
 const emit = defineEmits(['fechar']);
 const router = useRouter();
+const route = useRoute();
 const nome = computed(() => nomeExibido(props.usuario) || 'Perfil');
 const inicial = computed(() => inicialDe(props.usuario));
 const qtd = computed(() => visiveis.value.length);
 const ICONE = { saida: TriangleAlert, alerta: CalendarClock, info: Info };
 const VALOR = /[-−]?\s?R\$\s?[-−]?[\d.]+(,\d{2})?/g;
 const semValor = (t) => (ocultar.value ? String(t || '').replace(VALOR, MASCARA) : t);
+const TITULOS = { 'dados-backup': 'Dados e backup', notificacoes: 'Avisos e notificações', seguranca: 'Segurança', sobre: 'Sobre o app', apoie: 'Apoie o desenvolvedor', perfil: 'Perfil' };
 
-const ATALHOS = [
-  { rotulo: 'Custo de vida', rota: '/custos-fixos', icone: CalendarClock },
-  { rotulo: 'Quanto guardar', rota: '/mais/reserva', icone: PiggyBank },
-  { rotulo: 'Regras de categorização', rota: '/regras', icone: Wand2 },
-  { rotulo: 'Início do mês financeiro', rota: '/mais/financas', icone: CalendarDays },
-];
-const LISTA = [
-  { rotulo: 'Minhas finanças', rota: '/mais/financas', icone: Wallet },
-  { rotulo: 'Dados e backup', rota: '/mais/dados-backup', icone: DatabaseBackup },
-  { rotulo: 'Segurança', rota: '/mais/seguranca', icone: ShieldCheck },
-  { rotulo: 'Aparência e avisos', rota: '/mais/configuracoes', icone: SlidersHorizontal },
-  { rotulo: 'Sobre o app', rota: '/mais/sobre', icone: Info },
-  { rotulo: 'Apoie o desenvolvedor', rota: '/apoie', icone: Heart },
-];
+// PC: a vista atual do painel (null = início do painel)
+const vista = ref(null);
+watch(() => props.aberto, (v) => { if (!v) vista.value = null; });
+watch(() => route.fullPath, () => { if (props.aberto) emit('fechar'); });
 
 function ir(rota) { emit('fechar'); router.push(rota); }
+function abrir(id) {
+  if (ehCelular.value) { ir(id === 'apoie' ? '/apoie' : '/mais/' + id); return; }
+  vista.value = id;
+  nextTick(() => caixa.value?.querySelector('.corpo-painel')?.scrollTo({ top: 0 }));
+}
 async function bloquearAgora() {
   emit('fechar');
   if (modoPWA) { bloquear(); return; }
@@ -52,10 +50,10 @@ async function bloquearAgora() {
   router.push('/login');
 }
 
-// PC: painel lateral. Esc fecha; o foco entra no painel e volta para a foto ao fechar.
+// PC: Esc volta (dentro de uma vista) ou fecha; o foco entra no painel e volta para a foto ao fechar.
 const caixa = ref(null);
 let anterior = null;
-function aoTeclar(e) { if (e.key === 'Escape') emit('fechar'); }
+function aoTeclar(e) { if (e.key === 'Escape') { if (vista.value) vista.value = null; else emit('fechar'); } }
 watch(() => props.aberto && !ehCelular.value, async (v) => {
   if (v) {
     anterior = document.activeElement;
@@ -91,16 +89,7 @@ onUnmounted(() => window.removeEventListener('keydown', aoTeclar));
           </li>
         </ul>
       </template>
-      <div class="atalhos">
-        <button v-for="a in ATALHOS" :key="a.rotulo" type="button" class="cartao" @click="ir(a.rota)">
-          <span class="ic"><component :is="a.icone" :size="18" :stroke-width="1.9" /></span><b>{{ a.rotulo }}</b>
-        </button>
-      </div>
-      <div class="lista">
-        <button v-for="i in LISTA" :key="i.rotulo" type="button" class="linha" @click="ir(i.rota)">
-          <span class="ic"><component :is="i.icone" :size="18" :stroke-width="1.9" /></span><b>{{ i.rotulo }}</b><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
-        </button>
-      </div>
+      <PerfilConteudo @ir="ir" @abrir="abrir" />
     </div>
     <template #rodape>
       <button type="button" class="bloquear" @click="bloquearAgora"><Lock :size="17" :stroke-width="1.9" aria-hidden="true" />Bloquear agora</button>
@@ -110,38 +99,44 @@ onUnmounted(() => window.removeEventListener('keydown', aoTeclar));
   <Teleport v-else to="body">
     <transition name="painel">
       <div v-if="aberto" class="fundo-painel" @pointerdown.self="emit('fechar')">
-        <aside ref="caixa" class="lateral" role="dialog" aria-modal="true" :aria-label="`Perfil: ${nome}`" data-painel-caixa>
-          <div class="painel" data-painel-perfil>
-            <div class="cab">
-              <AvatarMini :inicial="inicial" :tamanho="52" />
-              <span class="cab-nome">{{ nome }}</span>
-              <button type="button" class="editar" @click="ir('/mais/perfil')"><Pencil :size="15" :stroke-width="2" aria-hidden="true" />Perfil</button>
-              <button type="button" class="fechar" aria-label="Fechar painel" @click="emit('fechar')"><X :size="18" :stroke-width="2" /></button>
-            </div>
-            <template v-if="qtd">
-              <h3>Avisos</h3>
-              <ul class="avisos">
-                <li v-for="a in visiveis" :key="a.id" :class="a.tom">
-                  <button type="button" class="aviso" @click="ir(a.rota)">
-                    <span class="ic"><component :is="ICONE[a.tom] || Info" :size="17" :stroke-width="1.9" /></span>
-                    <span class="tx"><b>{{ semValor(a.titulo) }}</b><small>{{ semValor(a.detalhe) }}</small></span>
-                  </button>
-                  <button type="button" class="dispensar" :aria-label="`Dispensar: ${a.titulo}`" @click="dispensarAviso(a.id)"><X :size="14" :stroke-width="2" /></button>
-                </li>
-              </ul>
+        <aside ref="caixa" class="flutuante" role="dialog" aria-modal="true" :aria-label="vista ? TITULOS[vista] : `Perfil: ${nome}`" data-painel-caixa>
+          <div class="corpo-painel">
+            <template v-if="!vista">
+              <div class="painel" data-painel-perfil>
+                <div class="cab">
+                  <AvatarMini :inicial="inicial" :tamanho="48" />
+                  <span class="cab-nome">{{ nome }}</span>
+                  <button type="button" class="editar" @click="abrir('perfil')"><Pencil :size="15" :stroke-width="2" aria-hidden="true" />Perfil</button>
+                  <button type="button" class="fechar" aria-label="Fechar painel" @click="emit('fechar')"><X :size="18" :stroke-width="2" /></button>
+                </div>
+                <template v-if="qtd">
+                  <h3>Avisos</h3>
+                  <ul class="avisos">
+                    <li v-for="a in visiveis" :key="a.id" :class="a.tom">
+                      <button type="button" class="aviso" @click="ir(a.rota)">
+                        <span class="ic"><component :is="ICONE[a.tom] || Info" :size="17" :stroke-width="1.9" /></span>
+                        <span class="tx"><b>{{ semValor(a.titulo) }}</b><small>{{ semValor(a.detalhe) }}</small></span>
+                      </button>
+                      <button type="button" class="dispensar" :aria-label="`Dispensar: ${a.titulo}`" @click="dispensarAviso(a.id)"><X :size="14" :stroke-width="2" /></button>
+                    </li>
+                  </ul>
+                </template>
+                <PerfilConteudo @ir="ir" @abrir="abrir" />
+              </div>
             </template>
-            <div class="atalhos">
-              <button v-for="a in ATALHOS" :key="a.rotulo" type="button" class="cartao" @click="ir(a.rota)">
-                <span class="ic"><component :is="a.icone" :size="18" :stroke-width="1.9" /></span><b>{{ a.rotulo }}</b>
-              </button>
-            </div>
-            <div class="lista">
-              <button v-for="i in LISTA" :key="i.rotulo" type="button" class="linha" @click="ir(i.rota)">
-                <span class="ic"><component :is="i.icone" :size="18" :stroke-width="1.9" /></span><b>{{ i.rotulo }}</b><ChevronRight :size="18" :stroke-width="1.8" class="seta" />
-              </button>
-            </div>
+            <template v-else>
+              <div class="cab-vista">
+                <button type="button" class="voltar" aria-label="Voltar ao painel" data-voltar-painel @click="vista = null"><ArrowLeft :size="18" :stroke-width="2" /></button>
+                <b>{{ TITULOS[vista] }}</b>
+                <button type="button" class="fechar" aria-label="Fechar painel" @click="emit('fechar')"><X :size="18" :stroke-width="2" /></button>
+              </div>
+              <div class="vista" :data-vista-painel="vista">
+                <Apoie v-if="vista === 'apoie'" />
+                <Perfil v-else :secao-fixa="vista" embutido />
+              </div>
+            </template>
           </div>
-          <footer class="rodape-painel">
+          <footer v-if="!vista" class="rodape-painel">
             <button type="button" class="bloquear" @click="bloquearAgora"><Lock :size="17" :stroke-width="1.9" aria-hidden="true" />Bloquear agora</button>
           </footer>
         </aside>
@@ -186,12 +181,19 @@ li.info .ic { background: var(--cor-entrada-fundo); color: var(--cor-primaria); 
 :is(button):focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
 
 /* PC/web: painel lateral à direita, por cima da página */
-.fundo-painel { position: fixed; inset: 0; z-index: 900; background: rgba(8, 6, 20, 0.32); }
-.lateral { position: absolute; top: 0; right: 0; bottom: 0; width: min(380px, 100vw); display: flex; flex-direction: column; background: var(--cor-fundo-elevado); border-left: 1px solid var(--cor-borda); box-shadow: -18px 0 40px -20px rgba(0, 0, 0, 0.5); }
-.lateral .painel { flex: 1; overflow-y: auto; padding: 18px 18px 12px; }
+.fundo-painel { position: fixed; inset: 0; z-index: 900; background: rgba(8, 6, 20, 0.18); }
+.flutuante { position: absolute; top: 60px; right: 14px; width: min(420px, calc(100vw - 28px)); max-height: calc(100vh - 76px); display: flex; flex-direction: column; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 20px; box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6); overflow: hidden; transform-origin: top right; }
+/* setinha apontando para a foto */
+.flutuante::before { content: ''; position: absolute; top: -6px; right: 22px; width: 12px; height: 12px; background: var(--cor-fundo-elevado); border-left: 1px solid var(--cor-borda); border-top: 1px solid var(--cor-borda); transform: rotate(45deg); }
+.corpo-painel { flex: 1; overflow-y: auto; padding: 16px 16px 10px; overscroll-behavior: contain; }
+.cab-vista { position: sticky; top: -16px; z-index: 2; display: flex; align-items: center; gap: 8px; margin: -16px -16px 8px; padding: 10px 12px; background: var(--cor-fundo-elevado); border-bottom: 1px solid var(--cor-borda); }
+.cab-vista b { flex: 1; font-family: var(--fonte-display); font-size: 16px; }
+.voltar { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: none; background: var(--cor-realce); color: var(--cor-texto); cursor: pointer; }
+.vista :deep(.pagina) { padding: 0; max-width: none; }
+.vista :deep(.secao > h2) { display: none; }
 .rodape-painel { padding: 12px 18px 18px; border-top: 1px solid var(--cor-borda); }
 .painel-enter-active, .painel-leave-active { transition: opacity var(--anim-padrao) ease; }
-.painel-enter-active .lateral, .painel-leave-active .lateral { transition: transform var(--anim-padrao) var(--anim-curva); }
+.painel-enter-active .flutuante, .painel-leave-active .flutuante { transition: transform var(--anim-padrao) var(--anim-curva); }
 .painel-enter-from, .painel-leave-to { opacity: 0; }
-.painel-enter-from .lateral, .painel-leave-to .lateral { transform: translateX(24px); }
+.painel-enter-from .flutuante, .painel-leave-to .flutuante { transform: scale(0.96) translateY(-6px); }
 </style>

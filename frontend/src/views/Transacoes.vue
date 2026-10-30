@@ -21,7 +21,7 @@ import CampoConta from '../components/CampoConta.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
 import IconeCategoria from '../components/IconeCategoria.vue';
 import BarraDegrade from '../components/BarraDegrade.vue';
-import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, Filter, Landmark, CreditCard } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, Filter, Landmark, CreditCard, Pencil } from 'lucide-vue-next';
 import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
 import { avisar } from '../services/avisos.js';
@@ -234,8 +234,10 @@ watch(() => [ehCreditoCartao.value, credito.value.tipo], async ([sim, tp]) => {
     credito.value.parecidas = r.ok ? await r.json() : [];
   } catch { credito.value.parecidas = []; }
 });
+const dadosAbertos = ref(false);
 function abrirEdicao(t) {
   fecharMenu();
+  dadosAbertos.value = false;
   editando.value = t;
   erroEdicao.value = '';
   if (t.cartao) {
@@ -671,7 +673,17 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <button v-if="trechoRegra(editando.cartao ? editando.descricao_base : editando.descricao)" type="button" class="acao-det" @click="criarRegraDaTx(editando)">Criar regra</button>
           <button v-if="editando.tipo_mov && editando.vinculo && !ehReserva(editando)" type="button" class="acao-det perigo" @click="excluirTx(editando); editando = null">{{ ehTransf(editando) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
         </div>
-        <template v-if="(editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && (!editando.tipo_mov || ['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(editando.tipo_mov)))">
+        <!-- 29/10 22h24: o detalhe abre RESUMIDO; tocar no resumo expande os campos de edição (valor, data, descrição, conta) -->
+        <button v-if="((editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && (!editando.tipo_mov || ['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(editando.tipo_mov)))) && !dadosAbertos" type="button" class="resumo-tx" data-resumo-tx @click="dadosAbertos = true">
+          <dl class="detalhes-tx">
+            <div><dt>Descrição</dt><dd>{{ editando.cartao ? editando.descricao_base : editando.descricao }}</dd></div>
+            <div><dt>Valor</dt><dd class="numero-tabular" :class="editando.valor < 0 ? 'negativo' : 'positivo'">{{ moeda(editando.cartao ? (editando.valor < 0 ? -1 : 1) * Math.abs(editando.valor_total_compra) : editando.valor) }}</dd></div>
+            <div><dt>Data</dt><dd>{{ dataCurta(editando.cartao ? editando.data_compra : editando.data) }}</dd></div>
+            <div><dt>{{ editando.cartao ? 'Cartão' : 'Conta' }}</dt><dd>{{ editando.conta_nome }}</dd></div>
+          </dl>
+          <span class="editar-dados"><Pencil :size="14" :stroke-width="2" aria-hidden="true" />Editar valor, data e descrição</span>
+        </button>
+        <template v-if="((editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && (!editando.tipo_mov || ['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(editando.tipo_mov)))) && dadosAbertos">
           <CampoTipo v-if="!editando.cartao" v-model="formEdicao.tipo" />
           <CampoTipo v-else-if="editando.total_parcelas === 1" v-model="formEdicao.tipo" rotulo="Lançar no extrato como" :opcoes="[{ id: 'saida', rotulo: 'Saída', tema: 'saida' }, { id: 'entrada', rotulo: 'Entrada', tema: 'entrada' }]" data-marcar-credito />
           <div v-if="ehCreditoCartao" class="credito-cartao" data-credito-cartao>
@@ -817,4 +829,8 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .acao-det { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
 .acao-det:hover { background: var(--cor-realce); }
 .acao-det.perigo { color: var(--cor-alerta-texto, var(--cor-alerta)); }
+.resumo-tx { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.resumo-tx .detalhes-tx { margin: 0; }
+.resumo-tx:hover .detalhes-tx { border-color: color-mix(in srgb, var(--cor-primaria) 40%, var(--cor-borda)); }
+.editar-dados { align-self: flex-end; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--cor-primaria); }
 </style>

@@ -105,7 +105,7 @@ export const MENU_LATERAL = [
   { rota: '/dividas', rotulo: 'Dívidas', icone: ReceiptText },
   { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
   { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
-  { rota: '/importar', rotulo: 'Importar', icone: FileUp },
+  // Homologação 1.0, seção 20: Importar saiu do menu lateral — fica no painel da foto, em Dados e backup.
   { rota: '/transacoes?revisar=1', rotulo: 'A revisar', icone: ListChecks, revisar: true },
 ];
 

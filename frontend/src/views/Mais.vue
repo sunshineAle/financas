@@ -1,10 +1,12 @@
 <script setup>
 // Mais = tela-índice (botão "Mais" do rodapé): cabeçalho com foto/nome e a lista de seções, cada uma em SUA página (/mais/<seção>,
-// renderizada por Perfil.vue). Cada item: ícone, título, resumo de uma linha e seta.
+// renderizada por Perfil.vue). Homologação 1.0, seção 21: a mesma ordem do painel da foto (PerfilConteudo) — atalhos em
+// blocos + Início do mês, Tema e Animações ali mesmo, e a lista; Relatórios entra no começo da lista (no celular não está no rodapé).
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ChartColumn, FileUp, LogOut, ChevronRight } from 'lucide-vue-next';
 import AvatarMini from '../components/AvatarMini.vue';
+import PerfilConteudo from '../components/PerfilConteudo.vue';
 import { perfil, nomeExibido, inicialDe, ultimoBackup } from '../services/perfil.js';
 import { SECOES_PERFIL } from '../config/perfilSecoes.js';
 import { modoTema } from '../services/tema.js';
@@ -57,6 +59,8 @@ const nomeTopo = computed(() => nomeExibido(conta.value) || 'Você');
 const emailTopo = computed(() => { const e = perfil.email || conta.value.email || ''; return e === 'local@aparelho' ? '' : e; });
 const inicial = computed(() => inicialDe(conta.value));
 
+const EXTRAS = [{ id: 'relatorios', rotulo: 'Relatórios', sub: 'evolução, comparações, categorias', icone: ChartColumn }];
+function abrir(id) { router.push(id === 'relatorios' ? '/relatorios' : id === 'apoie' ? '/apoie' : '/mais/' + id); }
 async function sair() {
   await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   router.push('/login');
@@ -75,16 +79,7 @@ async function sair() {
       </button>
     </div>
 
-    <section v-for="g in GRUPOS" :key="g.titulo" class="grupo">
-      <h2>{{ g.titulo }}</h2>
-      <div class="card">
-        <button v-for="i in g.itens" :key="i.rotulo" type="button" class="linha" @click="router.push(i.rota)">
-          <span class="quadro"><component :is="i.icone" :size="20" :stroke-width="1.8" /></span>
-          <span class="texto"><b>{{ i.rotulo }}</b><small>{{ i.sub }}</small></span>
-          <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
-        </button>
-      </div>
-    </section>
+    <PerfilConteudo :extras="EXTRAS" @ir="(r) => router.push(r)" @abrir="abrir" />
 
     <button type="button" class="sair" @click="sair"><LogOut :size="18" :stroke-width="1.8" /> Sair</button>
   </div>

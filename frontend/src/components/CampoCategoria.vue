@@ -5,11 +5,12 @@
 //   o campo busca sozinho em /api/categorias ou /api/categorias/receitas), rotulo, erro, dica, tema, obrigatorio, vazio,
 //   automatica (texto da 1ª opção "sem escolha", ex.: 'Automática'; vazio = não mostra), permitirNova (padrão true).
 // Eventos: update:modelValue, criada(categoria) — o pai pode recarregar a lista dele.
-// Homologação 1.0, seção 14: COMPACTO por padrão — uma fileira com as categorias mais usadas (contagem no aparelho) e
-// "Todas", que abre a grade completa numa janela (com "+ Nova categoria"). `grade` mostra a grade direto, como antes.
+// Homologação 1.0, seção 14 (ajuste de 29/10 22h24): COMPACTO por padrão — um quadro com a categoria escolhida;
+// tocar EXPANDE ali mesmo a grade de quadradinhos com todas (mais usadas primeiro, + "Nova categoria"); escolher recolhe.
+// `grade` mostra a grade sempre aberta, como antes. (Pílulas ficam só para a subcategoria.)
 // A opção sem escolha "Automática" passa a se chamar "Pelas regras" (com "?" explicando).
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
-import { Plus, Sparkles, LayoutGrid, X } from 'lucide-vue-next';
+import { Plus, Sparkles, ChevronDown } from 'lucide-vue-next';
 import AjudaSecao from './AjudaSecao.vue';
 import IconeCategoria from './IconeCategoria.vue';
 import CampoBase from './CampoBase.vue';
@@ -63,6 +64,8 @@ function contarUso(k) {
   try { const u = { ...uso.value, [k]: (uso.value[k] || 0) + 1 }; uso.value = u; localStorage.setItem(CHAVE_USO.value, JSON.stringify(u)); } catch { /* sem armazenamento */ }
 }
 onMounted(lerUso);
+const selecionada = computed(() => lista.value.find((c) => ativo(c)) || null);
+const ordenadaUso = computed(() => [...lista.value].sort((a, b) => (uso.value[chaveDe(b)] || 0) - (uso.value[chaveDe(a)] || 0)));
 const QTD_FILEIRA = 5;
 const fileira = computed(() => {
   const ord = [...lista.value].sort((a, b) => (uso.value[chaveDe(b)] || 0) - (uso.value[chaveDe(a)] || 0));
@@ -79,9 +82,7 @@ const painel = ref(null);
 function abrirTodas() { todasAberta.value = true; nextTick(() => painel.value?.querySelector('button.ativo, button')?.focus()); }
 function fecharTodas() { todasAberta.value = false; criando.value = false; }
 function escolherNaJanela(c) { escolher(c); fecharTodas(); }
-function tecla(e) { if (todasAberta.value && e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); fecharTodas(); } }
-watch(todasAberta, (v) => { if (v) window.addEventListener('keydown', tecla, true); else window.removeEventListener('keydown', tecla, true); });
-onBeforeUnmount(() => window.removeEventListener('keydown', tecla, true));
+
 
 // ---- nova categoria inline ----
 const criando = ref(false);
@@ -117,28 +118,23 @@ async function criar() {
 
 <template>
   <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="tema" :obrigatorio="obrigatorio">
-    <!-- Compacto: fileira das mais usadas + Todas -->
-    <div v-if="!grade" class="fileira" role="radiogroup" :aria-label="rotulo">
-      <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['chip-cat', { ativo: String(modelValue) === '' }]" @click="escolher(null)">
-        <span class="ic-p auto"><Sparkles :size="16" :stroke-width="1.9" aria-hidden="true" /></span>{{ rotuloAuto }}
-      </button>
-      <button v-for="c in fileira" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['chip-cat', { ativo: ativo(c) }]" @click="escolher(c)">
-        <IconeCategoria :valor="c.icone" :tipo="t" :cor="c.cor || undefined" :tamanho="26" />{{ c.nome }}
-      </button>
-      <button type="button" class="chip-cat todas" aria-haspopup="dialog" data-todas-categorias @click="abrirTodas"><LayoutGrid :size="16" :stroke-width="2" aria-hidden="true" />Todas</button>
-    </div>
+    <!-- Compacto: quadro com a escolhida; tocar expande a grade -->
+    <button v-if="!grade" type="button" class="quadro-cat" :aria-expanded="todasAberta" data-categoria-escolhida @click="todasAberta ? fecharTodas() : abrirTodas()">
+      <span v-if="!selecionada" class="ic-p auto"><Sparkles :size="18" :stroke-width="1.9" aria-hidden="true" /></span>
+      <IconeCategoria v-else :valor="selecionada.icone" :tipo="t" :cor="selecionada.cor || undefined" :tamanho="34" />
+      <b>{{ selecionada ? selecionada.nome : (automatica ? rotuloAuto : 'Escolha a categoria') }}</b>
+      <span class="trocar">{{ todasAberta ? 'Fechar' : 'Trocar' }}<ChevronDown :size="16" :stroke-width="2" :class="{ girado: todasAberta }" aria-hidden="true" /></span>
+    </button>
     <p v-if="!grade && automatica && ehPelasRegras && String(modelValue) === ''" class="sf-dica pelas-regras">A categoria vem da regra que combinar com a descrição.<AjudaSecao secao="categoria.regras" /></p>
 
-    <Teleport to="body" :disabled="grade">
-    <div v-if="grade || todasAberta" :class="grade ? 'grade-direta' : ['janela-todas', 'tema-' + (tema || t)]" @click.self="fecharTodas">
-    <div ref="painel" :class="{ 'painel-todas': !grade }" :role="grade ? null : 'dialog'" :aria-label="grade ? null : `${rotulo}: todas`">
-    <header v-if="!grade" class="topo-todas"><b>{{ rotulo }}</b><button type="button" class="fechar-todas" aria-label="Fechar" @click="fecharTodas"><X :size="18" :stroke-width="2" /></button></header>
+    <div v-if="grade || todasAberta" :class="grade ? 'grade-direta' : 'grade-expandida'">
+    <div ref="painel">
     <div class="grade" role="radiogroup" :aria-label="rotulo">
       <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['sf-opcao', 'cat', { ativo: String(modelValue) === '' }]" @click="grade ? escolher(null) : escolherNaJanela(null)">
         <span class="ic auto"><Sparkles :size="22" :stroke-width="1.8" aria-hidden="true" /></span>
         <span class="nm">{{ rotuloAuto }}</span>
       </button>
-      <button v-for="c in lista" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['sf-opcao', 'cat', { ativo: ativo(c) }]" @click="grade ? escolher(c) : escolherNaJanela(c)">
+      <button v-for="c in (grade ? lista : ordenadaUso)" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['sf-opcao', 'cat', { ativo: ativo(c) }]" @click="grade ? escolher(c) : escolherNaJanela(c)">
         <IconeCategoria :valor="c.icone" :tipo="t" :cor="c.cor || undefined" :tamanho="40" />
         <span class="nm">{{ c.nome }}</span>
       </button>
@@ -160,11 +156,17 @@ async function criar() {
     </div>
     </div>
     </div>
-    </Teleport>
   </CampoBase>
 </template>
 
 <style scoped>
+.quadro-cat { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px; border-radius: 14px; border: 1.5px solid var(--tema-cor, var(--cor-primaria)); background: var(--tema-fundo, var(--cor-realce)); color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
+.quadro-cat b { flex: 1; font-size: 14.5px; font-weight: 600; }
+.quadro-cat .ic-p { width: 34px; height: 34px; }
+.trocar { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: var(--tema-cor, var(--cor-primaria)); }
+.trocar svg { transition: transform var(--anim-rapida) ease; }
+.trocar svg.girado { transform: rotate(180deg); }
+.grade-expandida { margin-top: 8px; }
 .fileira { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .fileira::-webkit-scrollbar { display: none; }
 .chip-cat { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px 0 6px; border-radius: 999px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); white-space: nowrap; cursor: pointer; }
