@@ -126,8 +126,13 @@ const negativo = computed(() => estado.value === 'neg');
   background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); display: flex; flex-direction: column; gap: 4px;
   font-family: var(--fonte-texto); min-width: 0;
 }
-/* acento: faixa fina no topo + brilho suave no canto superior esquerdo */
-.topo-valor::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; z-index: 0; background: linear-gradient(90deg, var(--acento-1), var(--acento-2) 60%, transparent); }
+/* acento (30/10, 06h20): contorno colorido de 2 px que cobre o topo inteiro, a lateral direita completa e um pedaço da base
+   (sumindo para a esquerda); a lateral esquerda fica sem contorno. O brilho suave do canto continua. */
+.topo-valor::before { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit; padding: 2px;
+  background:
+    linear-gradient(90deg, transparent, var(--acento-1) 28px, var(--acento-2)) right top / calc(100% - 6px) calc(100% - 14px) no-repeat,
+    linear-gradient(270deg, var(--acento-2), transparent) right bottom / 45% 16px no-repeat;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
 .topo-valor::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--acento-1) 13%, transparent), transparent 60%); }
 .tema-meta { --acento-1: var(--meta-violeta-medio, #5E18D8); --acento-2: var(--meta-orquidea-medio, #AF32BD); --valor-cor: var(--cor-texto); }
 .tema-investimento { --acento-1: #22C3D6; --acento-2: var(--investimento-esmeralda-escuro, #0B5C68); }

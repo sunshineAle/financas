@@ -87,7 +87,12 @@ function tocar(g) {
     if (g.rotaCelular) { fechar(); router.push(g.rotaCelular); return; } // Mais: volta à tela inicial dele
     if (g.itens.length > 1) {
       radial.value = radial.value && radial.value.id === g.id ? null : { tipo: 'grupo', id: g.id };
-    } else fechar();
+      return;
+    }
+    fechar();
+    // Tocar no grupo já ativo, estando numa tela de dentro dele (ex.: Contas dentro de Patrimônio, extrato em Transações),
+    // volta para a página principal do grupo.
+    if (route.fullPath !== g.itens[0].rota) router.push(g.itens[0].rota);
     return;
   }
   fechar();

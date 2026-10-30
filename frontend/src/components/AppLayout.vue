@@ -13,7 +13,7 @@ import { avisar as avisarRegra } from '../services/avisos.js';
 import TopoApp from './TopoApp.vue';
 import MarcaDagda from './MarcaDagda.vue';
 import AvisoArmazenamento from './AvisoArmazenamento.vue';
-import { MENU_LATERAL } from '../config/menu.js';
+import { MENU_LATERAL, grupoDaRota } from '../config/menu.js';
 import { remontagemTransacoes } from '../services/nav.js';
 import { ehCelular } from '../services/layout.js';
 
@@ -25,7 +25,11 @@ const chaveTela = computed(() => (route.name === 'transacoes' ? `t${remontagemTr
 function itemAtivo(item) {
   if (item.revisar) return route.path === '/transacoes' && !!route.query.revisar;
   if (item.rota === '/transacoes') return route.path === '/transacoes' && !route.query.revisar;
-  return item.rota === '/' ? route.path === '/' : route.path === item.rota || route.path.startsWith(item.rota + '/') || (route.name === 'cartao-extrato' && item.rota === '/cartoes');
+  if (item.rota === '/orcamento') return route.path === '/orcamento';
+  // 1.0: as páginas que "moram" num grupo (Contas/Objetivos em Patrimônio, Cartões/Dívidas em Compromissos) acendem o item do grupo
+  const grupo = grupoDaRota(route);
+  if (grupo && grupo !== 'mais' && grupo !== 'inicio' && item.rota === '/' + grupo) return true;
+  return item.rota === '/' ? route.path === '/' : route.path === item.rota || route.path.startsWith(item.rota + '/');
 }
 
 // ---- Menu lateral do PC/web (anotação 62) ----
