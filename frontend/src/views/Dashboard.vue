@@ -370,7 +370,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.pagina { display: flex; flex-direction: column; max-width: 1100px; transition: opacity var(--anim-padrao) ease; }
+.pagina { display: flex; flex-direction: column; max-width: 1200px; width: 100%; margin: 0 auto; transition: opacity var(--anim-padrao) ease; } /* seção 17: centralizado, largura máxima */
 .pagina.atualizando { opacity: 0.65; }
 /* Patrimônio na legenda do orbe (homologação 1.0, seção 1): informativo, não entra no gráfico; toque abre Ativos | Passivos */
 .item-patrimonio { gap: 2px !important; }
