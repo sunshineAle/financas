@@ -64,7 +64,7 @@ const venceCurto = (iso) => (iso ? new Date(iso + 'T12:00:00').toLocaleDateStrin
 const COR = { contas: ['var(--entrada-ceu-medio)', 'var(--entrada-royal-medio)'], reserva: ['var(--meta-violeta-medio)', 'var(--meta-orquidea-medio)'], invest: ['var(--investimento-esmeralda-medio)', 'var(--investimento-verde-agua-medio)'] };
 const segmentos = computed(() => [
   { nome: 'Contas', valor: contas.value.total, cor: COR.contas[0], chave: 'contas' },
-  { nome: 'Reserva e metas', valor: reserva.value.total, cor: COR.reserva[0], chave: 'reserva' },
+  { nome: 'Metas', valor: reserva.value.total, cor: COR.reserva[0], chave: 'reserva' },
   { nome: 'Investimentos', valor: totalInvest.value, cor: COR.invest[0], chave: 'invest' },
 ].filter((s) => s.valor > 0));
 const barras = computed(() => segmentos.value.map((s) => ({ id: s.chave, rotulo: s.nome, valor: s.valor, cor: s.cor, detalhe: `${pct(s.valor)}%` })));
@@ -122,11 +122,11 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
             </div>
           </CardPadrao>
 
-          <!-- Reserva e metas -->
+          <!-- Metas -->
           <CardPadrao class="bloco-pat" sem-padding data-bloco-metas>
             <button type="button" class="cab-bloco" :aria-expanded="!!abertos.reserva" @click="alternar('reserva')">
               <Anel :pct="pct(reserva.total)" :tamanho="44" :espessura="10" :de="COR.reserva[0]" :ate="COR.reserva[1]"><Target :size="17" :stroke-width="1.8" /></Anel>
-              <span class="cb-nome">Reserva e metas<small>{{ metas.length }} {{ metas.length === 1 ? 'meta' : 'metas' }} · {{ pct(reserva.total) }}%</small></span>
+              <span class="cb-nome">Metas<small>{{ metas.length }} {{ metas.length === 1 ? 'meta' : 'metas' }} · {{ pct(reserva.total) }}%</small></span>
               <b class="numero-tabular"><Valor :valor="reserva.total" /></b>
               <ChevronDown class="seta" :class="{ girada: abertos.reserva }" :size="18" :stroke-width="2" aria-hidden="true" />
             </button>
