@@ -19,10 +19,19 @@ import CustosFixos from './views/CustosFixos.vue';
 import Regras from './views/Regras.vue';
 import { registrarTela } from './services/feedback.js';
 
+// true quando a última navegação foi um "voltar" (botão voltar do celular/navegador ou router.back()).
+export const voltando = { valor: false };
 const router = createRouter({
   // A versão de demonstração (sem servidor) navega em memória, sem depender da URL.
   // PWA instalado: rota no hash (#/...), sobrevive a recarregar e funciona offline; demo: em memória.
   history: import.meta.env.VITE_PWA ? createWebHashHistory() : import.meta.env.VITE_DEMO ? createMemoryHistory() : createWebHistory(),
+  // Homologação 1.0, seção 9: VOLTAR volta ao mesmo lugar (mesma rolagem) em todas as páginas. A posição é restaurada
+  // depois que a página carrega os dados (espera curta); ir para outra página começa no topo.
+  scrollBehavior(to, from, salvo) {
+    if (salvo) return new Promise((ok) => setTimeout(() => ok({ ...salvo, behavior: 'instant' }), 380));
+    if (to.path === from.path && to.hash !== from.hash) return false;
+    return { top: 0 };
+  },
   routes: [
     { path: '/login', name: 'login', component: Login },
     { path: '/', name: 'dashboard', component: Dashboard, meta: { titulo: 'Início' } },
@@ -55,6 +64,18 @@ router.beforeEach((to) => {
   return true;
 });
 
+// "Voltar" detectado pela pilha de páginas visitadas (funciona com qualquer histórico, inclusive o botão do celular).
+const pilha = [];
+router.beforeEach((to) => {
+  voltando.valor = pilha.length > 1 && pilha[pilha.length - 2] === to.fullPath;
+  return true;
+});
+router.afterEach((to, from, falha) => {
+  if (falha) return;
+  if (voltando.valor) pilha.pop(); else if (pilha[pilha.length - 1] !== to.fullPath) pilha.push(to.fullPath);
+  if (pilha.length > 50) pilha.shift();
+});
+
 router.afterEach((to) => {
   registrarTela(to);
   const t = to.meta && to.meta.titulo;
@@ -67,6 +88,6 @@ router.afterEach((to, from) => {
   if (to.name === 'cartao-extrato' && from.name && from.name !== 'cartao-extrato') origemExtrato = from.fullPath;
 });
 
-if (import.meta.env.VITE_DEMO && !import.meta.env.VITE_PWA) router.push('/');
+if (import.meta.env.VITE_DEMO && !import.meta.env.VITE_PWA) { router.push('/'); window.__router = router; }
 
 export default router;

@@ -38,7 +38,26 @@ function validar(corpo, parcial = false) {
     out.categoria_id = c.categoriaId || c.categoria_id || null;
   }
   if (c.ativo !== undefined) out.ativo = c.ativo ? 1 : 0;
+  // Recorrência com prazo (homologação 1.0, seção 12): "por 5 meses" a partir do mês de início; sem prazo = null.
+  if (c.meses !== undefined) {
+    if (c.meses === null || c.meses === '' || Number(c.meses) === 0) out.meses_total = null;
+    else { const n = Number(c.meses); if (!Number.isInteger(n) || n < 1 || n > 120) return { erro: 'O prazo deve ser de 1 a 120 meses.' }; out.meses_total = n; }
+  }
+  if (c.inicioMes !== undefined) {
+    const k = String(c.inicioMes || '');
+    if (k && !/^\d{4}-(0[1-9]|1[0-2])$/.test(k)) return { erro: 'Mês de início inválido.' };
+    out.inicio_mes = k || null;
+  }
   return { dados: out };
+}
+
+// A recorrência vale no mês `chave`? Sem prazo: sempre (a partir do início, se houver). Com prazo: só nos N meses.
+function recorrenciaValeNoMes(i, chave) {
+  if (i.inicioMes && chave < i.inicioMes) return false;
+  if (!i.meses) return true;
+  const ini = i.inicioMes || chave;
+  const [a, m] = ini.split('-').map(Number); const [b, n] = chave.split('-').map(Number);
+  return (b - a) * 12 + (n - m) < i.meses;
 }
 
 function categoriaDoUsuario(usuarioId, id) {
@@ -47,7 +66,7 @@ function categoriaDoUsuario(usuarioId, id) {
 }
 
 function formatar(l) {
-  return { id: l.id, nome: l.nome, valor: arred(l.valor), dia: l.dia_mes, categoriaId: l.categoria_id || null, categoriaNome: l.categoria_nome || null, ativo: !!l.ativo };
+  return { id: l.id, nome: l.nome, valor: arred(l.valor), dia: l.dia_mes, categoriaId: l.categoria_id || null, categoriaNome: l.categoria_nome || null, ativo: !!l.ativo, meses: l.meses_total || null, inicioMes: l.inicio_mes || null };
 }
 
 function listar(usuarioId) {
@@ -61,8 +80,8 @@ function listar(usuarioId) {
 router.get('/', (req, res) => {
   const hoje = chaveHoje();
   const gastoMes = gastosDoMesPorCategoria(req.usuario.id, hoje);
-  const itens = listar(req.usuario.id).map((i) => ({ ...i, pagoMes: i.categoriaId ? (gastoMes[i.categoriaId] || 0) > 0 : null }));
-  const totalAtivos = arred(itens.filter((i) => i.ativo).reduce((s, i) => s + i.valor, 0));
+  const itens = listar(req.usuario.id).map((i) => ({ ...i, pagoMes: i.categoriaId ? (gastoMes[i.categoriaId] || 0) > 0 : null, valeNoMes: recorrenciaValeNoMes(i, hoje) }));
+  const totalAtivos = arred(itens.filter((i) => i.ativo && i.valeNoMes).reduce((s, i) => s + i.valor, 0));
   const ess = essenciais(req.usuario.id);
   // Custo de vida = fixos + essenciais estimados (anotação 41/43). Parcelas NÃO entram (são temporárias).
   res.json({ itens, totalAtivos, totalEssenciais: ess.total, custoDeVida: arred(totalAtivos + ess.total) });
@@ -314,5 +333,58 @@ router.get('/previsao', (req, res) => {
   }
   res.json({ saldoContas, entradasMedia, custoDeVida: custoVida, semEntradas: !fechados.length, negativoEm, meses });
 });
+
+// ---- Previsão do Saldo do mês (homologação 1.0, seção 1 — regra do Contador) ----
+// Uma regra só, a mesma do Saldo do mês: tudo conta na DATA DA COMPRA (parcela do cartão no mês em que cai na fatura).
+// Previsto(mês futuro) = entradas previstas − Custo de vida − parcelas do cartão do mês − parcelas de dívidas/acordos
+//                        − saídas já lançadas para o mês (pagamento de fatura fica de fora).
+// Entradas previstas = o maior entre a média dos 3 últimos meses fechados e o que já foi lançado para o mês.
+function previsaoDoMes(usuarioId, chave) {
+  const hoje = chaveHoje();
+  const desloc = (() => { const [a, m] = chave.split('-').map(Number); const [ha, hm] = hoje.split('-').map(Number); return (a - ha) * 12 + (m - hm); })();
+  if (desloc < 1) return null;
+  const ent = Object.fromEntries(db.prepare(
+    `SELECT mes_fin(data) AS m, SUM(valor) AS t FROM transacoes
+     WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor > 0 AND COALESCE(tipo_mov, '') = ''
+       AND COALESCE(categoria_receita, '') NOT IN ('Resgates e saques', 'Rendimentos')
+     GROUP BY m`
+  ).all(usuarioId).map((l) => [l.m, Number(l.t) || 0]));
+  const fechados = [1, 2, 3].map((n) => somarMes(hoje, -n)).filter((k) => ent[k] > 0);
+  const entradasMedia = fechados.length ? arred(fechados.reduce((s, k) => s + ent[k], 0) / fechados.length) : 0;
+  const entradasLancadas = arred(ent[chave] || 0);
+  const entradas = Math.max(entradasMedia, entradasLancadas);
+  const saidasLancadas = arred(db.prepare(
+    `SELECT COALESCE(SUM(-valor), 0) AS t FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND valor < 0
+       AND COALESCE(tipo_mov, '') = '' AND mes_fin(data) = ? AND ${semPagamentoDeFatura()}`
+  ).get(usuarioId, chave).t);
+  const fixos = listar(usuarioId).filter((i) => i.ativo && recorrenciaValeNoMes(i, chave));
+  const ess = essenciais(usuarioId);
+  const custoDeVida = arred(fixos.reduce((s, i) => s + i.valor, 0) + ess.total);
+  const pc = projecaoCartaoPorMes(usuarioId).find((m) => m.mes === chave) || { total: 0, quantidade: 0 };
+  const pd = parcelasDeDividas(usuarioId, desloc);
+  const saidas = arred(custoDeVida + pc.total + pd.total + saidasLancadas);
+  return {
+    mes: chave, rotulo: rotuloMes(chave), semEntradas: !fechados.length,
+    entradas: arred(entradas), entradasMedia, entradasLancadas,
+    custoDeVida, parcelasCartao: arred(pc.total), parcelasDividas: pd.total, saidasLancadas,
+    saidas, saldo: arred(entradas - saidas),
+  };
+}
+// Primeiro mês futuro (até `qtd`) com Saldo do mês previsto negativo: alimenta o aviso "mantendo as dívidas atuais…".
+function primeiroMesNegativo(usuarioId, qtd = 6) {
+  const hoje = chaveHoje();
+  for (let i = 1; i <= qtd; i++) {
+    const p = previsaoDoMes(usuarioId, somarMes(hoje, i));
+    if (p && p.saldo < 0) return p;
+  }
+  return null;
+}
+router.get('/previsao-mes', (req, res) => {
+  const chave = String(req.query.mes || '');
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(chave)) return res.status(400).json({ erro: 'Mês inválido.' });
+  res.json(previsaoDoMes(req.usuario.id, chave));
+});
+router.previsaoDoMes = previsaoDoMes;
+router.primeiroMesNegativo = primeiroMesNegativo;
 
 module.exports = router;

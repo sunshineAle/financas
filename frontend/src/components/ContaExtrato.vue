@@ -52,11 +52,8 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
         <h3>{{ g.rotulo }}</h3>
         <span class="numero-tabular total">{{ sinal(g.total) }} {{ moeda.format(Math.abs(g.total)) }}</span>
       </header>
-      <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" rotulo-abrir="abrir em Transações" @abrir="emit('abrir', t)">
-        <template #menu>
-          <button type="button" @click="emit('abrir', t)">Ver em Transações</button>
-        </template>
-      </LinhaTransacao>
+      <!-- seção 6: sem menu ⋮ — o toque abre a transação (lá ficam Editar, Excluir, Estornar, Ignorar e Criar regra) -->
+      <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" rotulo-abrir="abrir em Transações" @abrir="emit('abrir', t)" />
     </section>
   </div>
 </template>

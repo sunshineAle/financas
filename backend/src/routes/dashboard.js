@@ -4,6 +4,7 @@ const db = require('../db');
 const { exigirAutenticacao } = require('../middleware/auth');
 
 const cartoesRouter = require('./cartoes');
+const custosFixosRouter = require('./custosFixos');
 const { calcularPatrimonio } = require('./patrimonio');
 const { chaveDaData: chaveDaDataFin } = require('../utils/mesFinanceiro');
 const { semPagamentoDeFatura, parcelasCartao, chaveHoje: chaveMesHoje, entradasCartao } = require('../utils/cartaoMeses');
@@ -244,9 +245,27 @@ router.get('/', exigirAutenticacao, (req, res) => {
     futuro: !ehAno && chaveAtual > chaveHoje,
     meses: ehAno ? 12 : 1,
   };
+  // Homologação 1.0, seção 1: mês futuro no filtro = "Previsto para …" no próprio Saldo do mês, pela mesma regra
+  // da data da compra (entradas previstas − Custo de vida − parcelas do cartão − parcelas de dívidas − já lançado).
+  if (periodo.futuro) periodo.previsao = custosFixosRouter.previsaoDoMes(usuarioId, chaveAtual);
+  // O aviso "mantendo as dívidas atuais…" usa essa mesma previsão (primeiro mês com Saldo do mês previsto negativo).
+  const negativo = custosFixosRouter.primeiroMesNegativo(usuarioId, 6);
+  if (negativo) alertas.push({ tipo: 'previsao', mes: negativo.mes, mensagem: `Mantendo as dívidas atuais, o Saldo do mês fica negativo em ${negativo.rotulo.replace(/ de \d{4}$/, '')}.` });
+
+  // "Seus saldos" (homologação 1.0, seção 1 — decisão final 29/10 21h59): os quatro números que formam o Patrimônio,
+  // dos mesmos blocos do detalhe Ativos | Passivos. Contas + Guardado − Faturas − Dívidas = Patrimônio líquido.
+  const totalBloco = (lista, chaves) => Math.round(lista.filter((b) => chaves.includes(b.chave)).reduce((s, b) => s + (b.total || 0), 0) * 100) / 100;
+  const saldos = {
+    contas: totalBloco(pat.ativos, ['contas']),
+    guardado: totalBloco(pat.ativos, ['reserva', 'renda_fixa', 'renda_variavel']),
+    faturas: totalBloco(pat.passivos, ['faturas']),
+    dividas: totalBloco(pat.passivos, ['dividas', 'cheque_especial']),
+    patrimonio: patrimonioLiquido,
+  };
 
   res.json({
     periodo,
+    saldos,
     reservaResumo,
     patrimonioLiquido,
     patrimonioConfere,

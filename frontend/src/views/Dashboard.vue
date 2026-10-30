@@ -1,22 +1,21 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
-import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
+import { lancamentoSalvo } from '../services/lancamento.js';
 import IconeCat from '../components/IconeCat.vue';
 import IconeCategoria from '../components/IconeCategoria.vue';
 import { chaveFinalCategoria } from '../utils/iconesCategoria.js';
-import { ArrowDown, ArrowUp, ArrowLeftRight, Receipt, Tag, Plus, CreditCard, Landmark, ChartColumn, ShieldCheck, TriangleAlert, ChevronRight, CircleCheck } from 'lucide-vue-next';
+import { CreditCard, ShieldCheck, TriangleAlert, ChevronRight, CircleCheck, ListChecks } from 'lucide-vue-next';
 import Orbe from '../components/Orbe.vue';
 import BarraDegrade from '../components/BarraDegrade.vue';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
-import TopoValor from '../components/TopoValor.vue';
 import BotaoOlho from '../components/BotaoOlho.vue';
-import BarraAcoes from '../components/BarraAcoes.vue';
-import BotaoAcao from '../components/BotaoAcao.vue';
 import DashNumero from '../components/DashNumero.vue';
 import DashRosca from '../components/DashRosca.vue';
 import Valor from '../components/Valor.vue';
-import PrevisaoSaldo from '../components/PrevisaoSaldo.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
+import SeusSaldos from '../components/SeusSaldos.vue';
+import { deveReabrir } from '../services/retornoPatrimonio.js';
 import LinhaTransacao from '../components/LinhaTransacao.vue';
 import { infoTransacao } from '../utils/infoTransacao.js';
 import PatrimonioDetalhe from '../components/PatrimonioDetalhe.vue';
@@ -32,7 +31,6 @@ const infoReceitas = ref([]); // categorias de entrada com ícone e cor (para a 
 const nome = ref('');
 const carregando = ref(true);
 const atualizando = ref(false);
-const menuAdd = ref(false);
 const abaRosca = ref('saidas');
 
 const rotuloUrgencia = { vermelho: 'Risco de negativação', amarelo: 'Atenção' };
@@ -51,12 +49,17 @@ const primeiroNome = computed(() => (nome.value || '').trim().split(/\s+/)[0] ||
 
 // --- Período exibido (mês ou ano inteiro) ----------------------------------
 const p = computed(() => dados.value?.periodo || { entradas: 0, saidas: 0, saidasPrevistas: 0, futuro: false, meses: 1 });
-const entradasDoMes = computed(() => p.value.entradas);
-const despesasDoMes = computed(() => p.value.saidas + p.value.saidasPrevistas);
+// Mês futuro (homologação 1.0, seção 1): "Previsto para …" — mesma regra da data da compra (backend: previsaoDoMes).
+const previsao = computed(() => p.value.previsao || null);
+const entradasDoMes = computed(() => (previsao.value ? previsao.value.entradas : p.value.entradas));
+const despesasDoMes = computed(() => (previsao.value ? previsao.value.saidas : p.value.saidas + p.value.saidasPrevistas));
+const composicaoAberta = ref(false);
+watch(() => periodo.value.chave, () => { composicaoAberta.value = false; });
+const nomeMesPrevisto = computed(() => String(previsao.value?.rotulo || '').replace(/ de \d{4}$/, ''));
 const saldoDoMes = computed(() => entradasDoMes.value - despesasDoMes.value);
 const pctDe = (v) => { const t = entradasDoMes.value + despesasDoMes.value; return t > 0 ? Math.round((v / t) * 100) : 0; };
 const palavraPeriodo = computed(() => (anoInteiro.value ? 'no ano' : 'no mês'));
-const rotuloSaldoPeriodo = computed(() => (anoInteiro.value ? 'Saldo do ano' : 'Saldo do mês'));
+const rotuloSaldoPeriodo = computed(() => (anoInteiro.value ? 'Saldo do ano' : previsao.value ? `Previsto para ${nomeMesPrevisto.value}` : 'Saldo do mês'));
 
 // Orbe: Entradas × Saídas (gráfico principal do Dashboard)
 const partesOrbe = computed(() => [
@@ -75,11 +78,17 @@ const totalFaturasAbertas = computed(() => dados.value?.totalFaturasAbertas || 0
 const patrimonio = computed(() => (typeof dados.value?.patrimonioLiquido === 'number'
   ? dados.value.patrimonioLiquido
   : Math.round((saldoContas.value + valorReserva.value - totalFaturasAbertas.value - totalDividas.value) * 100) / 100));
-// Detalhe do patrimônio (anotação 60): tocar no card abre a janela; os botões de ação dentro do card continuam com a função deles.
+// Detalhe do patrimônio (anotação 60): agora pela linha "Patrimônio" da legenda do orbe (homologação 1.0, seção 1).
 const patrimonioAberto = ref(false);
-function abrirPatrimonio(e) {
-  if (e && e.target && e.target.closest && e.target.closest('button, a, input, select, textarea')) return;
-  patrimonioAberto.value = true;
+
+// "Revise suas transações" (homologação 1.0, seção 7): só aparece quando há itens em A revisar (mesma fonte do menu lateral).
+const qtdRevisar = ref(0);
+async function carregarRevisar() {
+  try {
+    const r = await fetch('/api/reserva/auto/pendentes', { credentials: 'include' });
+    const j = r.ok ? await r.json() : null;
+    qtdRevisar.value = (j && Array.isArray(j.pendentes) && j.pendentes.length) || 0;
+  } catch { qtdRevisar.value = 0; }
 }
 
 // --- Categorias -------------------------------------------------------------
@@ -160,9 +169,11 @@ async function carregar() {
 }
 
 watch(() => periodo.value.chave, carregar);
-watch(lancamentoSalvo, () => carregar());
+watch(lancamentoSalvo, () => { carregar(); carregarRevisar(); });
 onMounted(async () => {
   carregar();
+  carregarRevisar();
+  if (deveReabrir()) patrimonioAberto.value = true; // voltou de uma conta/meta aberta pela janela Patrimônio (seção 9)
   try {
     const r = await fetch('/api/auth/me', { credentials: 'include' });
     if (r.ok) nome.value = (await r.json()).nome || '';
@@ -181,16 +192,34 @@ onMounted(async () => {
       <div class="palco-textos">
         <span class="pequena">{{ saudacao }}<template v-if="primeiroNome">, {{ primeiroNome }}</template></span>
         <span class="linha-valor">
-          <strong class="palco-valor" :class="{ negativo: saldoDoMes < 0 }"><DashNumero :valor="saldoDoMes" /></strong>
+          <button v-if="previsao" type="button" class="palco-valor valor-botao" :class="{ negativo: saldoDoMes < 0 }" :aria-expanded="composicaoAberta" aria-controls="composicao-previsto" :aria-label="`${rotuloSaldoPeriodo}: ver a composição`" @click="composicaoAberta = !composicaoAberta"><DashNumero :valor="saldoDoMes" /></button>
+          <strong v-else class="palco-valor" :class="{ negativo: saldoDoMes < 0 }"><DashNumero :valor="saldoDoMes" /></strong>
           <BotaoOlho class="olho-valor" :tamanho="36" />
         </span>
-        <span class="palco-rotulo">{{ rotuloSaldoPeriodo }} <span class="periodo">· {{ intervaloTxt || rotuloPeriodo }}</span></span>
+        <span class="palco-rotulo">{{ rotuloSaldoPeriodo }} <span v-if="!previsao" class="periodo">· {{ intervaloTxt || rotuloPeriodo }}</span><AjudaSecao :secao="previsao ? 'inicio.previsto' : 'inicio.saldo'" /></span>
+        <transition name="desce">
+          <ul v-if="previsao && composicaoAberta" id="composicao-previsto" class="composicao" data-composicao-previsto>
+            <li><span>+ Entradas previstas</span><b class="numero-tabular"><Valor :valor="previsao.entradas" /></b></li>
+            <li><span>− Custo de vida</span><b class="numero-tabular"><Valor :valor="previsao.custoDeVida" /></b></li>
+            <li><span>− Parcelas do cartão no mês</span><b class="numero-tabular"><Valor :valor="previsao.parcelasCartao" /></b></li>
+            <li><span>− Parcelas de dívidas e acordos</span><b class="numero-tabular"><Valor :valor="previsao.parcelasDividas" /></b></li>
+            <li v-if="previsao.saidasLancadas > 0"><span>− Já lançado para o mês</span><b class="numero-tabular"><Valor :valor="previsao.saidasLancadas" /></b></li>
+            <li class="total" :class="{ neg: previsao.saldo < 0 }"><span>= Previsto</span><b class="numero-tabular"><Valor :valor="previsao.saldo" /></b></li>
+            <li v-if="previsao.semEntradas" class="nota-comp">Sem entradas nos últimos meses: a previsão considera só as saídas.</li>
+          </ul>
+        </transition>
       </div>
       <div class="palco-orbe" :style="{ transform: `translate3d(0, ${deslocamento.toFixed(1)}px, 0)` }">
         <Orbe :partes="partesOrbe" :tamanho="460" />
         <ul class="legenda-orbe">
           <li><i class="ponto entrada"></i><span>Entradas</span><b class="numero-tabular"><Valor :valor="entradasDoMes" /></b><small>{{ pctDe(entradasDoMes) }}%</small></li>
           <li><i class="ponto saida"></i><span>Saídas</span><b class="numero-tabular"><Valor :valor="despesasDoMes" /></b><small>{{ pctDe(despesasDoMes) }}%</small></li>
+          <li class="item-patrimonio">
+            <button type="button" class="leg-botao" aria-haspopup="dialog" :aria-label="`Patrimônio líquido: ver Ativos e Passivos`" @click="patrimonioAberto = true">
+              <i class="ponto patrimonio"></i><span>Patrimônio</span><b class="numero-tabular"><Valor :valor="patrimonio" /></b>
+            </button>
+            <AjudaSecao secao="inicio.patrimonio" />
+          </li>
         </ul>
       </div>
     </section>
@@ -201,35 +230,17 @@ onMounted(async () => {
         <template #corpo>
       <div v-deslizar-mes class="corpo-mes">
       <div class="grade">
-        <!-- 1. Saldo + ações rápidas ----------------------------------------- -->
-        <div class="coluna">
-          <div class="card-patrimonio" @click="abrirPatrimonio">
-          <TopoValor tema="entrada" :variante="1" rotulo="Patrimônio líquido" :valor="patrimonio"
-            :linhas="[{ rotulo: 'Saldo nas contas', valor: saldoContas }, { rotulo: '+ Reserva de Liberdade', valor: valorReserva }, { rotulo: '− Faturas abertas', valor: totalFaturasAbertas }, { rotulo: '− Dívidas', valor: totalDividas }]">
-            <button type="button" class="dica-patrimonio" aria-label="Patrimônio líquido: ver os detalhes" aria-haspopup="dialog" @click.stop="patrimonioAberto = true">
-              Toque para ver os detalhes<ChevronRight :size="14" :stroke-width="2" aria-hidden="true" />
-            </button>
-            <template #acoes>
-              <BarraAcoes compacto :colunas="4">
-                <BotaoAcao compacto :icone="Plus" rotulo="Adicionar" tema="entrada" destaque :aria-expanded="menuAdd" @click="menuAdd = !menuAdd" />
-                <BotaoAcao compacto :icone="CreditCard" rotulo="Cartões" tema="entrada" @click="ir('/cartoes')" />
-                <BotaoAcao compacto :icone="Landmark" rotulo="Dívidas" tema="entrada" @click="ir('/dividas')" />
-                <BotaoAcao compacto :icone="ChartColumn" rotulo="Relatórios" tema="entrada" @click="ir('/relatorios')" />
-              </BarraAcoes>
-            </template>
-          </TopoValor>
-          </div>
-          <PatrimonioDetalhe :aberto="patrimonioAberto" @fechar="patrimonioAberto = false" />
-          <transition name="desce">
-            <div v-if="menuAdd" class="escolha-add">
-              <button type="button" class="chip entrada" @click="menuAdd = false; abrirLancamento({ tipo: 'entrada' })"><ArrowDown :size="18" :stroke-width="2" />Lançar entrada</button>
-              <button type="button" class="chip saida" @click="menuAdd = false; abrirLancamento({ tipo: 'saida' })"><ArrowUp :size="18" :stroke-width="2" />Lançar saída</button>
-            </div>
-          </transition>
-        </div>
+        <!-- 0. Seus saldos (decisão final da seção 1, 29/10 21h59): meia-lua com Contas, Guardado, Faturas e Dívidas -->
+        <SeusSaldos :saldos="dados.saldos" @patrimonio="patrimonioAberto = true" />
 
-        <!-- 1b. Dinheiro nas contas + previsão do saldo (anotação 51) -->
-        <PrevisaoSaldo />
+        <!-- 1. Revise suas transações (homologação 1.0, seção 7): só quando há itens em A revisar -->
+        <button v-if="qtdRevisar > 0" type="button" class="cartao revisar" data-revise-transacoes @click="ir('/transacoes?revisar=1')">
+          <span class="icone-cat aviso" aria-hidden="true"><ListChecks :size="20" :stroke-width="2" /></span>
+          <span class="textos"><span class="descricao">Revise suas transações</span><span class="secundario">{{ qtdRevisar }} {{ qtdRevisar === 1 ? 'item precisa' : 'itens precisam' }} da sua confirmação</span></span>
+          <span class="contador-revisar numero-tabular">{{ qtdRevisar > 99 ? '99+' : qtdRevisar }}</span>
+          <ChevronRight :size="18" :stroke-width="2" class="seta" aria-hidden="true" />
+        </button>
+        <PatrimonioDetalhe :aberto="patrimonioAberto" @fechar="patrimonioAberto = false" />
 
         <!-- 2. Atividade recente ---------------------------------------------- -->
         <section class="cartao">
@@ -359,14 +370,29 @@ onMounted(async () => {
 <style scoped>
 .pagina { display: flex; flex-direction: column; max-width: 1100px; transition: opacity var(--anim-padrao) ease; }
 .pagina.atualizando { opacity: 0.65; }
-/* Card de patrimônio: tocar abre o detalhe (anotação 60); a dica é discreta, em branco translúcido sobre o degradê */
-.card-patrimonio { cursor: pointer; }
-.dica-patrimonio {
-  display: inline-flex; align-items: center; gap: 2px; align-self: flex-start; margin: 2px 0 0; padding: 4px 0; min-height: 28px;
-  background: none; border: 0; font: inherit; font-size: 0.72rem; color: color-mix(in srgb, var(--cor-sobre-cor) 78%, transparent); cursor: pointer;
-}
-.dica-patrimonio:hover { color: var(--cor-sobre-cor); }
-.dica-patrimonio:focus-visible { outline: 2px solid var(--cor-sobre-cor); outline-offset: 2px; border-radius: 6px; }
+/* Patrimônio na legenda do orbe (homologação 1.0, seção 1): informativo, não entra no gráfico; toque abre Ativos | Passivos */
+.item-patrimonio { gap: 2px !important; }
+.leg-botao { display: inline-flex; align-items: center; gap: 7px; padding: 4px 2px; min-height: 32px; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 8px; }
+.leg-botao:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.leg-botao:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
+.ponto.patrimonio { background: linear-gradient(135deg, var(--meta-violeta-medio, #5E18D8), var(--cor-investimento, #1597A8)); }
+@media (max-width: 480px) { .item-patrimonio { flex-basis: 100%; justify-content: center; } }
+/* Valor previsto: tocar mostra a composição */
+.valor-botao { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; border-radius: 10px; text-decoration: underline dotted color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 6px; text-decoration-thickness: 2px; }
+.valor-botao.negativo { color: var(--cor-saida); }
+.valor-botao:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 4px; }
+.composicao { list-style: none; margin: 10px 0 0; padding: 10px 14px; width: min(340px, 92vw); border-radius: 14px; background: var(--cor-card); border: 1px solid var(--cor-card-borda); text-align: left; }
+.composicao li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13.5px; color: var(--cor-texto-suave); }
+.composicao li b { color: var(--cor-texto); font-weight: 600; }
+.composicao li.total { border-top: 1px solid var(--cor-borda); margin-top: 3px; padding-top: 7px; font-weight: 700; color: var(--cor-texto); }
+.composicao li.total.neg b { color: var(--cor-saida-texto); }
+.composicao .nota-comp { font-size: 12px; }
+/* Revise suas transações */
+.cartao.revisar { flex-direction: row; align-items: center; gap: 12px; cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; }
+.cartao.revisar:hover { background: color-mix(in srgb, var(--cor-amarelo) 6%, var(--cor-card)); }
+.cartao.revisar .textos { flex: 1; }
+.contador-revisar { min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: color-mix(in srgb, var(--cor-amarelo) 22%, transparent); color: var(--cor-amarelo); }
+.cartao.revisar .seta { color: var(--cor-texto-suave); }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
 
 /* Palco do orbe: solto no topo, sem card. O bloco do orbe desce mais devagar que a rolagem (parallax) */
@@ -411,11 +437,6 @@ onMounted(async () => {
 .c-saida { color: var(--cor-saida-texto); }
 .ok { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; color: var(--cor-investimento); }
 
-/* Escolha do tipo de lançamento (abre pelo botão Adicionar do card de saldo) */
-.escolha-add { display: flex; gap: 10px; flex-wrap: wrap; }
-.chip { flex: 1 1 140px; min-height: 48px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--fonte-texto); font-size: 14px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--c); color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
-.chip.entrada { --c: var(--cor-entrada); }
-.chip.saida { --c: var(--cor-saida-texto); }
 .desce-enter-active, .desce-leave-active { transition: opacity var(--anim-padrao) ease, transform var(--anim-padrao) var(--anim-curva); }
 .desce-enter-from, .desce-leave-to { opacity: 0; transform: translateY(-6px); }
 

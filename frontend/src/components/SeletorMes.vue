@@ -159,11 +159,12 @@ function tecla(e) {
 
 <style scoped>
 .mes-fileira {
-  --item-w: 62px; --aba-w: 100px; --alt: 46px; --raio: 14px;
+  /* Homologação 1.0, seção 4: aba ainda menor (largura e altura); embaixo do mês só o ano, centralizado */
+  --item-w: 54px; --aba-w: 78px; --alt: 38px; --raio: 12px;
   position: relative; display: flex; align-items: flex-end; gap: 6px; width: 100%; max-width: 100%; min-width: 0;
 }
-.mes-fileira.compacto { --alt: 44px; --item-w: 56px; --aba-w: 92px; --raio: 13px; }
-@media (min-width: 769px) { .mes-fileira { --item-w: 80px; --aba-w: 116px; } .mes-fileira.compacto { --item-w: 70px; --aba-w: 100px; } }
+.mes-fileira.compacto { --alt: 36px; --item-w: 50px; --aba-w: 72px; --raio: 11px; }
+@media (min-width: 769px) { .mes-fileira { --item-w: 66px; --aba-w: 88px; } .mes-fileira.compacto { --item-w: 60px; --aba-w: 80px; } }
 
 .fileira-mes-viewport {
   position: relative; flex: 1 1 auto; min-width: 0; height: var(--alt); overflow: hidden; cursor: grab; outline: none;
@@ -189,7 +190,7 @@ function tecla(e) {
   opacity: max(0, calc(0.9 - var(--d) * 0.3)); transition: opacity var(--anim-rapida) ease, color var(--anim-rapida) ease;
 }
 .item:hover { color: var(--cor-texto); }
-.item b { font-size: 13px; letter-spacing: 0.04em; font-weight: 600; }
+.item b { font-size: 12px; letter-spacing: 0.04em; font-weight: 600; }
 .item small { font-size: 9px; font-family: var(--fonte-texto); opacity: 0.8; line-height: 1; }
 .item:disabled { cursor: default; opacity: 0; }
 
@@ -204,9 +205,11 @@ function tecla(e) {
 .ligada .aba::before, .ligada .aba::after { content: ''; position: absolute; bottom: 0; width: 12px; height: 12px; pointer-events: none; }
 .ligada .aba::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--mes-fundo, var(--cor-fundo-elevado)) 12px); }
 .ligada .aba::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--mes-fundo, var(--cor-fundo-elevado)) 12px); }
-.aba-mes { display: inline-flex; align-items: center; gap: 2px; font-family: var(--fonte-display); font-size: 16px; font-weight: 600; letter-spacing: 0.06em; line-height: 1.1; }
-.aba-ano { font-family: var(--fonte-texto); font-size: 10px; opacity: 0.7; line-height: 1; letter-spacing: 0.04em; }
-.ano-modo .aba-mes { font-size: 18px; letter-spacing: 0; }
+.aba-mes { position: relative; display: inline-block; font-family: var(--fonte-display); font-size: 14px; font-weight: 600; letter-spacing: 0.06em; line-height: 1.1; }
+/* a setinha fica fora do fluxo: o nome do mês e o ano ficam no mesmo eixo, centralizados */
+.aba-mes .aba-seta { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 1px; }
+.aba-ano { font-family: var(--fonte-texto); font-size: 9.5px; text-align: center; opacity: 0.7; line-height: 1; letter-spacing: 0.04em; }
+.ano-modo .aba-mes { font-size: 15px; letter-spacing: 0; }
 .ano-modo .aba-ano { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .seta { flex: 0 0 auto; align-self: center; width: 36px; height: 36px; border-radius: 10px; display: none; align-items: center; justify-content: center; background: none; border: 1px solid var(--cor-borda); color: var(--cor-texto-suave); cursor: pointer; }

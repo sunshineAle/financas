@@ -320,6 +320,9 @@ const TABELAS = {
       'dia_mes INTEGER NOT NULL DEFAULT 1',
       'categoria_id TEXT',
       'ativo INTEGER NOT NULL DEFAULT 1',
+      // Homologação 1.0 (seção 12): recorrência com prazo — N meses a partir de inicio_mes (AAAA-MM); null = sem prazo.
+      'meses_total INTEGER',
+      'inicio_mes TEXT',
     ],
     fk: { usuario_id: 'usuarios', categoria_id: 'categorias_orcamento' },
     exporta: true,

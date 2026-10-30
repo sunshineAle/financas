@@ -12,6 +12,8 @@ import BarraDegrade from './BarraDegrade.vue';
 import Anel from './Anel.vue';
 import Valor from './Valor.vue';
 import IconeBanco from './IconeBanco.vue';
+import IconeCategoria from './IconeCategoria.vue';
+import { guardarRetorno, pegarRetorno } from '../services/retornoPatrimonio.js';
 
 const props = defineProps({ aberto: { type: Boolean, default: false } });
 const emit = defineEmits(['fechar']);
@@ -53,9 +55,20 @@ async function carregar() {
     carregando.value = false;
   }
 }
-watch(() => props.aberto, (v) => { if (v) { abertos.value = {}; carregar(); } }, { immediate: true });
+const caixa = ref(null);
+watch(() => props.aberto, async (v) => {
+  if (!v) return;
+  const r = pegarRetorno(); // voltou de uma conta/meta: reabre como estava (seção 9)
+  lado.value = r ? r.lado : lado.value;
+  abertos.value = r ? r.abertos : {};
+  await carregar();
+  if (r) setTimeout(() => { const el = caixa.value?.closest('.corpo, .modal-corpo, [data-modal-corpo]') || caixa.value?.parentElement; if (el) el.scrollTop = r.rolagem; }, 60);
+}, { immediate: true });
 
-const blocos = computed(() => (dados.value ? dados.value[lado.value] : []) || []);
+const blocos = computed(() => {
+  const l = (dados.value ? dados.value[lado.value] : []) || [];
+  return lado.value === 'ativos' ? [...l].sort((a, b) => ORDEM.indexOf(a.chave) - ORDEM.indexOf(b.chave)) : l;
+});
 const totalLado = computed(() => (dados.value ? (lado.value === 'ativos' ? dados.value.totalAtivos : dados.value.totalPassivos) : 0));
 const pct = (v) => (totalLado.value > 0 ? Math.round((v / totalLado.value) * 100) : 0);
 const segmentos = computed(() => blocos.value.map((b) => ({ nome: b.rotulo, valor: b.total, cor: cor(b.chave)[0] })));
@@ -63,9 +76,22 @@ const compromissos = computed(() => dados.value?.compromissos || { total: 0, ite
 const temaModal = computed(() => (lado.value === 'ativos' ? 'entrada' : 'saida'));
 
 function irPara(rota) {
+  const el = caixa.value?.closest('.corpo, .modal-corpo, [data-modal-corpo]') || caixa.value?.parentElement;
+  guardarRetorno({ lado: lado.value, abertos: { ...abertos.value }, rolagem: el ? el.scrollTop : 0 });
   emit('fechar');
   router.push(rota);
 }
+// Toque num item: conta → extrato da conta; meta → extrato da meta; ativo → detalhe do ativo; o resto → página do bloco.
+function irItem(b, i) {
+  if (b.chave === 'contas' || b.chave === 'cheque_especial') return irPara({ path: '/contas', query: { conta: i.id } });
+  if (b.chave === 'reserva' && i.detalhe === 'Meta') return irPara({ path: '/objetivos', query: { meta: i.id } });
+  if (b.chave === 'renda_fixa' || b.chave === 'renda_variavel') return irPara({ path: '/objetivos', query: { ativo: i.id } });
+  return irPara(b.rota);
+}
+const TIPO_CONTA = { corrente: 'Conta corrente', poupanca: 'Poupança', corretora: 'Corretora', dinheiro: 'Dinheiro', beneficio: 'Benefício', outra: 'Outra' };
+const subItem = (b, i) => (b.chave === 'contas' ? TIPO_CONTA[i.tipo] || 'Conta' : i.detalhe || '');
+// "Seus investimentos" acima de "Reserva e metas": a ordem dos ativos passa a ser Contas · Renda fixa · Renda variável · Reserva.
+const ORDEM = ['contas', 'renda_fixa', 'renda_variavel', 'reserva'];
 const alternar = (chave) => { abertos.value = { ...abertos.value, [chave]: !abertos.value[chave] }; };
 const mesFatura = (chave) => {
   const [a, m] = String(chave || '').split('-').map(Number);
@@ -76,7 +102,7 @@ const mesFatura = (chave) => {
 
 <template>
   <Modal :aberto="aberto" titulo="Patrimônio" ajuda="inicio.patrimonio" :tema="temaModal" :largura="560" @fechar="emit('fechar')">
-    <div class="patrimonio">
+    <div ref="caixa" class="patrimonio">
       <p v-if="carregando && !dados" class="estado">Carregando…</p>
       <p v-else-if="erro" class="estado erro" role="alert">{{ erro }}</p>
       <template v-if="dados">
@@ -120,7 +146,11 @@ const mesFatura = (chave) => {
 
         <!-- Blocos -->
         <ul class="blocos">
-          <li v-for="b in blocos" :key="b.chave" class="bloco" :class="{ vazio: !b.itens.length }">
+          <template v-for="b in blocos" :key="b.chave">
+          <li v-if="b.chave === 'reserva'" class="link-inv">
+            <button type="button" data-seus-investimentos @click="irPara('/objetivos?aba=investimentos')">Seus investimentos<ChevronRight :size="16" :stroke-width="2" aria-hidden="true" /></button>
+          </li>
+          <li class="bloco" :class="{ vazio: !b.itens.length }">
             <div class="bloco-topo">
               <Anel :pct="pct(b.total)" :tamanho="44" :espessura="13" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]">
                 <span class="anel-pct numero-tabular">{{ pct(b.total) }}%</span>
@@ -134,17 +164,22 @@ const mesFatura = (chave) => {
                 <ChevronRight :size="18" :stroke-width="2" aria-hidden="true" />
               </button>
             </div>
+            <!-- seção 9: linhas mais ricas — ícone maior, nome, tipo embaixo e saldo à direita; toque abre o extrato -->
             <ul v-if="abertos[b.chave] && b.itens.length" class="itens">
               <li v-for="i in b.itens" :key="i.id">
-                <span class="item-icone" aria-hidden="true">
-                  <IconeBanco v-if="b.chave === 'contas' || b.chave === 'cheque_especial' || b.chave === 'faturas'" :icone="i.icone || ''" :nome="i.nome" :tamanho="22" :padrao="b.chave === 'faturas' ? '💳' : '🏦'" />
-                  <template v-else>{{ i.icone || '•' }}</template>
-                </span>
-                <span class="item-nome">{{ i.nome }}<small v-if="i.detalhe">{{ i.detalhe }}<template v-if="i.fatura"> · fatura {{ mesFatura(i.fatura) }}</template></small></span>
-                <b class="numero-tabular"><Valor :valor="i.valor" /></b>
+                <button type="button" class="item-linha" :aria-label="`${i.nome}: ${b.chave === 'contas' || b.chave === 'cheque_especial' ? 'ver extrato da conta' : 'abrir'}`" @click="irItem(b, i)">
+                  <span class="item-icone" aria-hidden="true">
+                    <IconeBanco v-if="b.chave === 'contas' || b.chave === 'cheque_especial' || b.chave === 'faturas'" :icone="i.icone || ''" :nome="i.nome" :tamanho="36" :padrao="b.chave === 'faturas' ? '💳' : '🏦'" />
+                    <IconeCategoria v-else :valor="i.icone || i.tipo || (b.chave === 'reserva' ? '🎯' : '')" :tipo="b.chave === 'reserva' ? 'meta' : 'investimento'" :tamanho="36" />
+                  </span>
+                  <span class="item-nome">{{ i.nome }}<small v-if="subItem(b, i)">{{ subItem(b, i) }}<template v-if="i.fatura"> · fatura {{ mesFatura(i.fatura) }}</template></small></span>
+                  <b class="numero-tabular"><Valor :valor="i.valor" /></b>
+                </button>
               </li>
             </ul>
+            <button v-if="abertos[b.chave] && b.chave === 'contas' && b.itens.length === 1" type="button" class="ver-extrato" @click="irItem(b, b.itens[0])">Ver extrato da conta<ChevronRight :size="15" :stroke-width="2" aria-hidden="true" /></button>
           </li>
+          </template>
         </ul>
 
         <!-- Compromissos futuros: informativo, fora do total -->
@@ -224,10 +259,17 @@ const mesFatura = (chave) => {
 .ir:hover { background: var(--cor-realce); color: var(--cor-texto); }
 
 .itens { list-style: none; margin: 0; padding: 4px 12px 10px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--cor-borda); }
-.itens li { display: flex; align-items: center; gap: 10px; padding-top: 6px; font-size: 0.88rem; }
-.item-icone { width: 28px; display: inline-flex; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
-.item-nome { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
-.item-nome small { color: var(--cor-texto-suave); font-size: 0.74rem; }
+.itens li { display: block; padding-top: 4px; font-size: 0.92rem; }
+.item-linha { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 4px; border: 0; border-radius: 12px; background: none; color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
+.item-linha:hover { background: var(--cor-realce); }
+.item-linha:focus-visible { outline: 2px solid var(--cor-interface); outline-offset: 1px; }
+.item-icone { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; border-radius: 50%; overflow: hidden; }
+.item-nome { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow-wrap: anywhere; font-weight: 600; }
+.item-nome small { color: var(--cor-texto-suave); font-size: 0.76rem; font-weight: 400; }
+.ver-extrato { display: flex; align-items: center; gap: 2px; margin: 0 12px 10px auto; min-height: 36px; padding: 0; border: 0; background: none; color: var(--cor-primaria); font: 600 0.82rem var(--fonte-texto); cursor: pointer; }
+/* "Seus investimentos": linha discreta, sem destaque de holofote */
+.link-inv button { display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 6px; border: 0; background: none; color: var(--cor-texto-suave); font: 600 0.84rem var(--fonte-texto); cursor: pointer; }
+.link-inv button:hover { color: var(--cor-texto); }
 .itens b { white-space: nowrap; font-weight: 600; }
 
 .compromissos { border: 1px dashed var(--cor-borda); border-radius: 14px; overflow: hidden; }

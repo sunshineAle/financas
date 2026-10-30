@@ -1,6 +1,6 @@
 <script setup>
 // <AjudaSecao secao="dividas.faturas" /> — "?" minúsculo ao lado do título de uma seção, card ou janela (anotação 64).
-// Toque abre um BALÃO pequeno ancorado no ícone com a explicação curta daquela seção e, se houver, "Ver no manual".
+// Toque abre um BALÃO pequeno ancorado no ícone com a explicação curta daquela seção.
 // Fecha ao tocar fora ou com Esc (sem fechar a janela de trás); ao rolar, acompanha o "?". O foco volta ao "?".
 // Props: secao (id em config/ajudaSecoes.js) OU texto (string | lista) + titulo; manual (id da seção do Manual; sobrepõe o do mapa).
 // Use só onde havia texto explicativo na tela. Visual: 20px; área de toque 44px (pseudo-elemento, sem mexer no layout).
@@ -21,7 +21,7 @@ const frases = computed(() => {
   const t = props.texto || doMapa.value?.texto || '';
   return (Array.isArray(t) ? t : [t]).filter(Boolean);
 });
-const linkManual = computed(() => props.manual || doMapa.value?.manual || '');
+// Homologação 1.0, seção 11: o balão fica só com a explicação (sem o botão "Ver no manual"). O prop `manual` segue aceito.
 
 const id = 'ajuda-' + useId();
 const botao = ref(null);
@@ -101,7 +101,6 @@ onBeforeUnmount(desligar);
       <div v-if="aberto" :id="id" ref="balao" class="ajuda-balao" :class="{ acima: pos.acima }" role="dialog" :aria-label="`Explicação: ${titulo}`" data-ajuda-balao
         :style="{ left: pos.left + 'px', top: pos.top + 'px', width: pos.largura + 'px', '--seta': pos.seta + 'px' }" @click.stop>
         <p v-for="(f, i) in frases" :key="i">{{ f }}</p>
-        <RouterLink v-if="linkManual" class="ver-manual" :to="{ path: '/manual', query: { secao: linkManual } }" @click="fechar(false)">Ver no manual</RouterLink>
       </div>
     </Teleport>
   </span>
@@ -133,8 +132,6 @@ onBeforeUnmount(desligar);
 }
 .ajuda-balao.acima::before { top: auto; bottom: -6px; transform: rotate(225deg); }
 .ajuda-balao p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--cor-texto-suave); }
-.ver-manual { align-self: flex-start; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--cor-primaria); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
-.ver-manual:hover { text-decoration: underline; }
 @keyframes ajuda-entra { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ajuda-balao { animation: none; } }
 </style>

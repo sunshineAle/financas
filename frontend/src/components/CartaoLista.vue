@@ -49,12 +49,8 @@ const linhas = computed(() => props.lancamentos.map((l) => {
 <template>
   <div class="lista" role="list">
     <div v-for="x in linhas" :key="x.t.id" role="listitem">
-      <LinhaTransacao :t="x.t" :info="x.info" :clicavel="manual" rotulo-abrir="editar a compra" @abrir="emit('editar', x.l)">
-        <template #menu>
-          <button v-if="manual" type="button" @click="emit('editar', x.l)">Editar</button>
-          <button type="button" class="perigo" @click="emit('remover', x.l)">Remover</button>
-        </template>
-      </LinhaTransacao>
+      <!-- Homologação 1.0, seção 6: arrastar para a esquerda = Editar · Excluir (sem menu ⋮) -->
+      <LinhaTransacao :t="x.t" :info="x.info" :clicavel="manual" arrastavel rotulo-abrir="editar a compra" @abrir="emit('editar', x.l)" @editar="manual && emit('editar', x.l)" @excluir="emit('remover', x.l)" />
     </div>
   </div>
 </template>

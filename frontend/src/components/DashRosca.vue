@@ -1,6 +1,6 @@
 <script setup>
-// Rosca (5+ partes), no estilo dos arcos do orbe: pontas arredondadas, trilho apagado e degradê sutil
-// (clareia/escurece levemente) mesmo com cores separadas; total no centro e respiro entre as partes.
+// Rosca (5+ partes): pontas retas, trilho apagado e degradê com transparência por parte (início sólido, final sumindo);
+// total no centro e respiro entre as partes.
 // Mostra as `maximo` maiores e junta o resto em "Outros" (cinza). A lista ao lado traz todas as partes.
 import { ref, computed, onMounted } from 'vue';
 
@@ -28,47 +28,56 @@ const partes = computed(() => {
   return [...topo, { nome: 'Outros', valor: resto, cor: 'var(--cor-texto-suave)' }];
 });
 const total = computed(() => partes.value.reduce((s, x) => s + x.valor, 0));
-// Pontas arredondadas: o arredondamento "come" meia espessura em cada ponta, então o traço é encurtado
-// pela espessura mais um respiro entre as partes.
-const ESPESSURA = 8;
-const RESPIRO = 2.2;
-const idBase = 'rosca' + Math.random().toString(36).slice(2, 7);
+// Homologação 1.0, seção 3: pontas RETAS e degradê com transparência em cada parte (início sólido, final sumindo).
+// Desenho em conic-gradient recortado em anel (o degradê acompanha o arco, o que um traço SVG não faz).
+// Respiro de RESPIRO graus entre as partes; a parte em foco fica inteira e as outras esmaecem um pouco.
+const RESPIRO = 2.4; // graus
 const fatias = computed(() => {
   let acc = 0;
   const unico = partes.value.length === 1;
   return partes.value.map((p, i) => {
     const frac = total.value ? p.valor / total.value : 0;
-    const perda = unico ? 0 : ESPESSURA + RESPIRO;
-    const comp = Math.max(0.01, frac * C - perda);
-    const f = { ...p, i, frac, pct: Math.round(frac * 100), comp, off: -(acc * C + perda / 2) };
+    const ini = acc * 360 + (unico ? 0 : RESPIRO / 2);
+    const fim = (acc + frac) * 360 - (unico ? 0 : RESPIRO / 2);
     acc += frac;
-    return f;
+    return { ...p, i, frac, pct: Math.round(frac * 100), ini, fim: Math.max(ini + 0.5, fim) };
   });
 });
+const fundoRosca = computed(() => {
+  if (!fatias.value.length) return 'none';
+  const pv = pronto.value ? 1 : 0;
+  const partesCss = [];
+  fatias.value.forEach((f) => {
+    const ini = f.ini * pv, fim = f.fim * pv, comp = fim - ini;
+    const apaga = ativo.value !== null && ativo.value !== f.i ? 45 : 100;
+    const c = (alfa) => `color-mix(in srgb, ${f.cor} ${Math.round(alfa * apaga / 100)}%, transparent)`;
+    partesCss.push(`transparent ${ini.toFixed(2)}deg`, `${c(100)} ${ini.toFixed(2)}deg`, `${c(92)} ${(ini + comp * 0.45).toFixed(2)}deg`, `${c(f.frac >= 0.999 ? 80 : 22)} ${fim.toFixed(2)}deg`, `transparent ${fim.toFixed(2)}deg`);
+  });
+  return `conic-gradient(from 0deg, ${partesCss.join(', ')}, transparent 360deg)`;
+});
+// toque/ponteiro: descobre a parte pelo ângulo em relação ao centro
+const elRosca = ref(null);
+function parteNoPonto(e) {
+  const r = elRosca.value?.getBoundingClientRect();
+  if (!r) return null;
+  const pt = e.touches ? e.touches[0] : e;
+  const dx = pt.clientX - (r.left + r.width / 2), dy = pt.clientY - (r.top + r.height / 2);
+  const dist = Math.hypot(dx, dy) / (r.width / 2);
+  if (dist < 0.62 || dist > 1.05) return null;
+  const ang = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+  const f = fatias.value.find((x) => ang >= x.ini - RESPIRO / 2 && ang <= x.fim + RESPIRO / 2);
+  return f ? f.i : null;
+}
+function aoMover(e) { ativo.value = parteNoPonto(e); }
+function aoClicar(e) { const i = parteNoPonto(e); if (i !== null) emit('clicar', fatias.value[i]); }
 const foco = computed(() => (ativo.value !== null ? fatias.value[ativo.value] : null));
 </script>
 
 <template>
   <div class="rosca-bloco">
     <div class="rosca" role="img" :aria-label="`Total ${moeda(total)}`">
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <defs>
-          <linearGradient v-for="f in fatias" :id="`${idBase}${f.i}`" :key="'g' + f.i" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" :style="{ stopColor: `color-mix(in srgb, ${f.cor} 90%, white)` }" />
-            <stop offset="0.55" :style="{ stopColor: f.cor }" />
-            <stop offset="1" :style="{ stopColor: `color-mix(in srgb, ${f.cor} 82%, black)` }" />
-          </linearGradient>
-        </defs>
-        <circle cx="50" cy="50" :r="R" fill="none" class="trilho" :stroke-width="ESPESSURA" />
-        <g transform="rotate(-90 50 50)">
-          <circle
-            v-for="f in fatias" :key="f.i" cx="50" cy="50" :r="R" fill="none" :stroke="`url(#${idBase}${f.i})`" stroke-linecap="round"
-            :stroke-width="ativo === f.i ? ESPESSURA + 2.5 : ESPESSURA"
-            :stroke-dasharray="`${pronto ? f.comp : 0.01} ${C}`" :stroke-dashoffset="f.off"
-            class="fatia" @mouseenter="ativo = f.i" @mouseleave="ativo = null" @touchstart.passive="ativo = f.i" @click="emit('clicar', f)"
-          />
-        </g>
-      </svg>
+      <div ref="elRosca" class="anel-rosca" :style="{ background: fundoRosca }" aria-hidden="true"
+        @pointermove="aoMover" @pointerleave="ativo = null" @touchstart.passive="aoMover" @click="aoClicar"></div>
       <div class="centro">
         <template v-if="fatias.length">
           <strong class="numero-tabular">{{ foco ? foco.pct + '%' : moeda(total) }}</strong>
@@ -91,9 +100,11 @@ const foco = computed(() => (ativo.value !== null ? fatias.value[ativo.value] : 
 <style scoped>
 .rosca-bloco { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .rosca { position: relative; width: 168px; height: 168px; flex: none; margin-inline: auto; }
-.rosca svg { width: 100%; height: 100%; display: block; }
-.trilho { stroke: var(--cor-trilho); opacity: 0.7; } /* trilho apagado */
-.fatia { cursor: pointer; transition: stroke-dasharray var(--anim-lenta) var(--anim-curva-suave), stroke-width var(--anim-rapida) ease; }
+.rosca::before, .anel-rosca { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12.5px)); }
+.rosca::before { background: var(--cor-trilho); opacity: 0.7; } /* trilho apagado */
+.anel-rosca { cursor: pointer; }
 .centro { position: absolute; inset: 22%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; line-height: 1.2; }
 .centro strong { font-family: var(--fonte-display); font-size: 15px; }
 .centro small { font-size: 11px; color: var(--cor-texto-suave); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -11,8 +11,11 @@
 // Visual: ícone do item/categoria num círculo na cor da categoria + selo do banco/cartão no canto; linha 1 = descrição ·
 // valor; linha 2 = data curta · pílula do meio de pagamento (com a bandeira) · categoria; embaixo do valor, discretos:
 // parcela, recorrência e "a revisar". Valores de transação ficam sempre visíveis (o "olho" só esconde totais).
-import { computed, useSlots } from 'vue';
-import { Repeat, CircleAlert, Link2Off } from 'lucide-vue-next';
+// Homologação 1.0, seção 6: com `arrastavel`, ARRASTAR PARA A ESQUERDA mostra Editar e Excluir (emite 'editar'/'excluir')
+// e o menu ⋮ sai da linha (a descrição ganha largura). Estornar/Ignorar/Criar regra ficam no detalhe (toque na linha).
+//   <LinhaTransacao :t="t" :info="info" arrastavel @abrir="…" @editar="…" @excluir="…" />
+import { computed, useSlots, ref } from 'vue';
+import { Repeat, CircleAlert, Link2Off, Pencil, Trash2 } from 'lucide-vue-next';
 import IconeCategoria from './IconeCategoria.vue';
 import IconeBanco from './IconeBanco.vue';
 import IconeBandeira from './IconeBandeira.vue';
@@ -28,8 +31,10 @@ const props = defineProps({
   clicavel: { type: Boolean, default: true },
   selecionada: { type: Boolean, default: false },
   rotuloAbrir: { type: String, default: 'Ver detalhes' },
+  arrastavel: { type: Boolean, default: false },
+  podeExcluir: { type: Boolean, default: true },
 });
-const emit = defineEmits(['abrir', 'menu']);
+const emit = defineEmits(['abrir', 'menu', 'editar', 'excluir']);
 const slots = useSlots();
 
 const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -118,7 +123,40 @@ const chip = computed(() => {
 });
 const naoVinculado = computed(() => props.t.revisao === 'recusado');
 const temExtras = computed(() => !!(parcela.value || props.t.recorrente || props.t.a_revisar || naoVinculado.value));
-const temMenu = computed(() => props.menu || !!slots.menu);
+const temMenu = computed(() => !props.arrastavel && (props.menu || !!slots.menu));
+
+// ---- arrastar para a esquerda (só com `arrastavel`) ----
+const LARG_ACOES = 136; // dois botões de 68px
+const dx = ref(0);
+const aberta = ref(false);
+const arrastando = ref(false);
+let g = null;
+let engolir = false;
+function aoApertar(e) {
+  if (!props.arrastavel || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  g = { x: e.clientX, y: e.clientY, id: e.pointerId, base: aberta.value ? -LARG_ACOES : 0, ativo: false };
+}
+function aoMover(e) {
+  if (!g || e.pointerId !== g.id) return;
+  const ddx = e.clientX - g.x, ddy = e.clientY - g.y;
+  if (!g.ativo) {
+    if (Math.abs(ddx) < 8 || Math.abs(ddx) < Math.abs(ddy) * 1.2) { if (Math.abs(ddy) > 10) g = null; return; }
+    g.ativo = true; arrastando.value = true;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
+  }
+  dx.value = Math.max(-LARG_ACOES - 24, Math.min(0, g.base + ddx));
+}
+function aoSoltar() {
+  if (!g) return;
+  const foi = g.ativo;
+  g = null; arrastando.value = false;
+  if (!foi) return;
+  engolir = true; setTimeout(() => { engolir = false; }, 0);
+  aberta.value = dx.value < -LARG_ACOES / 2;
+  dx.value = aberta.value ? -LARG_ACOES : 0;
+}
+function fecharAcoes() { aberta.value = false; dx.value = 0; }
+function acao(nome) { fecharAcoes(); emit(nome, props.t); }
 
 // Rótulo completo para leitor de tela (a linha é um botão: o leitor lê só este texto).
 const rotuloLinha = computed(() => [
@@ -135,15 +173,28 @@ const rotuloLinha = computed(() => [
   props.clicavel ? props.rotuloAbrir : '',
 ].filter(Boolean).join(', '));
 
-function abrir() { if (props.clicavel) emit('abrir', props.t); }
+function abrir() {
+  if (engolir) return;
+  if (aberta.value) { fecharAcoes(); return; }
+  if (props.clicavel) emit('abrir', props.t);
+}
 </script>
 
 <template>
+  <div class="linha-tx-envoltorio" :class="{ arrastavel, aberta }">
+  <div v-if="arrastavel" class="acoes-arraste" :aria-hidden="!aberta">
+    <button type="button" class="ac editar" :tabindex="aberta ? 0 : -1" @click.stop="acao('editar')"><Pencil :size="18" :stroke-width="2" aria-hidden="true" />Editar</button>
+    <button type="button" class="ac excluir" :tabindex="aberta ? 0 : -1" :disabled="!podeExcluir" :title="podeExcluir ? '' : 'Esta transação não pode ser excluída'" @click.stop="acao('excluir')"><Trash2 :size="18" :stroke-width="2" aria-hidden="true" />Excluir</button>
+  </div>
   <div
     class="linha-tx"
     :class="{ clicavel, ignorada: t.ignorada === 1, 'fora-totais': t.ignorada === 2, selecionada, 'com-menu': temMenu, 'sem-extras': !temExtras }"
     :tabindex="clicavel ? 0 : null" :role="clicavel ? 'button' : 'group'" :aria-label="rotuloLinha" :aria-pressed="selecionada || null"
+    :style="arrastavel ? { transform: `translate3d(${dx}px, 0, 0)` } : null"
+    :data-arrastando="arrastando || null"
     @click="abrir" @keydown.enter.self="abrir" @keydown.space.self.prevent="abrir"
+    @keydown.delete.self="arrastavel && podeExcluir && emit('excluir', t)"
+    @pointerdown="aoApertar" @pointermove="aoMover" @pointerup="aoSoltar" @pointercancel="aoSoltar"
   >
     <span class="ic" aria-hidden="true">
       <IconeCategoria class="circulo" :valor="iconeValor" :tipo="ehSaida ? 'saida' : 'entrada'" :cor="neutra ? 'var(--cor-texto-suave)' : (info.cor || '')" :tamanho="40" />
@@ -179,9 +230,21 @@ function abrir() { if (props.clicavel) emit('abrir', props.t); }
       </button>
     </span>
   </div>
+  </div>
 </template>
 
 <style scoped>
+.linha-tx-envoltorio { position: relative; min-width: 0; }
+.linha-tx-envoltorio.arrastavel { overflow: hidden; border-radius: 14px; }
+.linha-tx-envoltorio.arrastavel .linha-tx { position: relative; z-index: 1; background: var(--cor-card); touch-action: pan-y; transition: transform var(--anim-padrao, .2s) var(--anim-curva, ease), background var(--anim-rapida) ease; }
+.linha-tx-envoltorio.arrastavel .linha-tx[data-arrastando] { transition: none; }
+.linha-tx-envoltorio.arrastavel .linha-tx.clicavel:hover, .linha-tx-envoltorio.arrastavel .linha-tx:focus-visible { background: color-mix(in srgb, var(--cor-texto) 6%, var(--cor-card)); }
+.acoes-arraste { position: absolute; inset: 0 0 0 auto; display: flex; z-index: 0; }
+.ac { width: 68px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; padding: 0; font: 600 11.5px var(--fonte-texto); color: #fff; cursor: pointer; }
+.ac.editar { background: var(--cor-interface, #3446C4); }
+.ac.excluir { background: var(--cor-alerta, #D5211A); }
+.ac:disabled { opacity: 0.45; cursor: not-allowed; }
+.ac:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
 .linha-tx {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;

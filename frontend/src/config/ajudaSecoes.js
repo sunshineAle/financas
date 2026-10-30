@@ -11,12 +11,43 @@
 
 export const AJUDA_SECOES = {
   // ---------- Início ----------
+  // Homologação 1.0, seção 1 (texto do Contador): o que é cada número.
+  'inicio.saldo': {
+    titulo: 'Saldo do mês',
+    texto: [
+      'É o que entrou menos o que saiu no seu mês financeiro: mostra se sobrou ou faltou no período.',
+      'Compras no cartão contam na data da compra; a parcela conta no mês em que cai na fatura. Pagar a fatura não é gasto.',
+      'Escolha um mês futuro no filtro para ver o previsto.',
+    ],
+  },
+  'inicio.previsto': {
+    titulo: 'Previsto para o mês',
+    texto: [
+      'Entradas previstas (a média dos 3 últimos meses, ou o que já foi lançado, se for maior) menos o Custo de vida, as parcelas do cartão e as parcelas de dívidas e acordos que caem no mês.',
+      'Usa a mesma regra do Saldo do mês: tudo conta na data da compra. Toque no valor para ver a conta.',
+    ],
+  },
+  'inicio.saldos': {
+    titulo: 'Seus saldos',
+    texto: [
+      'Contas + Guardado (Reserva de Liberdade, metas e investimentos) − Faturas abertas − Dívidas = Patrimônio, no centro.',
+      'É a posição de hoje: não muda com o mês escolhido. Toque no centro para ver Ativos e Passivos.',
+    ],
+  },
   'inicio.patrimonio': {
     titulo: 'Patrimônio',
     texto: [
-      'É o que você tem menos o que deve: contas + Reserva de Liberdade − faturas abertas − dívidas.',
-      'Investimentos entram pelo valor guardado (sem cotação do dia).',
-      'Parcelas das próximas faturas não entram: viram dívida quando a fatura abre.',
+      'É tudo o que você tem menos tudo o que deve: contas + Reserva de Liberdade e investimentos − faturas abertas − dívidas.',
+      'É uma posição (um retrato de hoje), não o resultado do mês. Toque para ver Ativos e Passivos.',
+      'O resumo de cada número fica em Relatórios › Resumo financeiro.',
+    ],
+  },
+  'relatorios.resumo': {
+    titulo: 'Resumo financeiro',
+    texto: [
+      'Saldo do mês: entradas − saídas do mês (sobrou ou faltou).',
+      'Dinheiro nas contas: a soma dos saldos dos bancos, incluindo o que já está comprometido com a fatura.',
+      'Patrimônio líquido: tudo o que você tem − tudo o que deve.',
     ],
   },
 
@@ -231,7 +262,7 @@ export const AJUDA_SECOES = {
   },
 
   // ---------- Relatórios ----------
-  'relatorios.evolucao': { titulo: 'Evolução do saldo', texto: 'Entradas menos saídas de cada mês. Toque em um mês para ir até ele.' },
+  'relatorios.evolucao': { titulo: 'Relação mensal', texto: ['Entradas, saídas e o resultado (entradas − saídas) de cada mês.', 'Toque ou arraste no gráfico para escolher o mês: o resto da página mostra aquele mês. O botão ao lado alterna Mês e Ano.', 'Meses futuros mostram o previsto.'] },
   'relatorios.semana': { titulo: 'Esta semana × semana passada', texto: 'Saídas dos últimos 7 dias comparadas aos 7 dias anteriores.' },
   'relatorios.projecao': { titulo: 'Projeção para o próximo mês', texto: 'Média dos últimos meses com dados.' },
 

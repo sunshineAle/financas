@@ -9,4 +9,7 @@ import './styles/tokens.css';
 instalarHttp();
 iniciarTema();
 iniciarMes(router);
-createApp(App).use(router).directive('deslizar-mes', diretivaDeslizarMes).mount('#app');
+const app = createApp(App);
+if (import.meta.env.VITE_DEMO) app.config.errorHandler = (e, _i, info) => console.error('VUE', info, e && e.stack || e);
+router.onError((e) => console.error('ROUTER', e && e.stack || e));
+app.use(router).directive('deslizar-mes', diretivaDeslizarMes).mount('#app');

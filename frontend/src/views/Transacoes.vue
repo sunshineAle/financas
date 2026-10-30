@@ -307,6 +307,13 @@ async function sugerirRegra(t, f) {
     ],
   });
 }
+function criarRegraDaTx(t) {
+  const ehSaida = t.cartao ? t.valor < 0 : t.valor < 0;
+  const nomeTx = String(t.cartao ? t.descricao_base : t.descricao).replace(/\s*\(\d+\/\d+\)\s*$/, '').trim();
+  sugestaoRegra.value = { inicial: { tipo: ehSaida ? 'saida' : 'entrada', padrao: trechoRegra(nomeTx), categoriaId: ehSaida ? (t.categoria_id || '') : '', categoriaReceita: ehSaida ? '' : (t.categoria_receita || ''), subcategoria: t.subcategoria || '', icone: t.cartao ? '' : (t.icone || '') } };
+  editando.value = null;
+  regraAberta.value = true;
+}
 async function criarRegraDireto(i, aplicarAntigas) {
   const corpo = { tipo: i.tipo, padrao: i.padrao, subcategoria: i.subcategoria, icone: i.icone, aplicarAntigas, ...(i.tipo === 'saida' ? { categoriaId: i.categoriaId } : { categoriaReceita: i.categoriaReceita }) };
   const r = await pedir('/api/regras', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
@@ -371,6 +378,24 @@ async function trocarCategoria(t, valor) {
   await carregar();
 }
 
+// Homologação 1.0, seção 6: "Excluir" do arraste. Transferência/estorno desfaz o par; compra no cartão remove a compra.
+function podeExcluirTx(t) {
+  if (ehReserva(t)) return false;
+  if (t.tipo_mov && t.vinculo) return true;
+  if (t.cartao) return t.cartao_origem === 'manual';
+  return t.origem === 'manual';
+}
+async function excluirTx(t) {
+  if (!podeExcluirTx(t)) return;
+  if (t.tipo_mov && t.vinculo && !t.cartao) { await desfazerMov(t); return; }
+  if (t.cartao) {
+    if (!confirm(`Excluir a compra "${t.descricao_base || t.descricao}"${t.total_parcelas > 1 ? ` (todas as ${t.total_parcelas} parcelas)` : ''}?`)) return;
+    await pedir(`/api/cartoes/${t.cartao_id}/lancamentos/${t.compra_id}`, { method: 'DELETE' });
+    await Promise.all([carregar(), carregarApoio()]);
+    return;
+  }
+  await apagar(t);
+}
 async function apagar(t) {
   if (!confirm(`Apagar "${t.descricao}" (${moeda(t.valor)})?`)) return;
   const resposta = await pedir(`/api/transacoes/${t.id}`, { method: 'DELETE' });
@@ -569,7 +594,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
               <span v-if="g.total !== 0" class="total-grupo numero-tabular" :class="g.total < 0 ? 'neg' : 'pos'">{{ g.total < 0 ? '−' : '+' }} {{ moeda(Math.abs(g.total)) }}</span>
             </header>
             <CardPadrao class="cartao-lista" sem-padding>
-              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
+              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
             </CardPadrao>
           </section>
         </template>
@@ -608,7 +633,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
                   <ChevronDown :size="18" :stroke-width="2" class="seta-cat" :class="{ aberta: abertas[g.chave] }" />
                 </button>
                 <div v-if="abertas[g.chave]" class="cat-itens">
-                  <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" menu @abrir="abrirEdicao" @menu="abrirMenu" />
+                  <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
                 </div>
               </div>
             </CardPadrao>
@@ -637,9 +662,16 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
           <span v-else-if="editando.ignorada" class="selo-ignorada">ignorada</span>
         </p>
+        <!-- Homologação 1.0, seção 6: ações que saíram do menu ⋮ ficam aqui, no detalhe -->
+        <div class="acoes-detalhe" data-acoes-detalhe>
+          <button v-if="podeEstornar(editando)" type="button" class="acao-det" @click="abrirEstorno(editando); editando = null">Estornar</button>
+          <button v-if="!editando.cartao && !editando.tipo_mov" type="button" class="acao-det" @click="alternarIgnorar(editando); editando = null">{{ editando.ignorada ? 'Reativar' : 'Ignorar' }}</button>
+          <button v-if="trechoRegra(editando.cartao ? editando.descricao_base : editando.descricao)" type="button" class="acao-det" @click="criarRegraDaTx(editando)">Criar regra</button>
+          <button v-if="editando.tipo_mov && editando.vinculo && !ehReserva(editando)" type="button" class="acao-det perigo" @click="excluirTx(editando); editando = null">{{ ehTransf(editando) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
+        </div>
         <template v-if="(editando.origem === 'manual' && !editando.tipo_mov) || (editando.cartao && editando.cartao_origem === 'manual' && (!editando.tipo_mov || ['estorno_avulso', 'estorno_vinculado', 'pagamento', 'cashback'].includes(editando.tipo_mov)))">
           <CampoTipo v-if="!editando.cartao" v-model="formEdicao.tipo" />
-          <CampoTipo v-else-if="editando.total_parcelas === 1" v-model="formEdicao.tipo" rotulo="Na fatura é" :opcoes="[{ id: 'saida', rotulo: 'Compra', tema: 'saida' }, { id: 'entrada', rotulo: 'Crédito', tema: 'entrada' }]" data-marcar-credito />
+          <CampoTipo v-else-if="editando.total_parcelas === 1" v-model="formEdicao.tipo" rotulo="Lançar no extrato como" :opcoes="[{ id: 'saida', rotulo: 'Saída', tema: 'saida' }, { id: 'entrada', rotulo: 'Entrada', tema: 'entrada' }]" data-marcar-credito />
           <div v-if="ehCreditoCartao" class="credito-cartao" data-credito-cartao>
             <p class="nota">Crédito abate a fatura. Que crédito é este?</p>
             <label v-for="o in [['estorno', 'Estorno de uma compra', 'Anula a compra (ou parte dela)'], ['pagamento', 'Pagamento adiantado da fatura', 'Não é entrada nem gasto'], ['cashback', 'Cashback ou outro crédito', 'Entra como entrada em Cashback']]" :key="o[0]" class="opcao-credito" :class="{ ativa: credito.tipo === o[0] }">
@@ -779,4 +811,8 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .menu-pontos button { background: transparent; border: none; color: var(--cor-texto); text-align: left; font-family: inherit; font-size: 14px; font-weight: 500; padding: 12px 10px; border-radius: 8px; cursor: pointer; }
 .menu-pontos button:hover { background: var(--cor-realce); }
 .menu-pontos .perigo { color: var(--cor-alerta); }
+.acoes-detalhe { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 4px; }
+.acao-det { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
+.acao-det:hover { background: var(--cor-realce); }
+.acao-det.perigo { color: var(--cor-alerta-texto, var(--cor-alerta)); }
 </style>

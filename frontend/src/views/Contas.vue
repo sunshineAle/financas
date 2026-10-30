@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { RefreshCw, Plus } from 'lucide-vue-next';
 import Modal from '../components/Modal.vue';
 import Carrossel from '../components/Carrossel.vue';
@@ -27,6 +27,7 @@ import { corPorNome, corDoBanco } from '../utils/corBanco.js';
 import { periodo, anoInteiro, rotuloPeriodo, ehAtual } from '../services/mes.js';
 
 const router = useRouter();
+const route = useRoute();
 const props = defineProps({ embutido: { type: Boolean, default: false }, fluxo: { type: Boolean, default: false } });
 const emit = defineEmits(['fluxo-fim']); // fluxo: usada pelo modal de primeiro cadastro (abre só o formulário)
 let salvouNoFluxo = false;
@@ -77,6 +78,9 @@ async function carregarContas() {
   const resposta = await fetch('/api/contas', { credentials: 'include' });
   if (resposta.status === 401) { router.push('/login'); return; }
   contas.value = aplicarOrdem('contas', await resposta.json());
+  // ?conta=<id> (vindo de "Ver extrato da conta" no Patrimônio, seção 9): abre direto nessa conta
+  const pedida = route.query.conta ? contas.value.findIndex((c) => String(c.id) === String(route.query.conta)) : -1;
+  if (pedida >= 0) sel.value = pedida;
   if (sel.value > contas.value.length - 1) sel.value = Math.max(0, contas.value.length - 1);
   carregando.value = false;
   contas.value.forEach((c) => {
