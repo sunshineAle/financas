@@ -262,6 +262,8 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
 .cab-bloco:hover { background: var(--cor-realce); }
 .cab-bloco :deep(svg) { color: var(--cor-texto-suave); }
 .cb-nome { display: flex; flex-direction: column; font: 600 15.5px var(--fonte-display); min-width: 0; }
+.cb-nome, .cb-nome small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cab-bloco b { white-space: nowrap; }
 .cb-nome small { font: 400 12.5px var(--fonte-texto); color: var(--cor-texto-suave); }
 .cab-bloco b { font-size: 15.5px; }
 .seta { transition: transform var(--anim-padrao, .2s) ease; }
@@ -280,4 +282,9 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
 .acessar { align-self: center; display: inline-flex; align-items: center; gap: 2px; min-height: 40px; margin-top: 6px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-primaria); font: 600 13.5px var(--fonte-texto); cursor: pointer; }
 .acessar:hover { background: var(--cor-realce); }
 
+@media (max-width: 420px) {
+  .cab-bloco { grid-template-columns: 44px minmax(0, 1fr) auto 18px; gap: 10px; padding: 12px 12px; }
+  .cb-nome { font-size: 14.5px; }
+  .cab-bloco b { font-size: 14.5px; }
+}
 </style>
