@@ -37,6 +37,8 @@ onMounted(() => { if (props.autofocus) el.value?.focus(); });
     <div class="valor-wrap" :class="{ erro: !!erro, zero: !modelValue }">
       <span class="moeda">{{ neg ? '− R$' : 'R$' }}</span>
       <input :id="id" ref="el" class="valor-input numero-tabular" type="text" inputmode="numeric" autocomplete="off" :value="texto" :disabled="disabled" :aria-invalid="!!erro" @input="aoDigitar" />
+      <!-- Homologação 1.0, seção 14: data e parcelas compactas ficam ao lado do valor -->
+      <div v-if="$slots.lado" class="lado"><slot name="lado" /></div>
     </div>
   </CampoBase>
 </template>
@@ -48,5 +50,6 @@ onMounted(() => { if (props.autofocus) el.value?.focus(); });
 .valor-wrap.erro { border-color: var(--cor-saida); }
 .moeda { font-family: var(--fonte-display); font-size: 18px; font-weight: 600; color: var(--cor-texto-suave); }
 .valor-input { flex: 1; min-width: 0; width: 100%; border: none; outline: none; background: transparent; padding: 0; font-family: var(--fonte-display); font-size: clamp(32px, 9vw, 42px); font-weight: 700; line-height: 1.1; color: var(--tema-cor); }
+.lado { align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .valor-wrap.zero .valor-input { color: var(--cor-texto-suave); }
 </style>

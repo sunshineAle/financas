@@ -10,7 +10,10 @@ import FormularioModal from './FormularioModal.vue';
 import CampoTipo from './CampoTipo.vue';
 import CampoValor from './CampoValor.vue';
 import CampoTexto from './CampoTexto.vue';
-import CampoData from './CampoData.vue';
+import CampoDataPilula from './CampoDataPilula.vue';
+import CampoParcelasPilula from './CampoParcelasPilula.vue';
+import CampoSubcategoria from './CampoSubcategoria.vue';
+import CampoDivida from './CampoDivida.vue';
 import CampoConta from './CampoConta.vue';
 import CampoSelecao from './CampoSelecao.vue';
 import CampoCategoria from './CampoCategoria.vue';
@@ -211,15 +214,18 @@ function transferenciaFeita(t) {
 <template>
   <FormularioModal :aberto="aberto" :titulo="titulo" ajuda="lancar" :tema="f.tipo" :rotulo-salvar="noCartao ? 'Lançar compra' : f.tipo === 'entrada' ? 'Lançar entrada' : 'Lançar saída'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharLancamento">
     <CampoTipo v-if="!noCartao" v-model="f.tipo" />
-    <CampoValor v-model="f.valor" :tipo="f.tipo" :erro="erros.valor" autofocus />
+    <CampoValor v-model="f.valor" :tipo="f.tipo" :erro="erros.valor" autofocus>
+      <template #lado>
+        <CampoDataPilula v-model="f.data" :rotulo="usaCartao ? 'Data da compra' : 'Data'" />
+        <CampoParcelasPilula v-if="usaCartao && cartoesManuais.length" v-model="f.parcelas" />
+      </template>
+    </CampoValor>
     <CampoTexto v-model="f.descricao" rotulo="Descrição" placeholder="Ex: Mercado, Salário, Pix do João" :erro="erros.descricao" />
-    <CampoData v-model="f.data" atalhos />
     <CampoTipo v-if="f.tipo === 'saida' && !noCartao && !noConta" v-model="f.pagamento" rotulo="Forma de pagamento" :opcoes="[{ id: 'conta', rotulo: 'Débito / Pix', tema: 'saida', icone: Landmark }, { id: 'cartao', rotulo: 'Cartão de crédito', tema: 'saida', icone: CreditCard }]" />
     <template v-if="usaCartao">
       <p v-if="cartoesManuais.length === 0" class="nota">Nenhum cartão manual cadastrado. Cartões conectados pelo Open Finance recebem as compras sozinhos; cadastre um cartão em Cartões para lançar à mão.</p>
       <template v-else>
         <CampoSelecao v-model="f.cartaoId" rotulo="Cartão" :opcoes="cartoesManuais.map((c) => ({ valor: c.id, rotulo: c.nome }))" :disabled="noCartao" />
-        <CampoTexto v-model="f.parcelas" rotulo="Parcelas" type="number" min="1" max="48" step="1" />
         <p v-if="previa" class="previa">{{ previa.parcelas }}x de {{ moeda(previa.valorParcela) }} · começa na fatura de {{ rotuloFatura(previa.primeiraFatura.chave) }} e termina em {{ rotuloFatura(previa.ultimaFatura) }}. Entra sozinho na fatura do cartão.</p>
       </template>
     </template>
@@ -230,18 +236,17 @@ function transferenciaFeita(t) {
     </p>
     <p v-else-if="destinoPix && destinoPix.tipo === 'terceiro' && !usaCartao" class="dica-pix">Pix/TED para outra pessoa é lançado como despesa. Para uma conta sua, escolha “Transferir”.</p>
     <template v-if="f.tipo === 'saida' && !usaCartao && vinculaveis.length">
-      <CampoSelecao v-model="f.dividaId" rotulo="Vincular a acordo, dívida ou crediário (opcional)" :opcoes="[{ valor: '', rotulo: 'Nenhum' }, ...vinculaveis.map((d) => ({ valor: d.id, rotulo: d.nome }))]" />
+      <CampoDivida v-model="f.dividaId" :dividas="vinculaveis" :tema="f.tipo" />
       <template v-if="f.dividaId">
         <CampoValor v-model="f.valorParcela" tipo="saida" rotulo="Valor da parcela" dica="Parcela da dívida; pode mudar." dica-ao-focar />
         <p v-if="economiaAntecipacao > 0" class="previa">Economia por antecipação: {{ moeda(economiaAntecipacao) }}. A parcela inteira ({{ moeda(f.valorParcela) }}) é abatida do saldo da dívida.</p>
         <p v-else-if="dividaEscolhida" class="previa">Saldo atual da dívida: {{ moeda(dividaEscolhida.saldo) }}. O valor pago será abatido dele e entra no histórico.</p>
       </template>
     </template>
-    <CampoCategoria v-if="f.tipo === 'saida'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Categoria de despesa" automatica="Automática" dica="Automática usa suas regras e o nome da descrição." dica-ao-focar />
-    <CampoCategoria v-else v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Categoria de entrada" automatica="Automática" dica="Automática usa suas regras." dica-ao-focar />
-    <CampoTexto v-if="!usaCartao" v-model="f.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" list="sugestoes-sub-lanc" autocomplete="off" placeholder="Ex: Presente da mãe, Uber do trabalho" />
+    <CampoCategoria v-if="f.tipo === 'saida'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Categoria de despesa" automatica="Pelas regras" />
+    <CampoCategoria v-else v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Categoria de entrada" automatica="Pelas regras" />
+    <CampoSubcategoria v-if="!usaCartao" v-model="f.subcategoria" :sugestoes="sugestoesSub" :tema="f.tipo" />
     <CampoIconeItem v-if="!usaCartao" v-model="f.icone" :tipo="f.tipo" :descricao="f.descricao" />
-    <datalist id="sugestoes-sub-lanc"><option v-for="s in sugestoesSub" :key="s" :value="s"></option></datalist>
   </FormularioModal>
 
   <TransferenciaModal :aberto="transfAberta" :contas="contas" :inicial="transfInicial" @fechar="fecharLancamento" @salvo="transferenciaFeita" />

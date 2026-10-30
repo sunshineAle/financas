@@ -215,7 +215,7 @@ async function excluir() {
         <li v-for="i in ativos" :key="i.id" class="linha">
           <button type="button" class="corpo" @click="editar(i)">
             <span class="quadro"><CalendarClock :size="20" :stroke-width="1.8" /></span>
-            <span class="texto"><b>{{ i.nome }}</b><small>todo dia {{ i.dia }}{{ i.categoriaNome ? ' · ' + i.categoriaNome : '' }}</small></span>
+            <span class="texto"><b>{{ i.nome }}</b><small>todo dia {{ i.dia }}{{ i.categoriaNome ? ' · ' + i.categoriaNome : '' }}<template v-if="i.meses"> · {{ i.valeNoMes === false ? 'prazo encerrado' : `por ${i.meses} ${i.meses === 1 ? 'mês' : 'meses'}` }}</template></small></span>
             <span class="lado"><span class="valor numero-tabular">{{ moeda(i.valor) }}</span><span v-if="i.pagoMes !== null && i.pagoMes !== undefined" class="selo" :class="i.pagoMes ? 'pago' : 'pend'">{{ i.pagoMes ? 'Pago' : 'Pendente' }}</span></span>
           </button>
           <button type="button" class="pausa" :aria-label="`Pausar ${i.nome}`" title="Pausar (sai da projeção)" @click="alternar(i)"><Power :size="18" :stroke-width="1.9" /></button>

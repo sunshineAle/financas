@@ -7,7 +7,7 @@
 // `centro` = botão central do rodapé; `acoes` = opções de lançamento do botão central (+ ou segurar).
 import {
   House, Landmark, ArrowLeftRight, CreditCard, ReceiptText, Target, Ellipsis,
-  ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock, ListChecks,
+  ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock, ListChecks, Repeat, WandSparkles,
 } from 'lucide-vue-next';
 
 export const GRUPOS = [
@@ -49,9 +49,16 @@ export const GRUPOS = [
 ];
 
 // Opções do "+" / segurar Transações. A rota já é tratada por Transacoes.vue (?novo=entrada|saida|transferencia).
+// "+" em dois níveis (homologação 1.0, seção 12): 1º toque = Transação · Criar recorrência · Regra de transação;
+// "Transação" abre Entrada · Saída · Transferência.
+export const ACOES_MAIS = [
+  { id: 'transacao', rotulo: 'Transação', icone: ArrowRightLeft },
+  { id: 'recorrencia', rotulo: 'Criar recorrência', icone: Repeat },
+  { id: 'regra', rotulo: 'Regra de transação', icone: WandSparkles },
+];
 export const ACOES_LANCAR = [
-  { id: 'entrada', rotulo: 'Lançar entrada', icone: ArrowDownLeft, rota: '/transacoes?novo=entrada', tom: 'entrada' },
-  { id: 'saida', rotulo: 'Lançar saída', icone: ArrowUpRight, rota: '/transacoes?novo=saida', tom: 'saida' },
+  { id: 'entrada', rotulo: 'Entrada', icone: ArrowDownLeft, rota: '/transacoes?novo=entrada', tom: 'entrada' },
+  { id: 'saida', rotulo: 'Saída', icone: ArrowUpRight, rota: '/transacoes?novo=saida', tom: 'saida' },
   { id: 'transferencia', rotulo: 'Transferência', icone: ArrowRightLeft, rota: '/transacoes?novo=transferencia' },
 ];
 

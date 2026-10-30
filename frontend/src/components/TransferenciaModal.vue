@@ -7,6 +7,7 @@ import { ref, computed, watch } from 'vue';
 import { ArrowUpDown } from 'lucide-vue-next';
 import FormularioModal from './FormularioModal.vue';
 import CampoValor from './CampoValor.vue';
+import CampoDataPilula from './CampoDataPilula.vue';
 import CampoData from './CampoData.vue';
 import CampoTexto from './CampoTexto.vue';
 import CampoSelecao from './CampoSelecao.vue';
@@ -78,11 +79,12 @@ async function salvar() {
 
 <template>
   <FormularioModal :aberto="aberto" titulo="Transferência entre contas" ajuda="transferir" tema="neutro" rotulo-salvar="Transferir" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
-    <CampoValor v-model="f.valor" tema="neutro" :erro="erros.valor" autofocus />
+    <CampoValor v-model="f.valor" tema="neutro" :erro="erros.valor" autofocus>
+      <template #lado><CampoDataPilula v-model="f.data" /></template>
+    </CampoValor>
     <CampoSelecao v-model="f.origemId" rotulo="Sai de" :opcoes="opcoesOrigem" :erro="erros.origem" />
     <button type="button" class="inverter" aria-label="Inverter origem e destino" @click="inverter"><ArrowUpDown :size="16" :stroke-width="2.2" /><span>Inverter</span></button>
     <CampoSelecao v-model="f.destinoId" rotulo="Entra em" :opcoes="opcoesDestino" :erro="erros.destino" />
-    <CampoData v-model="f.data" atalhos />
     <CampoTexto v-model="f.descricao" rotulo="Descrição (opcional)" maxlength="120" placeholder="Ex: Reserva do mês" />
     <p v-if="resumo" class="resumo">{{ resumo }}</p>
   </FormularioModal>

@@ -16,6 +16,7 @@ import Valor from '../components/Valor.vue';
 import AjudaSecao from '../components/AjudaSecao.vue';
 import SeusSaldos from '../components/SeusSaldos.vue';
 import { deveReabrir } from '../services/retornoPatrimonio.js';
+import { acaoRapidaSalva } from '../services/acoesRapidas.js';
 import LinhaTransacao from '../components/LinhaTransacao.vue';
 import { infoTransacao } from '../utils/infoTransacao.js';
 import PatrimonioDetalhe from '../components/PatrimonioDetalhe.vue';
@@ -170,6 +171,7 @@ async function carregar() {
 
 watch(() => periodo.value.chave, carregar);
 watch(lancamentoSalvo, () => { carregar(); carregarRevisar(); });
+watch(acaoRapidaSalva, () => carregar()); // recorrência nova muda a previsão
 onMounted(async () => {
   carregar();
   carregarRevisar();

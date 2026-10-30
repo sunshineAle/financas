@@ -8,7 +8,8 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { Plus } from 'lucide-vue-next';
 import NavRadial from './NavRadial.vue';
-import { GRUPOS, ACOES_LANCAR, grupoDaRota, temSubmenu, itemDaRota } from '../config/menu.js';
+import { GRUPOS, ACOES_LANCAR, ACOES_MAIS, grupoDaRota, temSubmenu, itemDaRota } from '../config/menu.js';
+import { abrirRecorrencia, abrirNovaRegra } from '../services/acoesRapidas.js';
 import { abrirLancamento } from '../services/lancamento.js';
 
 const router = useRouter();
@@ -58,14 +59,15 @@ const ancoraDe = (i) => `calc(${i} * 20% + 10%)`;
 const grupoDoRadial = computed(() => (radial.value && radial.value.id ? GRUPOS.find((g) => g.id === radial.value.id) : null));
 const radialItens = computed(() => {
   if (!radial.value) return [];
-  if (radial.value.tipo === 'lancar') return ACOES_LANCAR.map((a) => ({ id: a.id, rotulo: a.rotulo, icone: a.icone, tom: a.tom }));
+  if (radial.value.tipo === 'lancar') return ACOES_MAIS.map((a) => ({ id: a.id, rotulo: a.rotulo, icone: a.icone }));
+  if (radial.value.tipo === 'transacao') return ACOES_LANCAR.map((a) => ({ id: a.id, rotulo: a.rotulo, icone: a.icone, tom: a.tom }));
   return grupoDoRadial.value.itens.map((i) => ({ id: i.rota, rotulo: i.rotuloCurto || i.rotulo, icone: i.icone, atual: route.path === i.rota }));
 });
 const radialAncora = computed(() => {
   if (!radial.value) return '50%';
-  return radial.value.tipo === 'lancar' ? ancoraDe(INDICE_CENTRO) : ancoraDe(GRUPOS.findIndex((g) => g.id === radial.value.id));
+  return radial.value.tipo === 'lancar' || radial.value.tipo === 'transacao' ? ancoraDe(INDICE_CENTRO) : ancoraDe(GRUPOS.findIndex((g) => g.id === radial.value.id));
 });
-const radialTitulo = computed(() => (radial.value ? (radial.value.tipo === 'lancar' ? 'Novo lançamento' : `Telas de ${grupoDoRadial.value.rotulo}`) : ''));
+const radialTitulo = computed(() => (radial.value ? (radial.value.tipo === 'lancar' ? 'Adicionar' : radial.value.tipo === 'transacao' ? 'Nova transação' : `Telas de ${grupoDoRadial.value.rotulo}`) : ''));
 
 function fechar() { radial.value = null; }
 
@@ -91,11 +93,19 @@ function tocar(g) {
   fechar();
   router.push(g.rotaCelular || (temSubmenu(g) ? itemDoBotao(g).rota : g.itens[0].rota));
 }
-function abrirLancar() { radial.value = radial.value && radial.value.tipo === 'lancar' ? null : { tipo: 'lancar' }; }
+function abrirLancar() { radial.value = radial.value && (radial.value.tipo === 'lancar' || radial.value.tipo === 'transacao') ? null : { tipo: 'lancar' }; }
 function escolher(it) {
   const r = radial.value;
-  fechar();
   if (r && r.tipo === 'lancar') {
+    // 1º nível do "+": Transação abre o 2º nível (Entrada · Saída · Transferência); os outros abrem a janela deles
+    if (it.id === 'transacao') { radial.value = { tipo: 'transacao' }; return; }
+    fechar();
+    if (it.id === 'recorrencia') abrirRecorrencia();
+    else if (it.id === 'regra') abrirNovaRegra();
+    return;
+  }
+  fechar();
+  if (r && r.tipo === 'transacao') {
     const a = ACOES_LANCAR.find((x) => x.id === it.id);
     abrirLancamento({ tipo: a.id }); // abre a janela sobre a página atual (nunca troca de página)
   } else router.push(it.id);
@@ -143,7 +153,7 @@ onUnmounted(() => { window.removeEventListener('scroll', aoRolar); clearTimeout(
           <span v-else class="caixa-icone"><component :is="g.icone" :size="22" :stroke-width="1.7" class="icone-item" /></span>
           <span class="rotulo">{{ g.rotulo }}</span>
         </button>
-        <button type="button" class="mais-lancar" aria-label="Lançar entrada ou saída" @click="abrirLancar">
+        <button type="button" class="mais-lancar" aria-label="Adicionar: transação, recorrência ou regra" @click="abrirLancar">
           <Plus :size="13" :stroke-width="3" />
         </button>
       </div>

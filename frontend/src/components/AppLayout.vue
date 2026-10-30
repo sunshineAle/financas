@@ -5,6 +5,10 @@ import { Pin, PinOff } from 'lucide-vue-next';
 import BarraRodape from './BarraRodape.vue';
 import AvisoToast from './AvisoToast.vue';
 import LancamentoModal from './LancamentoModal.vue';
+import RecorrenciaModal from './RecorrenciaModal.vue';
+import RegraModal from './RegraModal.vue';
+import { novaRegraAberta, acaoRapidaFoiSalva } from '../services/acoesRapidas.js';
+import { avisar as avisarRegra } from '../services/avisos.js';
 import TopoApp from './TopoApp.vue';
 import MarcaDagda from './MarcaDagda.vue';
 import AvisoArmazenamento from './AvisoArmazenamento.vue';
@@ -146,6 +150,9 @@ onUnmounted(() => { limparTempos(); document.removeEventListener('pointerdown', 
 
     <BarraRodape v-if="ehCelular" />
     <LancamentoModal />
+    <!-- Homologação 1.0, seção 12: "Criar recorrência" e "Regra de transação" do "+" -->
+    <RecorrenciaModal />
+    <RegraModal :aberto="novaRegraAberta" :inicial="{}" @fechar="novaRegraAberta = false" @salvo="(r) => { novaRegraAberta = false; acaoRapidaFoiSalva(); avisarRegra(r && r.aplicadas ? `Regra criada e aplicada a ${r.aplicadas} transações.` : 'Regra criada.', { rota: '/regras' }); }" />
     <AvisoToast />
   </div>
 </template>

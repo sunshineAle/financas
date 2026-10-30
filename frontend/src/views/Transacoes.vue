@@ -15,6 +15,8 @@ import CampoTipo from '../components/CampoTipo.vue';
 import CampoValor from '../components/CampoValor.vue';
 import CampoTexto from '../components/CampoTexto.vue';
 import CampoData from '../components/CampoData.vue';
+import CampoDataPilula from '../components/CampoDataPilula.vue';
+import CampoSubcategoria from '../components/CampoSubcategoria.vue';
 import CampoConta from '../components/CampoConta.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
 import IconeCategoria from '../components/IconeCategoria.vue';
@@ -689,9 +691,10 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
                 <option v-for="c in contas" :key="c.id" :value="c.id">{{ c.nome }}</option>
               </select></label>
           </div>
-          <CampoValor v-model="formEdicao.valor" :tipo="edicaoEhSaida ? 'saida' : 'entrada'" :rotulo="editando.cartao ? (formEdicao.tipo === 'entrada' ? 'Valor do crédito' : 'Valor total da compra') : 'Valor'" />
+          <CampoValor v-model="formEdicao.valor" :tipo="edicaoEhSaida ? 'saida' : 'entrada'" :rotulo="editando.cartao ? (formEdicao.tipo === 'entrada' ? 'Valor do crédito' : 'Valor total da compra') : 'Valor'">
+            <template #lado><CampoDataPilula v-model="formEdicao.data" :rotulo="editando.cartao ? 'Data da compra' : 'Data'" /></template>
+          </CampoValor>
           <CampoTexto v-model="formEdicao.descricao" rotulo="Descrição" />
-          <CampoData v-model="formEdicao.data" :rotulo="editando.cartao ? 'Data da compra' : 'Data'" />
           <p v-if="editando.cartao" class="nota">Cartão: {{ editando.conta_nome }} · parcela {{ editando.descricao.match(/\((\d+\/\d+)\)$/)?.[1] || '1/1' }} nesta linha</p>
           <CampoConta v-else v-model="formEdicao.contaId" :contas="contasCampo" />
         </template>
@@ -703,11 +706,10 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         </dl>
         <CampoCategoria v-if="edicaoEhSaida || (ehCreditoCartao && credito.tipo === 'estorno')" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
         <CampoCategoria v-else-if="!editando.cartao" :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
-        <CampoTexto v-model="formEdicao.subcategoria" rotulo="Subcategoria" maxlength="80" list="sugestoes-sub" autocomplete="off" placeholder="Ex: Hortifruti, Uber do trabalho" />
+        <CampoSubcategoria v-model="formEdicao.subcategoria" :sugestoes="sugestoesSub" :tema="edicaoEhSaida ? 'saida' : 'entrada'" />
         <CampoIconeItem v-if="!editando.cartao" v-model="formEdicao.icone" :tipo="formEdicao.tipo" :descricao="formEdicao.descricao" />
       </template>
     </FormularioModal>
-    <datalist id="sugestoes-sub"><option v-for="s in sugestoesSub" :key="s" :value="s"></option></datalist>
 
     <RegraModal :aberto="regraAberta" :inicial="sugestaoRegra ? sugestaoRegra.inicial : {}" tipo-fixo @fechar="regraAberta = false" @salvo="regraCriada" />
 

@@ -5,8 +5,12 @@
 //   o campo busca sozinho em /api/categorias ou /api/categorias/receitas), rotulo, erro, dica, tema, obrigatorio, vazio,
 //   automatica (texto da 1ª opção "sem escolha", ex.: 'Automática'; vazio = não mostra), permitirNova (padrão true).
 // Eventos: update:modelValue, criada(categoria) — o pai pode recarregar a lista dele.
-import { ref, computed, onMounted } from 'vue';
-import { Plus, Sparkles } from 'lucide-vue-next';
+// Homologação 1.0, seção 14: COMPACTO por padrão — uma fileira com as categorias mais usadas (contagem no aparelho) e
+// "Todas", que abre a grade completa numa janela (com "+ Nova categoria"). `grade` mostra a grade direto, como antes.
+// A opção sem escolha "Automática" passa a se chamar "Pelas regras" (com "?" explicando).
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { Plus, Sparkles, LayoutGrid, X } from 'lucide-vue-next';
+import AjudaSecao from './AjudaSecao.vue';
 import IconeCategoria from './IconeCategoria.vue';
 import CampoBase from './CampoBase.vue';
 import CampoTexto from './CampoTexto.vue';
@@ -22,6 +26,7 @@ const props = defineProps({
   vazio: { type: String, default: 'Nenhuma categoria cadastrada.' },
   automatica: { type: String, default: '' },
   permitirNova: { type: Boolean, default: true },
+  grade: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue', 'criada']);
 
@@ -45,6 +50,38 @@ const lista = computed(() => {
   return [...base.filter(ehGeral), ...base.filter((c) => !ehGeral(c))];
 });
 const ativo = (c) => String(props.modelValue) === String(chaveDe(c));
+// "Automática" (rótulo antigo) vira "Pelas regras"
+const rotuloAuto = computed(() => (/autom/i.test(props.automatica) ? 'Pelas regras' : props.automatica));
+const ehPelasRegras = computed(() => rotuloAuto.value === 'Pelas regras');
+
+// ---- mais usadas (contagem guardada no aparelho, por tipo) ----
+const CHAVE_USO = computed(() => `dagda.categorias.uso.${t.value}`);
+const uso = ref({});
+function lerUso() { try { uso.value = JSON.parse(localStorage.getItem(CHAVE_USO.value) || '{}') || {}; } catch { uso.value = {}; } }
+function contarUso(k) {
+  if (!k) return;
+  try { const u = { ...uso.value, [k]: (uso.value[k] || 0) + 1 }; uso.value = u; localStorage.setItem(CHAVE_USO.value, JSON.stringify(u)); } catch { /* sem armazenamento */ }
+}
+onMounted(lerUso);
+const QTD_FILEIRA = 5;
+const fileira = computed(() => {
+  const ord = [...lista.value].sort((a, b) => (uso.value[chaveDe(b)] || 0) - (uso.value[chaveDe(a)] || 0));
+  const top = ord.slice(0, QTD_FILEIRA);
+  const sel = lista.value.find((c) => ativo(c));
+  if (sel && !top.includes(sel)) top.unshift(sel); // a escolhida sempre aparece
+  return top;
+});
+function escolher(c) { const k = c ? chaveDe(c) : ''; contarUso(k); emit('update:modelValue', k); }
+
+// ---- janela "Todas" ----
+const todasAberta = ref(false);
+const painel = ref(null);
+function abrirTodas() { todasAberta.value = true; nextTick(() => painel.value?.querySelector('button.ativo, button')?.focus()); }
+function fecharTodas() { todasAberta.value = false; criando.value = false; }
+function escolherNaJanela(c) { escolher(c); fecharTodas(); }
+function tecla(e) { if (todasAberta.value && e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); fecharTodas(); } }
+watch(todasAberta, (v) => { if (v) window.addEventListener('keydown', tecla, true); else window.removeEventListener('keydown', tecla, true); });
+onBeforeUnmount(() => window.removeEventListener('keydown', tecla, true));
 
 // ---- nova categoria inline ----
 const criando = ref(false);
@@ -70,6 +107,8 @@ async function criar() {
     if (!r.ok) { erroNova.value = d.erro || 'Não foi possível criar a categoria.'; return; }
     extras.value.push(d);
     criando.value = false;
+    contarUso(chaveDe(d));
+    todasAberta.value = false;
     emit('update:modelValue', chaveDe(d));
     emit('criada', d);
   } catch { erroNova.value = 'Não foi possível criar a categoria.'; } finally { salvando.value = false; }
@@ -78,12 +117,28 @@ async function criar() {
 
 <template>
   <CampoBase :rotulo="rotulo" :erro="erro" :dica="dica" :dica-ao-focar="dicaAoFocar" :tema="tema" :obrigatorio="obrigatorio">
-    <div class="grade" role="radiogroup" :aria-label="rotulo">
-      <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['sf-opcao', 'cat', { ativo: String(modelValue) === '' }]" @click="emit('update:modelValue', '')">
-        <span class="ic auto"><Sparkles :size="22" :stroke-width="1.8" aria-hidden="true" /></span>
-        <span class="nm">{{ automatica }}</span>
+    <!-- Compacto: fileira das mais usadas + Todas -->
+    <div v-if="!grade" class="fileira" role="radiogroup" :aria-label="rotulo">
+      <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['chip-cat', { ativo: String(modelValue) === '' }]" @click="escolher(null)">
+        <span class="ic-p auto"><Sparkles :size="16" :stroke-width="1.9" aria-hidden="true" /></span>{{ rotuloAuto }}
       </button>
-      <button v-for="c in lista" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['sf-opcao', 'cat', { ativo: ativo(c) }]" @click="emit('update:modelValue', chaveDe(c))">
+      <button v-for="c in fileira" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['chip-cat', { ativo: ativo(c) }]" @click="escolher(c)">
+        <IconeCategoria :valor="c.icone" :tipo="t" :cor="c.cor || undefined" :tamanho="26" />{{ c.nome }}
+      </button>
+      <button type="button" class="chip-cat todas" aria-haspopup="dialog" data-todas-categorias @click="abrirTodas"><LayoutGrid :size="16" :stroke-width="2" aria-hidden="true" />Todas</button>
+    </div>
+    <p v-if="!grade && automatica && ehPelasRegras && String(modelValue) === ''" class="sf-dica pelas-regras">A categoria vem da regra que combinar com a descrição.<AjudaSecao secao="categoria.regras" /></p>
+
+    <Teleport to="body" :disabled="grade">
+    <div v-if="grade || todasAberta" :class="grade ? 'grade-direta' : ['janela-todas', 'tema-' + (tema || t)]" @click.self="fecharTodas">
+    <div ref="painel" :class="{ 'painel-todas': !grade }" :role="grade ? null : 'dialog'" :aria-label="grade ? null : `${rotulo}: todas`">
+    <header v-if="!grade" class="topo-todas"><b>{{ rotulo }}</b><button type="button" class="fechar-todas" aria-label="Fechar" @click="fecharTodas"><X :size="18" :stroke-width="2" /></button></header>
+    <div class="grade" role="radiogroup" :aria-label="rotulo">
+      <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['sf-opcao', 'cat', { ativo: String(modelValue) === '' }]" @click="grade ? escolher(null) : escolherNaJanela(null)">
+        <span class="ic auto"><Sparkles :size="22" :stroke-width="1.8" aria-hidden="true" /></span>
+        <span class="nm">{{ rotuloAuto }}</span>
+      </button>
+      <button v-for="c in lista" :key="chaveDe(c)" type="button" role="radio" :aria-checked="ativo(c)" :class="['sf-opcao', 'cat', { ativo: ativo(c) }]" @click="grade ? escolher(c) : escolherNaJanela(c)">
         <IconeCategoria :valor="c.icone" :tipo="t" :cor="c.cor || undefined" :tamanho="40" />
         <span class="nm">{{ c.nome }}</span>
       </button>
@@ -103,10 +158,28 @@ async function criar() {
         <button type="button" class="b pri" :disabled="salvando" @click="criar">{{ salvando ? 'Criando...' : 'Criar categoria' }}</button>
       </div>
     </div>
+    </div>
+    </div>
+    </Teleport>
   </CampoBase>
 </template>
 
 <style scoped>
+.fileira { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.fileira::-webkit-scrollbar { display: none; }
+.chip-cat { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px 0 6px; border-radius: 999px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); white-space: nowrap; cursor: pointer; }
+.chip-cat.ativo { border-color: var(--tema-cor, var(--cor-primaria)); background: var(--tema-fundo, var(--cor-realce)); }
+.chip-cat.todas { padding: 0 12px; color: var(--tema-cor, var(--cor-primaria)); border-style: dashed; }
+.chip-cat:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tema-cor, var(--cor-primaria)) 35%, transparent); }
+.ic-p { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--cor-realce); color: var(--cor-texto-suave); }
+.pelas-regras { display: flex; align-items: center; margin: 2px 0 0; }
+.janela-todas { position: fixed; inset: 0; z-index: 80; background: rgb(0 0 0 / 0.45); display: flex; align-items: flex-end; justify-content: center; }
+@media (min-width: 769px) { .janela-todas { align-items: center; } }
+.painel-todas { width: min(520px, 100%); max-height: min(78vh, 620px); overflow-y: auto; padding: 14px 14px 18px; border-radius: 20px 20px 0 0; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); box-shadow: 0 -12px 40px -16px rgb(0 0 0 / 0.5); }
+@media (min-width: 769px) { .painel-todas { border-radius: 20px; } }
+.topo-todas { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-family: var(--fonte-display); font-size: 16px; }
+.fechar-todas { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--cor-realce); color: var(--cor-texto); display: grid; place-items: center; cursor: pointer; }
+.painel-todas .grade { max-height: none; }
 .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; overscroll-behavior: contain; }
 .cat { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 80px; padding: 10px 6px; border-radius: 14px; background: var(--cor-fundo); border: 1.5px solid var(--cor-borda); color: var(--cor-texto); font: 600 12px/1.2 var(--fonte-texto); text-align: center; cursor: pointer; transition: border-color var(--anim-rapida) ease, background var(--anim-padrao) ease, transform var(--anim-rapida) ease; }
 .cat:hover { border-color: color-mix(in srgb, var(--tc, var(--tema-cor, var(--cor-primaria))) 40%, var(--cor-borda)); }

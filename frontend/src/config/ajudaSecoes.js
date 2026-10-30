@@ -57,9 +57,23 @@ export const AJUDA_SECOES = {
     texto: [
       'Para o que não vem do banco: dinheiro em espécie, um Pix que ainda não sincronizou, uma entrada extra.',
       'Em contas manuais o saldo é ajustado na hora.',
-      'Categoria "Automática" usa as suas regras e o nome da descrição; sem correspondência, vai para "Geral".',
+      'Categoria "Pelas regras": vem da regra que combinar com a descrição; sem regra, vai para "Geral".',
     ],
     manual: 'transacoes',
+  },
+  recorrencia: {
+    titulo: 'Criar recorrência',
+    texto: [
+      'Um gasto que se repete todo mês, com prazo (ex.: 5 meses) ou sem prazo. Ele entra no Custo de vida e na previsão do Saldo do mês.',
+      'Não lança transações: o que de fato sair continua vindo do seu extrato. Para mudar ou apagar, abra o Custo de vida.',
+    ],
+  },
+  'categoria.regras': {
+    titulo: 'Pelas regras',
+    texto: [
+      'O app procura uma das suas regras de categorização que combine com a descrição (ex.: "IFD*" → Restaurante) e usa a categoria dela.',
+      'Sem regra que combine, a transação fica em "Geral". Você pode escolher outra categoria quando quiser.',
+    ],
   },
   transferir: {
     titulo: 'Transferência',

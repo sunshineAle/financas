@@ -4,6 +4,9 @@ import { ref, watch, nextTick } from 'vue';
 import FormularioModal from './FormularioModal.vue';
 import CampoTexto from './CampoTexto.vue';
 import CampoValor from './CampoValor.vue';
+import CampoDataPilula from './CampoDataPilula.vue';
+import CampoParcelasPilula from './CampoParcelasPilula.vue';
+import CampoSubcategoria from './CampoSubcategoria.vue';
 import CampoData from './CampoData.vue';
 import CampoSelecao from './CampoSelecao.vue';
 import CampoCategoria from './CampoCategoria.vue';
@@ -85,15 +88,15 @@ async function registrar() {
 
 <template>
   <FormularioModal :aberto="aberto" :titulo="`${editando ? 'Editar compra' : 'Lançar compra'} · ${cartao ? cartao.nome : ''}`" tema="saida" :rotulo-salvar="editando ? 'Salvar compra' : 'Registrar compra'" :carregando="salvando" :erro="erro" @salvar="registrar" @fechar="emit('fechar')">
-    <CampoValor v-model="compra.valor" tipo="saida" rotulo="Valor total" :erro="erros.valor" />
+    <CampoValor v-model="compra.valor" tipo="saida" rotulo="Valor total" :erro="erros.valor">
+      <template #lado>
+        <CampoDataPilula v-model="compra.dataCompra" rotulo="Data da compra" />
+        <CampoParcelasPilula v-if="!editando" v-model="compra.parcelas" />
+      </template>
+    </CampoValor>
     <CampoTexto v-model="compra.descricao" rotulo="O que foi comprado" placeholder="Ex: Geladeira" :erro="erros.descricao" obrigatorio />
-    <div class="duas">
-      <CampoTexto v-model="compra.parcelas" rotulo="Parcelas" type="number" min="1" max="48" inputmode="numeric" :disabled="!!editando" tema="saida" />
-      <CampoData v-model="compra.dataCompra" rotulo="Data da compra" atalhos tema="saida" />
-    </div>
-    <CampoCategoria v-model="compra.categoriaId" tipo="saida" tema="saida" rotulo="Categoria (opcional)" automatica="Automática" :categorias="categorias" />
-    <CampoTexto v-if="compra.categoriaId" v-model="compra.subcategoria" rotulo="Subcategoria (opcional)" maxlength="80" list="sugestoes-sub-cartao" autocomplete="off" placeholder="Ex: Eletrodomésticos, Presente" tema="saida" />
-    <datalist id="sugestoes-sub-cartao"><option v-for="s in sugestoes" :key="s" :value="s"></option></datalist>
+    <CampoCategoria v-model="compra.categoriaId" tipo="saida" tema="saida" rotulo="Categoria (opcional)" automatica="Pelas regras" :categorias="categorias" />
+    <CampoSubcategoria v-if="compra.categoriaId" v-model="compra.subcategoria" :sugestoes="sugestoes" tema="saida" />
     <CampoSelecao v-if="dividas.length" v-model="compra.dividaId" rotulo="Vincular a acordo, dívida ou crediário (opcional)" placeholder="Nenhuma" :opcoes="[{ valor: '', rotulo: 'Nenhuma' }, ...dividas.map((d) => ({ valor: d.id, rotulo: d.nome }))]" tema="saida" />
     <p v-if="previa" class="previa">
       <template v-if="previa.parcelas > 1">{{ previa.parcelas }}x de {{ moeda(previa.valorParcela) }}.</template>

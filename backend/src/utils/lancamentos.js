@@ -449,6 +449,9 @@ function listarVinculaveis(usuarioId) {
       id: d.id, nome: d.nome, saldo: d.saldo, taxa_juros: d.taxa_juros ?? null, urgencia: d.urgencia,
       tipo: d.tipo ?? null, status: d.status ?? null, conta_nome: d.conta_nome || null,
       valor_parcela: sugerida ? arredondar(Number(sugerida)) : null,
+      // Homologação 1.0, seção 14: lista mais rica no "Vincular dívida" (origem e cartão ligado, se houver)
+      credor: d.credor || null, icone: d.icone || null,
+      cartao_nome: (db.prepare('SELECT k.nome FROM lancamentos_cartao l JOIN cartoes k ON k.id = l.cartao_id AND k.excluido_em IS NULL WHERE l.divida_id = ? AND l.excluido_em IS NULL LIMIT 1').get(d.id) || {}).nome || null,
     };
   });
 }
