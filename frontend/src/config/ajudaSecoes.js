@@ -34,6 +34,14 @@ export const AJUDA_SECOES = {
       'É a posição de hoje: não muda com o mês escolhido. Toque no centro para ver Ativos e Passivos.',
     ],
   },
+  'patrimonio.passivos': {
+    titulo: 'O que você deve hoje',
+    texto: [
+      'Passivos são as dívidas de hoje: as faturas abertas dos cartões, o saldo que falta das dívidas e o cheque especial.',
+      'As parcelas futuras do cartão não entram aqui: elas passam a contar quando chegam à fatura. Para ver o que vem nos próximos meses, abra Compromissos › Futuros.',
+      'Empréstimos e acordos entram com todo o saldo que falta, porque é o valor que o credor cobra para quitar hoje.',
+    ],
+  },
   'inicio.patrimonio': {
     titulo: 'Patrimônio',
     texto: [

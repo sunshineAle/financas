@@ -7,7 +7,9 @@
 // Números: GET /api/patrimonio (o mesmo cálculo do Início). Detalhe das metas: /api/reserva; dos ativos: /api/investimentos.
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { ChevronDown, ChevronRight, ChartPie, ChartBar, Landmark, Target, TrendingUp } from 'lucide-vue-next';
+import { ChevronDown, ChevronRight, ChartPie, ChartBar, Landmark, Target, TrendingUp, CreditCard, ReceiptText, TriangleAlert } from 'lucide-vue-next';
+import AbasSeletor from '../components/AbasSeletor.vue';
+import { ehTelaLarga } from '../services/layout.js';
 import TopoValor from '../components/TopoValor.vue';
 import CardPadrao from '../components/CardPadrao.vue';
 import DashRosca from '../components/DashRosca.vue';
@@ -23,7 +25,11 @@ const metas = ref([]);
 const ativos = ref([]);
 const erro = ref('');
 const grafico = ref('rosca');
-const abertos = ref({ contas: true });
+const abertos = ref({ contas: true, faturas: true });
+// Abas Ativos | Passivos como antes (decisão de 30/10, 07h31); no PC (≥ 1100 px) os dois lados ficam lado a lado.
+const lado = ref('ativos');
+const ABAS = [{ id: 'ativos', rotulo: 'Ativos' }, { id: 'passivos', rotulo: 'Passivos' }];
+const ladosVisiveis = computed(() => (ehTelaLarga.value ? ['ativos', 'passivos'] : [lado.value]));
 
 const pegar = (u) => fetch(u, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 onMounted(async () => {
@@ -38,6 +44,21 @@ const reserva = computed(() => blocoDe('reserva'));
 const totalInvest = computed(() => Math.round((blocoDe('renda_fixa').total + blocoDe('renda_variavel').total) * 100) / 100);
 const totalAtivos = computed(() => pat.value?.totalAtivos || 0);
 const pct = (v) => (totalAtivos.value > 0 ? Math.round((v / totalAtivos.value) * 100) : 0);
+// Passivos: só o que se deve HOJE (faturas abertas, dívidas, cheque especial). Parcelas futuras ficam em Compromissos.
+const passivoDe = (chave) => (pat.value?.passivos || []).find((b) => b.chave === chave) || { total: 0, itens: [] };
+const faturas = computed(() => passivoDe('faturas'));
+const dividas = computed(() => passivoDe('dividas'));
+const cheque = computed(() => passivoDe('cheque_especial'));
+const totalPassivos = computed(() => pat.value?.totalPassivos || 0);
+const pctP = (v) => (totalPassivos.value > 0 ? Math.round((v / totalPassivos.value) * 100) : 0);
+const CORP = { faturas: ['var(--saida-carmim-medio)', 'var(--saida-tangerina-medio)'], dividas: ['var(--saida-vermelho-medio)', 'var(--saida-brasa-medio)'], cheque: ['var(--saida-coral-medio)', 'var(--saida-ambar-medio)'] };
+const segmentosP = computed(() => [
+  { nome: 'Faturas abertas', valor: faturas.value.total, cor: CORP.faturas[0], chave: 'faturas' },
+  { nome: 'Dívidas', valor: dividas.value.total, cor: CORP.dividas[0], chave: 'dividas' },
+  { nome: 'Cheque especial', valor: cheque.value.total, cor: CORP.cheque[0], chave: 'cheque' },
+].filter((x) => x.valor > 0));
+const barrasP = computed(() => segmentosP.value.map((x) => ({ id: x.chave, rotulo: x.nome, valor: x.valor, cor: x.cor, detalhe: `${pctP(x.valor)}%` })));
+const venceCurto = (iso) => (iso ? new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '') : '');
 
 // Cores da paleta v2 (as mesmas do Início/"Seus saldos"): contas = céu, reserva = violeta (metas), investimentos = petróleo
 const COR = { contas: ['var(--entrada-ceu-medio)', 'var(--entrada-royal-medio)'], reserva: ['var(--meta-violeta-medio)', 'var(--meta-orquidea-medio)'], invest: ['var(--investimento-esmeralda-medio)', 'var(--investimento-verde-agua-medio)'] };
@@ -65,11 +86,13 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
     <p v-if="erro" class="estado" role="alert">{{ erro }}</p>
     <template v-if="pat">
       <TopoValor tema="investimento" :variante="2" rotulo="Patrimônio líquido" periodo="hoje" :valor="pat.patrimonioLiquido"
-        :linhas="[{ rotulo: 'O que você tem', valor: pat.totalAtivos }, { rotulo: 'O que você deve', valor: -pat.totalPassivos }]">
-        <button type="button" class="link-comp" @click="router.push('/compromissos')">Faturas e dívidas ficam em Compromissos<ChevronRight :size="15" :stroke-width="2" /></button>
-      </TopoValor>
+        :linhas="[{ rotulo: 'Ativos (o que você tem)', valor: pat.totalAtivos }, { rotulo: 'Passivos (o que você deve)', valor: -pat.totalPassivos }]" />
 
-      <div class="grade-pat">
+      <AbasSeletor v-if="!ehTelaLarga" v-model="lado" :abas="ABAS" :tema="lado === 'ativos' ? 'entrada' : 'saida'" bloco />
+
+      <div class="lados" :class="{ duplo: ladosVisiveis.length > 1 }">
+      <div v-if="ladosVisiveis.includes('ativos')" class="grade-pat">
+        <h2 v-if="ehTelaLarga" class="lado-titulo ativos">Ativos</h2>
         <!-- Onde está o seu dinheiro -->
         <CardPadrao class="bloco-pat" titulo="Onde está o seu dinheiro" ajuda="inicio.patrimonio" data-bloco-grafico>
           <template #acoes>
@@ -146,6 +169,77 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
           </CardPadrao>
         </div>
       </div>
+
+      <!-- ===== PASSIVOS: só o que se deve hoje ===== -->
+      <div v-if="ladosVisiveis.includes('passivos')" class="grade-pat">
+        <h2 v-if="ehTelaLarga" class="lado-titulo passivos">Passivos</h2>
+        <CardPadrao class="bloco-pat" titulo="O que você deve hoje" ajuda="patrimonio.passivos" data-bloco-grafico-passivos>
+          <template #acoes>
+            <button type="button" class="troca-graf" :aria-label="grafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" @click="grafico = grafico === 'rosca' ? 'barras' : 'rosca'"><component :is="grafico === 'rosca' ? ChartBar : ChartPie" :size="16" :stroke-width="2" /></button>
+          </template>
+          <DashRosca v-if="grafico === 'rosca'" compacta :segmentos="segmentosP" rotulo-total="você deve" rotulo-vazio="Nenhum passivo. Ótimo!" />
+          <RelBarrasH v-else :itens="barrasP" :formato="moeda" />
+        </CardPadrao>
+
+        <div class="col-blocos">
+          <!-- Faturas abertas -->
+          <CardPadrao class="bloco-pat" sem-padding data-bloco-faturas>
+            <button type="button" class="cab-bloco" :aria-expanded="!!abertos.faturas" @click="alternar('faturas')">
+              <Anel :pct="pctP(faturas.total)" :tamanho="44" :espessura="10" :de="CORP.faturas[0]" :ate="CORP.faturas[1]"><CreditCard :size="17" :stroke-width="1.8" /></Anel>
+              <span class="cb-nome">Faturas abertas<small>{{ faturas.itens.length }} {{ faturas.itens.length === 1 ? 'fatura' : 'faturas' }} · {{ pctP(faturas.total) }}%</small></span>
+              <b class="numero-tabular"><Valor :valor="faturas.total" /></b>
+              <ChevronDown class="seta" :class="{ girada: abertos.faturas }" :size="18" :stroke-width="2" aria-hidden="true" />
+            </button>
+            <div v-if="abertos.faturas" class="corpo-bloco">
+              <button v-for="f in faturas.itens" :key="f.id" type="button" class="linha" @click="router.push(`/cartoes/${f.cartaoId}/extrato`)">
+                <IconeBanco :icone="f.icone || ''" :nome="f.nome" :tamanho="36" padrao="💳" />
+                <span class="l-nome">{{ f.nome }}<small>{{ f.detalhe }}<template v-if="f.vence"> · vence {{ venceCurto(f.vence) }}</template></small></span>
+                <b class="numero-tabular"><Valor :valor="f.valor" /></b>
+              </button>
+              <p v-if="!faturas.itens.length" class="vazio">Nenhuma fatura aberta.</p>
+              <button type="button" class="acessar" @click="router.push('/cartoes')">Acessar Cartões<ChevronRight :size="16" :stroke-width="2" /></button>
+            </div>
+          </CardPadrao>
+
+          <!-- Dívidas -->
+          <CardPadrao class="bloco-pat" sem-padding data-bloco-dividas>
+            <button type="button" class="cab-bloco" :aria-expanded="!!abertos.dividas" @click="alternar('dividas')">
+              <Anel :pct="pctP(dividas.total)" :tamanho="44" :espessura="10" :de="CORP.dividas[0]" :ate="CORP.dividas[1]"><ReceiptText :size="17" :stroke-width="1.8" /></Anel>
+              <span class="cb-nome">Dívidas<small>{{ dividas.itens.length }} {{ dividas.itens.length === 1 ? 'dívida' : 'dívidas' }} · {{ pctP(dividas.total) }}%</small></span>
+              <b class="numero-tabular"><Valor :valor="dividas.total" /></b>
+              <ChevronDown class="seta" :class="{ girada: abertos.dividas }" :size="18" :stroke-width="2" aria-hidden="true" />
+            </button>
+            <div v-if="abertos.dividas" class="corpo-bloco">
+              <button v-for="d in dividas.itens" :key="d.id" type="button" class="linha" @click="router.push('/dividas')">
+                <IconeCategoria valor="🧾" tipo="saida" :tamanho="36" />
+                <span class="l-nome">{{ d.nome }}<small>saldo que falta{{ d.credor ? ' · ' + d.credor : '' }}</small></span>
+                <b class="numero-tabular"><Valor :valor="d.valor" /></b>
+              </button>
+              <p v-if="!dividas.itens.length" class="vazio">Nenhuma dívida em aberto.</p>
+              <button type="button" class="acessar" @click="router.push('/dividas')">Acessar Dívidas<ChevronRight :size="16" :stroke-width="2" /></button>
+            </div>
+          </CardPadrao>
+
+          <!-- Cheque especial (só quando houver) -->
+          <CardPadrao v-if="cheque.total > 0" class="bloco-pat" sem-padding data-bloco-cheque>
+            <button type="button" class="cab-bloco" :aria-expanded="!!abertos.cheque" @click="alternar('cheque')">
+              <Anel :pct="pctP(cheque.total)" :tamanho="44" :espessura="10" :de="CORP.cheque[0]" :ate="CORP.cheque[1]"><TriangleAlert :size="17" :stroke-width="1.8" /></Anel>
+              <span class="cb-nome">Cheque especial<small>conta com saldo negativo · {{ pctP(cheque.total) }}%</small></span>
+              <b class="numero-tabular"><Valor :valor="cheque.total" /></b>
+              <ChevronDown class="seta" :class="{ girada: abertos.cheque }" :size="18" :stroke-width="2" aria-hidden="true" />
+            </button>
+            <div v-if="abertos.cheque" class="corpo-bloco">
+              <button v-for="c in cheque.itens" :key="c.id" type="button" class="linha" @click="router.push({ path: '/contas', query: { conta: c.id } })">
+                <IconeBanco :icone="c.icone || ''" :nome="c.nome" :tamanho="36" />
+                <span class="l-nome">{{ c.nome }}<small>{{ c.detalhe }}</small></span>
+                <b class="numero-tabular"><Valor :valor="c.valor" /></b>
+              </button>
+              <button type="button" class="acessar" @click="router.push('/contas')">Acessar Contas<ChevronRight :size="16" :stroke-width="2" /></button>
+            </div>
+          </CardPadrao>
+        </div>
+      </div>
+      </div>
     </template>
   </div>
 </template>
@@ -153,6 +247,11 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
 <style scoped>
 .pag-patrimonio { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; margin: 0 auto; width: 100%; padding: 4px 16px 24px; }
 .estado { color: var(--cor-texto-suave); }
+.lados.duplo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.lado-titulo { margin: 2px 0 0; font: 600 17px var(--fonte-display); }
+.lado-titulo.ativos { color: var(--cor-entrada-texto, var(--cor-entrada)); }
+.lado-titulo.passivos { color: var(--cor-saida-texto, var(--cor-saida)); }
+:deep(.abas) { background: var(--cor-fundo); border: 1px solid color-mix(in srgb, var(--cor-texto) 14%, var(--cor-borda)); }
 .link-comp { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin-top: 6px; padding: 0; border: 0; background: none; color: var(--cor-texto-suave); font: 500 12.5px var(--fonte-texto); cursor: pointer; }
 .link-comp:hover { color: var(--cor-texto); }
 .grade-pat { display: flex; flex-direction: column; gap: 14px; }
@@ -180,7 +279,5 @@ const moeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency
 .vazio { margin: 6px; color: var(--cor-texto-suave); font-size: 14px; }
 .acessar { align-self: center; display: inline-flex; align-items: center; gap: 2px; min-height: 40px; margin-top: 6px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-primaria); font: 600 13.5px var(--fonte-texto); cursor: pointer; }
 .acessar:hover { background: var(--cor-realce); }
-@media (min-width: 1100px) {
-  .grade-pat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
-}
+
 </style>
