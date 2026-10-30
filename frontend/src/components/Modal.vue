@@ -9,6 +9,7 @@
 import { watch, onUnmounted, ref, nextTick } from 'vue';
 import { X } from 'lucide-vue-next';
 import AjudaSecao from './AjudaSecao.vue';
+import { useArrastarParaFechar } from '../services/arrastarParaFechar.js';
 
 const props = defineProps({
   aberto: { type: Boolean, default: false },
@@ -19,6 +20,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['fechar']);
 const caixa = ref(null);
+useArrastarParaFechar(caixa, () => emit('fechar')); // celular: arrastar a folha para baixo fecha
 let anterior = null;
 // Teclado virtual: a folha acompanha a área visível (visualViewport) para o campo e Salvar/Cancelar não ficarem escondidos.
 const vv = typeof window !== 'undefined' ? window.visualViewport : null;

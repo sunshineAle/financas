@@ -572,7 +572,9 @@ const blocoCategorias = computed(() => {
   return lista.map((c, i) => ({ ...c, destaque: i < 3 && c.gasto > 0 }));
 });
 const semCategoria = computed(() => transacoes.value.filter((t) => t.ignorada !== 1 && ['s-0', 'e-0'].includes(infoDe(t).chave)));
-const ultimas = computed(() => ordenadas.value.filter((t) => t.ignorada !== 1).slice(0, 5));
+const ultimas = computed(() => ordenadas.value.filter((t) => t.ignorada !== 1).slice(0, 3));
+const todasCategorias = ref(false);
+const categoriasVisiveis = computed(() => (todasCategorias.value ? blocoCategorias.value : blocoCategorias.value.slice(0, 3)));
 function faixaCat(pct) {
   if (pct >= 100) return { de: 'var(--saida-carmim-medio)', ate: 'var(--saida-vermelho-medio)' };
   if (pct >= 95) return { de: '#E6F9F1', ate: '#9FE3C8' };
@@ -708,7 +710,36 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 
       <!-- ===== BLOCOS (padrão) ===== -->
       <template v-if="modo === 'blocos'">
-        <!-- 1. Gastos | Entradas por categoria (rosca ↔ barras) -->
+        <!-- 1. Últimas transações (3) + Ver todas — logo abaixo do card de valores (30/10, 03h04) -->
+        <CardPadrao class="bloco-tx" titulo="Últimas transações" data-bloco-ultimas>
+          <div v-if="ultimas.length" class="cartao-lista-sem">
+            <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+          </div>
+          <p v-else class="nota-vazia">Nenhuma transação {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
+          <button type="button" class="ver-todas" data-ver-todas @click="irModo({ ver: 'extrato' })">Ver todas<ChevronRight :size="16" :stroke-width="2" /></button>
+        </CardPadrao>
+        <!-- 2. Categorias: as 3 maiores ("Ver todas" abre o resto aqui mesmo), aviso de sem categoria -->
+        <CardPadrao class="bloco-tx" titulo="Categorias" ajuda="transacoes.categorias" data-bloco-categorias>
+          <button v-if="semCategoria.length" type="button" class="aviso-semcat" data-sem-categoria @click="abrirCategoria('s-0')">
+            <TriangleAlert :size="17" :stroke-width="2" /><span><b>{{ semCategoria.length }} sem categoria</b> — toque para categorizar</span><ChevronRight :size="16" :stroke-width="2" />
+          </button>
+          <ul v-if="blocoCategorias.length" class="lista-cat">
+            <li v-for="c in categoriasVisiveis" :key="c.chave">
+              <button type="button" class="linha-cat" :class="{ destaque: c.destaque }" @click="abrirCategoria(c.chave)">
+                <IconeCategoria :valor="c.icone || ''" tipo="saida" :cor="c.cor" :tamanho="38" />
+                <span class="lc-corpo">
+                  <span class="lc-topo"><span class="lc-nome">{{ c.nome }}<small v-if="c.destaque && todasCategorias" class="selo-maior">maior gasto</small></span><b class="numero-tabular">{{ moeda(c.gasto) }}</b></span>
+                  <BarraDegrade v-if="c.teto > 0" :pct="c.pct" :de="faixaCat(c.pct).de" :ate="faixaCat(c.pct).ate" :altura="6" :marcador="false" />
+                  <small class="lc-sub numero-tabular">{{ c.teto > 0 ? `${c.pct}% de ${moeda(c.teto)}` : 'sem limite' }} · {{ c.qtd }} lançamento(s)</small>
+                </span>
+              </button>
+            </li>
+          </ul>
+          <p v-else class="nota-vazia">Nenhum gasto categorizado neste período.</p>
+          <button v-if="blocoCategorias.length > 3" type="button" class="ver-todas" data-ver-categorias :aria-expanded="todasCategorias" @click="todasCategorias = !todasCategorias">{{ todasCategorias ? 'Ver menos' : `Ver todas (${blocoCategorias.length})` }}<ChevronRight :size="16" :stroke-width="2" :class="{ girado: todasCategorias }" /></button>
+        </CardPadrao>
+
+        <!-- 3. Gastos | Entradas por categoria (rosca ↔ barras) -->
         <CardPadrao class="bloco-tx" data-bloco-grafico>
           <div class="cab-bloco">
             <div class="mini-abas" role="tablist" aria-label="Gastos ou entradas por categoria">
@@ -724,34 +755,6 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           </template>
         </CardPadrao>
 
-        <!-- 2. Categorias: gasto e limite, maiores em destaque, aviso de sem categoria -->
-        <CardPadrao class="bloco-tx" titulo="Categorias" ajuda="transacoes.categorias" data-bloco-categorias>
-          <button v-if="semCategoria.length" type="button" class="aviso-semcat" data-sem-categoria @click="abrirCategoria('s-0')">
-            <TriangleAlert :size="17" :stroke-width="2" /><span><b>{{ semCategoria.length }} sem categoria</b> — toque para categorizar</span><ChevronRight :size="16" :stroke-width="2" />
-          </button>
-          <ul v-if="blocoCategorias.length" class="lista-cat">
-            <li v-for="c in blocoCategorias" :key="c.chave">
-              <button type="button" class="linha-cat" :class="{ destaque: c.destaque }" @click="abrirCategoria(c.chave)">
-                <IconeCategoria :valor="c.icone || ''" tipo="saida" :cor="c.cor" :tamanho="38" />
-                <span class="lc-corpo">
-                  <span class="lc-topo"><span class="lc-nome">{{ c.nome }}<small v-if="c.destaque" class="selo-maior">maior gasto</small></span><b class="numero-tabular">{{ moeda(c.gasto) }}</b></span>
-                  <BarraDegrade v-if="c.teto > 0" :pct="c.pct" :de="faixaCat(c.pct).de" :ate="faixaCat(c.pct).ate" :altura="6" :marcador="false" />
-                  <small class="lc-sub numero-tabular">{{ c.teto > 0 ? `${c.pct}% de ${moeda(c.teto)}` : 'sem limite' }} · {{ c.qtd }} lançamento(s)</small>
-                </span>
-              </button>
-            </li>
-          </ul>
-          <p v-else class="nota-vazia">Nenhum gasto categorizado neste período.</p>
-        </CardPadrao>
-
-        <!-- 3. Últimas transações + Ver todas -->
-        <CardPadrao class="bloco-tx" titulo="Últimas transações" data-bloco-ultimas>
-          <div v-if="ultimas.length" class="cartao-lista-sem">
-            <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
-          </div>
-          <p v-else class="nota-vazia">Nenhuma transação {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
-          <button type="button" class="ver-todas" data-ver-todas @click="irModo({ ver: 'extrato' })">Ver todas<ChevronRight :size="16" :stroke-width="2" /></button>
-        </CardPadrao>
       </template>
 
       <!-- ===== DETALHE DA CATEGORIA ===== -->
@@ -1062,6 +1065,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .selo-maior { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--cor-saida-texto, var(--cor-saida)); background: color-mix(in srgb, var(--cor-saida) 14%, transparent); }
 .ver-todas { align-self: center; display: inline-flex; align-items: center; gap: 2px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-primaria); font: 600 13.5px var(--fonte-texto); cursor: pointer; }
 .ver-todas:hover { background: var(--cor-realce); }
+.ver-todas .girado { transform: rotate(90deg); }
 .cartao-lista-sem { display: flex; flex-direction: column; }
 .painel-extrato { gap: 10px; }
 .cab-extrato { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -1097,9 +1101,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .form-limite { display: flex; flex-direction: column; gap: 10px; }
 .erro-lim { margin: 0; font-size: 13px; color: var(--cor-alerta-texto, var(--cor-alerta)); }
 .salvar-lim { min-height: 46px; border-radius: 12px; border: 0; background: var(--cor-interface, var(--cor-primaria)); color: #fff; font: 600 14.5px var(--fonte-texto); cursor: pointer; }
-/* PC: gráfico + categorias lado a lado, últimas transações embaixo (seção 17) */
+/* PC: últimas transações + categorias lado a lado, gráfico embaixo (seção 17; ordem de 30/10, 03h04) */
 @media (min-width: 1100px) {
   .modo-blocos { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  .modo-blocos > :not([data-bloco-grafico]):not([data-bloco-categorias]) { grid-column: 1 / -1; }
+  .modo-blocos > :not([data-bloco-ultimas]):not([data-bloco-categorias]) { grid-column: 1 / -1; }
 }
 </style>

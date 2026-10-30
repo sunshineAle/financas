@@ -5,10 +5,12 @@
 // de trás), tocando fora ou no X. Celular: sobe da base; PC: centralizada.
 import { watch, ref, nextTick, onBeforeUnmount } from 'vue';
 import { X } from 'lucide-vue-next';
+import { useArrastarParaFechar } from '../services/arrastarParaFechar.js';
 
 const props = defineProps({ aberto: Boolean, titulo: { type: String, default: '' }, tema: { type: String, default: '' }, largura: { type: Number, default: 460 } });
 const emit = defineEmits(['fechar']);
 const caixa = ref(null);
+useArrastarParaFechar(caixa, () => emit('fechar')); // celular: arrastar a folha para baixo fecha
 function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); emit('fechar'); } }
 watch(() => props.aberto, async (v) => {
   if (v) { window.addEventListener('keydown', tecla, true); await nextTick(); caixa.value?.querySelector('[aria-checked="true"], button.opcao, button')?.focus({ preventScroll: true }); }
