@@ -15,7 +15,9 @@ import IconeBanco from './IconeBanco.vue';
 import IconeCategoria from './IconeCategoria.vue';
 import { guardarRetorno, pegarRetorno } from '../services/retornoPatrimonio.js';
 
-const props = defineProps({ aberto: { type: Boolean, default: false } });
+const props = defineProps({ aberto: { type: Boolean, default: false }, pagina: { type: Boolean, default: false } });
+// Versão 1.0: `pagina` = página Patrimônio (rodapé). No PC (≥ 1100 px) Ativos e Passivos ficam lado a lado, sem a aba.
+import { ehTelaLarga } from '../services/layout.js';
 const emit = defineEmits(['fechar']);
 const router = useRouter();
 
@@ -65,20 +67,22 @@ watch(() => props.aberto, async (v) => {
   if (r) setTimeout(() => { const el = caixa.value?.closest('.corpo, .modal-corpo, [data-modal-corpo]') || caixa.value?.parentElement; if (el) el.scrollTop = r.rolagem; }, 60);
 }, { immediate: true });
 
-const blocos = computed(() => {
-  const l = (dados.value ? dados.value[lado.value] : []) || [];
-  return lado.value === 'ativos' ? [...l].sort((a, b) => ORDEM.indexOf(a.chave) - ORDEM.indexOf(b.chave)) : l;
-});
-const totalLado = computed(() => (dados.value ? (lado.value === 'ativos' ? dados.value.totalAtivos : dados.value.totalPassivos) : 0));
-const pct = (v) => (totalLado.value > 0 ? Math.round((v / totalLado.value) * 100) : 0);
-const segmentos = computed(() => blocos.value.map((b) => ({ nome: b.rotulo, valor: b.total, cor: cor(b.chave)[0] })));
+const duplo = computed(() => props.pagina && ehTelaLarga.value);
+const ladosVisiveis = computed(() => (duplo.value ? ['ativos', 'passivos'] : [lado.value]));
+function blocosDe(ld) {
+  const l = (dados.value ? dados.value[ld] : []) || [];
+  return ld === 'ativos' ? [...l].sort((a, b) => ORDEM.indexOf(a.chave) - ORDEM.indexOf(b.chave)) : l;
+}
+const totalDe = (ld) => (dados.value ? (ld === 'ativos' ? dados.value.totalAtivos : dados.value.totalPassivos) : 0);
+const pctDe = (ld, v) => (totalDe(ld) > 0 ? Math.round((v / totalDe(ld)) * 100) : 0);
+const segmentosDe = (ld) => blocosDe(ld).map((b) => ({ nome: b.rotulo, valor: b.total, cor: cor(b.chave)[0] }));
 const compromissos = computed(() => dados.value?.compromissos || { total: 0, itens: [] });
 const temaModal = computed(() => (lado.value === 'ativos' ? 'entrada' : 'saida'));
 
 function irPara(rota) {
   const el = caixa.value?.closest('.corpo, .modal-corpo, [data-modal-corpo]') || caixa.value?.parentElement;
   guardarRetorno({ lado: lado.value, abertos: { ...abertos.value }, rolagem: el ? el.scrollTop : 0 });
-  emit('fechar');
+  if (!props.pagina) emit('fechar');
   router.push(rota);
 }
 // Toque num item: conta → extrato da conta; meta → extrato da meta; ativo → detalhe do ativo; o resto → página do bloco.
@@ -101,7 +105,7 @@ const mesFatura = (chave) => {
 </script>
 
 <template>
-  <Modal :aberto="aberto" titulo="Patrimônio" ajuda="inicio.patrimonio" :tema="temaModal" :largura="560" @fechar="emit('fechar')">
+  <component :is="pagina ? 'div' : Modal" v-bind="pagina ? { class: 'pag-patrimonio' } : { aberto, titulo: 'Patrimônio', ajuda: 'inicio.patrimonio', tema: temaModal, largura: 560 }" @fechar="emit('fechar')">
     <div ref="caixa" class="patrimonio">
       <p v-if="carregando && !dados" class="estado">Carregando…</p>
       <p v-else-if="erro" class="estado erro" role="alert">{{ erro }}</p>
@@ -123,39 +127,42 @@ const mesFatura = (chave) => {
           <TriangleAlert :size="16" :stroke-width="2" aria-hidden="true" />O total não bateu com o Início; avise no feedback.
         </p>
 
-        <AbasSeletor v-model="lado" :abas="ABAS" :tema="lado === 'ativos' ? 'entrada' : 'saida'" bloco />
+        <AbasSeletor v-if="!duplo" v-model="lado" :abas="ABAS" :tema="lado === 'ativos' ? 'entrada' : 'saida'" bloco />
+        <div class="lados" :class="{ duplo }">
+        <section v-for="l in ladosVisiveis" :key="l" class="lado-col">
+          <h2 v-if="duplo" class="lado-titulo" :class="l">{{ l === 'ativos' ? 'Ativos' : 'Passivos' }}</h2>
 
         <!-- Gráfico (rosca ↔ barras) -->
-        <section class="grafico" :aria-label="lado === 'ativos' ? 'Gráfico dos ativos' : 'Gráfico dos passivos'">
+        <section class="grafico" :aria-label="l === 'ativos' ? 'Gráfico dos ativos' : 'Gráfico dos passivos'">
           <div class="grafico-topo">
-            <span class="total-lado">{{ lado === 'ativos' ? 'Total de ativos' : 'Total de passivos' }} · <b class="numero-tabular"><Valor :valor="totalLado" /></b></span>
+            <span class="total-lado">{{ l === 'ativos' ? 'Total de ativos' : 'Total de passivos' }} · <b class="numero-tabular"><Valor :valor="totalDe(l)" /></b></span>
             <button type="button" class="troca" :aria-label="grafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" :title="grafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" @click="grafico = grafico === 'rosca' ? 'barras' : 'rosca'">
               <component :is="grafico === 'rosca' ? ChartBar : ChartPie" :size="16" :stroke-width="2" aria-hidden="true" />
               <span>{{ grafico === 'rosca' ? 'Barras' : 'Rosca' }}</span>
             </button>
           </div>
-          <DashRosca v-if="grafico === 'rosca'" compacta :segmentos="segmentos" :rotulo-total="lado === 'ativos' ? 'ativos' : 'passivos'"
-            :rotulo-vazio="lado === 'ativos' ? 'Nenhum ativo ainda.' : 'Nenhum passivo. Ótimo!'" />
+          <DashRosca v-if="grafico === 'rosca'" compacta :segmentos="segmentosDe(l)" :rotulo-total="l === 'ativos' ? 'ativos' : 'passivos'"
+            :rotulo-vazio="l === 'ativos' ? 'Nenhum ativo ainda.' : 'Nenhum passivo. Ótimo!'" />
           <ul v-else class="barras">
-            <li v-for="b in blocos" :key="b.chave">
-              <div class="barra-rotulo"><span>{{ b.rotulo }}</span><b class="numero-tabular"><Valor :valor="b.total" /></b><small>{{ pct(b.total) }}%</small></div>
-              <BarraDegrade :pct="pct(b.total)" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]" :altura="8" :marcador="false" />
+            <li v-for="b in blocosDe(l)" :key="b.chave">
+              <div class="barra-rotulo"><span>{{ b.rotulo }}</span><b class="numero-tabular"><Valor :valor="b.total" /></b><small>{{ pctDe(l, b.total) }}%</small></div>
+              <BarraDegrade :pct="pctDe(l, b.total)" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]" :altura="8" :marcador="false" />
             </li>
           </ul>
         </section>
 
         <!-- Blocos -->
         <ul class="blocos">
-          <template v-for="b in blocos" :key="b.chave">
+          <template v-for="b in blocosDe(l)" :key="b.chave">
           <li v-if="b.chave === 'reserva'" class="link-inv">
             <button type="button" data-seus-investimentos @click="irPara('/objetivos?aba=investimentos')">Seus investimentos<ChevronRight :size="16" :stroke-width="2" aria-hidden="true" /></button>
           </li>
           <li class="bloco" :class="{ vazio: !b.itens.length }">
             <div class="bloco-topo">
-              <Anel :pct="pct(b.total)" :tamanho="48" :espessura="12" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]">
-                <span class="anel-pct numero-tabular">{{ pct(b.total) }}%</span>
+              <Anel :pct="pctDe(l, b.total)" :tamanho="48" :espessura="12" :de="cor(b.chave)[0]" :ate="cor(b.chave)[1]">
+                <span class="anel-pct numero-tabular">{{ pctDe(l, b.total) }}%</span>
               </Anel>
-              <button type="button" class="bloco-info" :aria-expanded="!!abertos[b.chave]" :disabled="!b.itens.length" @click="alternar(b.chave)">
+              <button type="button" class="bloco-info" :aria-expanded="!!abertos[l + b.chave]" :disabled="!b.itens.length" @click="alternar(l + b.chave)">
                 <span class="bloco-nome">{{ b.rotulo }}</span>
                 <small>{{ b.itens.length ? `${b.itens.length} ${b.itens.length === 1 ? 'item' : 'itens'}` : 'Nada aqui' }}</small>
               </button>
@@ -165,7 +172,7 @@ const mesFatura = (chave) => {
               </button>
             </div>
             <!-- seção 9: linhas mais ricas — ícone maior, nome, tipo embaixo e saldo à direita; toque abre o extrato -->
-            <ul v-if="abertos[b.chave] && b.itens.length" class="itens">
+            <ul v-if="abertos[l + b.chave] && b.itens.length" class="itens">
               <li v-for="i in b.itens" :key="i.id">
                 <button type="button" class="item-linha" :aria-label="`${i.nome}: ${b.chave === 'contas' || b.chave === 'cheque_especial' ? 'ver extrato da conta' : 'abrir'}`" @click="irItem(b, i)">
                   <span class="item-icone" aria-hidden="true">
@@ -177,9 +184,11 @@ const mesFatura = (chave) => {
                 </button>
               </li>
             </ul>
-            <button v-if="abertos[b.chave] && b.chave === 'contas' && b.itens.length === 1" type="button" class="ver-extrato" @click="irItem(b, b.itens[0])">Ver extrato da conta<ChevronRight :size="15" :stroke-width="2" aria-hidden="true" /></button>
+            <button v-if="abertos[l + b.chave] && b.chave === 'contas' && b.itens.length === 1" type="button" class="ver-extrato" @click="irItem(b, b.itens[0])">Ver extrato da conta<ChevronRight :size="15" :stroke-width="2" aria-hidden="true" /></button>
           </li>
-          </template>
+            </section>
+        </div>
+      </template>
         </ul>
 
         <!-- Compromissos futuros: informativo, fora do total -->
@@ -199,7 +208,7 @@ const mesFatura = (chave) => {
         </div>
       </template>
     </div>
-  </Modal>
+  </component>
 </template>
 
 <style scoped>
@@ -297,4 +306,11 @@ const mesFatura = (chave) => {
 .comp-nome small { color: var(--cor-texto-suave); font-size: 0.74rem; }
 .comp-topo b { color: var(--cor-texto-suave); white-space: nowrap; }
 .nota { margin: 0; font-size: 0.75rem; color: var(--cor-texto-suave); }
+/* Versão 1.0: página Patrimônio */
+.pag-patrimonio { max-width: 1200px; margin: 0 auto; width: 100%; padding: 4px 16px 24px; }
+.lados.duplo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.lado-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.lado-titulo { margin: 4px 0 0; font: 600 17px var(--fonte-display); }
+.lado-titulo.ativos { color: var(--cor-entrada-texto, var(--cor-entrada)); }
+.lado-titulo.passivos { color: var(--cor-saida-texto, var(--cor-saida)); }
 </style>

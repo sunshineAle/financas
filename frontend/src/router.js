@@ -37,6 +37,8 @@ const router = createRouter({
     { path: '/', name: 'dashboard', component: Dashboard, meta: { titulo: 'Início' } },
     { path: '/contas', name: 'contas', component: MeuDinheiro, meta: { titulo: 'Contas' } },
     { path: '/transacoes', name: 'transacoes', component: Transacoes, meta: { titulo: 'Transações' } },
+    { path: '/patrimonio', name: 'patrimonio', component: () => import('./views/Patrimonio.vue'), meta: { titulo: 'Patrimônio' } },
+    { path: '/compromissos', name: 'compromissos', component: () => import('./views/Compromissos.vue'), meta: { titulo: 'Compromissos' } },
     { path: '/cartoes', name: 'cartoes', component: Cartoes, meta: { titulo: 'Cartões e Crédito' } },
     { path: '/cartoes/:id/extrato', name: 'cartao-extrato', component: CartaoExtrato },
     { path: '/dividas', name: 'dividas', component: Dividas, meta: { titulo: 'Dívidas' } },

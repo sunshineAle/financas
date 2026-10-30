@@ -175,7 +175,7 @@ watch(acaoRapidaSalva, () => carregar()); // recorrência nova muda a previsão
 onMounted(async () => {
   carregar();
   carregarRevisar();
-  if (deveReabrir()) patrimonioAberto.value = true; // voltou de uma conta/meta aberta pela janela Patrimônio (seção 9)
+  // 1.0: Patrimônio virou página; voltar de uma conta/meta volta para ela pelo histórico. // voltou de uma conta/meta aberta pela janela Patrimônio (seção 9)
   try {
     const r = await fetch('/api/auth/me', { credentials: 'include' });
     if (r.ok) nome.value = (await r.json()).nome || '';
@@ -217,7 +217,7 @@ onMounted(async () => {
           <li><i class="ponto entrada"></i><span>Entradas</span><b class="numero-tabular"><Valor :valor="entradasDoMes" /></b><small>{{ pctDe(entradasDoMes) }}%</small></li>
           <li><i class="ponto saida"></i><span>Saídas</span><b class="numero-tabular"><Valor :valor="despesasDoMes" /></b><small>{{ pctDe(despesasDoMes) }}%</small></li>
           <li class="item-patrimonio">
-            <button type="button" class="leg-botao" aria-haspopup="dialog" :aria-label="`Patrimônio líquido: ver Ativos e Passivos`" @click="patrimonioAberto = true">
+            <button type="button" class="leg-botao" aria-haspopup="dialog" :aria-label="`Patrimônio líquido: ver Ativos e Passivos`" @click="router.push('/patrimonio')">
               <i class="ponto patrimonio"></i><span>Patrimônio</span><b class="numero-tabular"><Valor :valor="patrimonio" /></b>
             </button>
             <AjudaSecao secao="inicio.patrimonio" />
@@ -233,7 +233,7 @@ onMounted(async () => {
       <div v-deslizar-mes class="corpo-mes">
       <div class="grade">
         <!-- 0. Seus saldos (decisão final da seção 1, 29/10 21h59): meia-lua com Contas, Guardado, Faturas e Dívidas -->
-        <SeusSaldos :saldos="dados.saldos" @patrimonio="patrimonioAberto = true" />
+        <SeusSaldos :saldos="dados.saldos" @patrimonio="router.push('/patrimonio')" />
 
         <!-- 1. Revise suas transações (homologação 1.0, seção 7): só quando há itens em A revisar -->
         <button v-if="qtdRevisar > 0" type="button" class="cartao revisar" data-revise-transacoes @click="ir('/transacoes?revisar=1')">

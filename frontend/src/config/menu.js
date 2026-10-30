@@ -10,39 +10,21 @@ import {
   ChartColumn, Tags, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Heart, FileUp, CalendarClock, ListChecks, Repeat, WandSparkles,
 } from 'lucide-vue-next';
 
+// Versão 1.0 (modelo unificado): rodapé Início · Patrimônio · [Transações +] · Compromissos · Mais, sem submenu radial.
+// Contas e Objetivos "moram" em Patrimônio; Cartões e Dívidas em Compromissos; Categorias em Transações (EXTRAS abaixo).
 export const GRUPOS = [
-  {
-    id: 'inicio', rotulo: 'Início', icone: House,
-    itens: [{ rota: '/', rotulo: 'Início', icone: House }],
-  },
-  {
-    id: 'contas', rotulo: 'Contas', icone: Landmark,
-    itens: [
-      { rota: '/contas', rotulo: 'Contas', icone: Landmark },
-      { rota: '/objetivos', rotulo: 'Objetivos', icone: Target },
-    ],
-  },
-  {
-    id: 'transacoes', rotulo: 'Transações', icone: ArrowLeftRight, centro: true,
-    itens: [{ rota: '/transacoes', rotulo: 'Transações', icone: ArrowLeftRight }],
-  },
-  {
-    id: 'cartoes', rotulo: 'Cartões', icone: CreditCard,
-    itens: [
-      { rota: '/cartoes', rotulo: 'Cartões e Crédito', rotuloCurto: 'Cartões', icone: CreditCard },
-      { rota: '/dividas', rotulo: 'Dívidas', icone: ReceiptText },
-    ],
-  },
+  { id: 'inicio', rotulo: 'Início', icone: House, itens: [{ rota: '/', rotulo: 'Início', icone: House }] },
+  { id: 'patrimonio', rotulo: 'Patrimônio', icone: Landmark, itens: [{ rota: '/patrimonio', rotulo: 'Patrimônio', icone: Landmark }] },
+  { id: 'transacoes', rotulo: 'Transações', icone: ArrowLeftRight, centro: true, itens: [{ rota: '/transacoes', rotulo: 'Transações', icone: ArrowLeftRight }] },
+  { id: 'compromissos', rotulo: 'Compromissos', icone: CreditCard, itens: [{ rota: '/compromissos', rotulo: 'Compromissos', rotuloCurto: 'Compromissos', icone: CreditCard }] },
   {
     id: 'mais', rotulo: 'Mais', icone: Ellipsis,
     // No celular o botão "Mais" abre a tela /mais (lista de configurações), que lista tudo isto; no PC/web são itens do menu lateral.
     rotaCelular: '/mais',
     itens: [
       { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
-      { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
       { rota: '/custos-fixos', rotulo: 'Custo de vida', icone: CalendarClock },
       { rota: '/importar', rotulo: 'Importar extrato', rotuloCurto: 'Importar', icone: FileUp },
-      // Perfil fica só no rodapé do menu (avatar + nome) e Configurações logo abaixo dele; o Manual fica em Sobre o app.
       { rota: '/apoie', rotulo: 'Apoie o desenvolvedor', rotuloCurto: 'Apoie', icone: Heart },
     ],
   },
@@ -63,7 +45,7 @@ export const ACOES_LANCAR = [
 ];
 
 // Rotas que "pertencem" a um grupo mesmo não sendo itens dele (ex.: o extrato abre sobre Cartões).
-const EXTRAS = { 'cartao-extrato': 'cartoes', mais: 'mais', regras: 'mais', manual: 'mais' };
+const EXTRAS = { contas: 'patrimonio', objetivos: 'patrimonio', cartoes: 'compromissos', dividas: 'compromissos', 'cartao-extrato': 'compromissos', orcamento: 'transacoes', mais: 'mais', regras: 'mais', manual: 'mais' };
 
 export function grupoDaRota(rota) {
   if (rota.name && EXTRAS[rota.name]) return EXTRAS[rota.name];
@@ -87,7 +69,6 @@ export const temSubmenu = (g) => g.itens.length > 1 && !g.rotaCelular;
 // Item do grupo que corresponde à rota atual (o rodapé mostra o ícone/nome DELE no botão do grupo).
 export function itemDaRota(g, rota) {
   return g.itens.find((i) => (i.rota === '/' ? rota.path === '/' : rota.path === i.rota || rota.path.startsWith(i.rota + '/')))
-    || (rota.name === 'cartao-extrato' ? g.itens.find((i) => i.rota === '/cartoes') : null)
     || g.itens[0];
 }
 
@@ -97,15 +78,14 @@ export const ROTAS_COM_TOPO = ['dashboard', 'contas', 'objetivos', 'transacoes',
 // Menu lateral do PC/web (anotação 62), nesta ordem. `revisar` = item "A revisar" (só aparece quando há itens;
 // o contador vem de /api/reserva/auto/pendentes, os mesmos itens do card "A revisar" no topo de Transações).
 export const MENU_LATERAL = [
+  // Versão 1.0 (homologação seção 20): Início · Patrimônio · Transações · Compromissos · Categorias · Relatórios.
+  // O resto (Custo de vida, Regras, Dados e backup…) fica no painel da foto.
   { rota: '/', rotulo: 'Início', icone: House },
+  { rota: '/patrimonio', rotulo: 'Patrimônio', dica: 'Contas, Metas e Investimentos', icone: Landmark },
   { rota: '/transacoes', rotulo: 'Transações', icone: ArrowLeftRight },
-  { rota: '/contas', rotulo: 'Contas', icone: Landmark },
-  { rota: '/objetivos', rotulo: 'Objetivos', dica: 'Metas e Investimentos', icone: Target },
-  { rota: '/cartoes', rotulo: 'Cartões e Crédito', icone: CreditCard },
-  { rota: '/dividas', rotulo: 'Dívidas', icone: ReceiptText },
+  { rota: '/compromissos', rotulo: 'Compromissos', dica: 'Cartões, crediários e dívidas', icone: CreditCard },
   { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
   { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
-  // Homologação 1.0, seção 20: Importar saiu do menu lateral — fica no painel da foto, em Dados e backup.
   { rota: '/transacoes?revisar=1', rotulo: 'A revisar', icone: ListChecks, revisar: true },
 ];
 
@@ -113,6 +93,9 @@ export const MENU_LATERAL = [
 // Celular: todas as telas internas do "Mais" e o extrato do cartão. PC: Perfil/configurações, Manual e o extrato do cartão.
 export function voltarDaRota(rota, celular) {
   if (rota.name === 'cartao-extrato') return '/cartoes';
+  if (['contas', 'objetivos'].includes(rota.name)) return '/patrimonio';
+  if (['cartoes', 'dividas'].includes(rota.name)) return '/compromissos';
+  if (rota.name === 'orcamento') return '/transacoes';
   if (celular) return ehTelaInternaDoMais(rota) ? '/mais' : null;
   return rota.name === 'mais-secao' || rota.name === 'manual' ? '/mais' : null;
 }
