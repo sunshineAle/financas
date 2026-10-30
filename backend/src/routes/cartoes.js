@@ -58,7 +58,7 @@ function lerDadosCartao(corpo, usuarioId) {
 }
 
 // --- Tipo de crédito, juros e bandeira (anotações 53 e 58) ---------------------
-// 'cartao' = cartão de crédito; 'loja' = cartão de loja (uso restrito à loja); 'crediario' = crediário / carnê digital.
+// 'cartao' = cartão de crédito; 'loja' = cartão de loja (uso restrito à loja); 'crediario' = crediário.
 // Cheque especial e empréstimo NÃO viram cartão (ficam em Contas e Dívidas).
 const TIPOS_CREDITO = { cartao: 'Cartão de crédito', loja: 'Cartão de loja', crediario: 'Crediário' };
 const BANDEIRAS = ['mastercard', 'visa', 'elo', 'amex', 'hipercard'];

@@ -114,7 +114,7 @@ async function confirmarEstorno() {
 const podeEstornar = (t) => !t.tipo_mov && !t.ignorada && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
 const ehReserva = (t) => /^reserva_|^transferencia_corretora$/.test(String(t.tipo_mov || ''));
 const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia') && !ehReserva(t);
-const rotuloMov = { reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
+const rotuloMov = { reserva_aporte: 'aporte em investimento', reserva_resgate_inv: 'resgate de investimento', reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
   // anotação 61: créditos na fatura do cartão
   estorno_avulso: 'estorno a revisar', estornada_parcial: 'estornada em parte', pagamento: 'pagamento adiantado', cashback: 'cashback', pagamento_cartao: 'pagamento adiantado do cartão', pagamento_cartao_criado: 'pagamento adiantado do cartão' };
 // Créditos do cartão que CONTAM nos totais (cashback é entrada; estorno avulso e estorno parcial mexem no gasto da categoria)

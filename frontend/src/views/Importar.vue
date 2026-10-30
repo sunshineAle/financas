@@ -165,7 +165,7 @@ const grava = (l) => ['importar', 'transferencia', 'atualizar'].includes(l.acao)
 const visiveis = computed(() => linhas.value.filter((l) => {
   if (filtro.value === 'todas') return true;
   if (filtro.value === 'novas') return l.acao === 'importar' || l.acao === 'transferencia';
-  if (filtro.value === 'atencao') return l.confianca === 'baixa' || ['divergente', 'estorno', 'pagamento_fatura', 'pagamento_adiantado', 'cashback', 'reserva'].includes(l.status) || l.revisar;
+  if (filtro.value === 'atencao') return l.confianca === 'baixa' || ['divergente', 'estorno', 'pagamento_fatura', 'pagamento_adiantado', 'cashback', 'reserva', 'investimento'].includes(l.status) || l.revisar;
   if (filtro.value === 'descartadas') return l.acao === 'descartar' || l.acao === 'manter';
   return true;
 }));
@@ -173,7 +173,7 @@ const visiveis = computed(() => linhas.value.filter((l) => {
 const ehCaixinha = (l) => l.status === 'reserva' && l.reserva && l.reserva.caixinha;
 const totais = computed(() => {
   const g = linhas.value.filter(grava);
-  const comuns = g.filter((l) => !ehCaixinha(l));
+  const comuns = g.filter((l) => !ehCaixinha(l) && l.status !== 'investimento'); // seção 15: aporte/resgate pela regra fica fora
   const rend = g.filter((l) => ehCaixinha(l) && l.reserva.metaId).reduce((s, l) => s + (Number(l.reserva.rendimento) || 0), 0);
   if (tipo.value === 'fatura') {
     // Anotação 61: na fatura, crédito abate a fatura; só o cashback é entrada

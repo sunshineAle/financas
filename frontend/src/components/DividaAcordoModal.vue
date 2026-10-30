@@ -32,7 +32,7 @@ const erroSim = ref('');
 const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
 const pct = (v, c = 2) => `${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: c })}%`;
 const opcoes = computed(() => [{ valor: '', rotulo: 'Novo acordo (nova dívida)' }, ...props.dividas.map((d) => ({ valor: d.id, rotulo: `${d.nome} · ${moeda(d.saldo)}` }))]);
-const opcoesOrigem = [{ valor: 'cartao', rotulo: 'Cartão' }, { valor: 'crediario', rotulo: 'Crediário / carnê' }, { valor: 'emprestimo', rotulo: 'Empréstimo / financiamento' }, { valor: 'conta_atrasada', rotulo: 'Conta atrasada' }, { valor: 'pessoa', rotulo: 'Pessoa' }, { valor: 'outra', rotulo: 'Outra' }];
+const opcoesOrigem = [{ valor: 'cartao', rotulo: 'Cartão' }, { valor: 'crediario', rotulo: 'Crediário' }, { valor: 'emprestimo', rotulo: 'Empréstimo / financiamento' }, { valor: 'conta_atrasada', rotulo: 'Conta atrasada' }, { valor: 'pessoa', rotulo: 'Pessoa' }, { valor: 'outra', rotulo: 'Outra' }];
 const alvo = computed(() => props.dividas.find((d) => d.id === f.value.dividaId) || null);
 
 function preencherDe(d) {

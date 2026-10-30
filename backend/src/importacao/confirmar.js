@@ -199,6 +199,9 @@ function gravarConta(ctx, conta, linhas, corpo) {
         require('../utils/carteiraDb').tirarDosTotais(t.id, 'reserva_pendente');
         resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: l.reserva.rotulo, sentido, valor: Math.abs(valor), data: l.data, descricao: l.descricao });
       }
+    } else if (l.status === 'investimento' && l.investimento) {
+      // Seção 15: aporte/resgate de investimento pela regra — fica fora dos totais (não é entrada nem saída)
+      require('../utils/carteiraDb').tirarDosTotais(t.id, l.investimento.sentido === 'aporte' ? 'reserva_aporte' : 'reserva_resgate_inv');
     } else if (l.status === 'reserva' && l.reserva) resultado.reservasPendentes.push({ transacaoId: t.id, rotulo: l.reserva.rotulo, sentido: l.reserva.sentido, valor: Math.abs(valor), data: l.data, descricao: l.descricao });
 
     if (l.acao === 'transferencia' && l.transferencia && l.transferencia.contaId) {

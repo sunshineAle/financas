@@ -446,22 +446,27 @@ onMounted(carregarConectados);
     <template v-else-if="aba === 'metas'">
       <ReservasAuto :metas="metas" :versao="versao" @decidido="aposGravar" />
       <!-- Homologação 1.0, seção 10: o ORBE fica no topo, no lugar do card "Total guardado"; o valor vai junto dele -->
-      <section class="palco-obj" aria-label="Total guardado em metas">
-        <span class="palco-rot">Total guardado em metas<AjudaSecao secao="objetivos.liquidez" /></span>
-        <strong class="palco-num numero-tabular"><Valor :valor="totalAtingidoMetas" /></strong>
-        <small class="palco-sub">{{ metas.length === 1 ? '1 meta' : metas.length + ' metas' }} · <template v-if="totalMetas - totalAtingidoMetas > 0">faltam <Valor :valor="Math.max(0, totalMetas - totalAtingidoMetas)" /></template><template v-else>tudo guardado</template></small>
+      <!-- Orbe sozinho no topo (visual); as abas e o saldo ficam num bloco único logo abaixo -->
+      <section class="palco-obj" aria-label="Metas">
         <div v-if="partesMetas.length" class="palco-orbe" role="img" :aria-label="'Visão geral das metas: ' + partesMetas.map((a) => `${a.nome} ${a.pct}%`).join(', ')">
           <Orbe :partes="partesMetas" :tamanho="460" />
         </div>
-        <ul v-if="partesMetas.length" class="legenda-palco">
-          <li v-for="a in partesMetas" :key="a.id"><i class="pt" :style="{ background: a.cor }"></i><span>{{ a.nome }}</span><b class="numero-tabular"><Valor :valor="a.guardado" /></b><small class="numero-tabular">{{ a.pct }}%</small></li>
-        </ul>
-        <BarraAcoes compacto :colunas="3" rotulo="Ações das metas" class="acoes-palco">
-          <BotaoAcao compacto :icone="PiggyBank" rotulo="Guardar" tema="meta" destaque @click="abrirAporte('aporte', metaSel)" />
-          <BotaoAcao compacto :icone="ArrowUpFromLine" rotulo="Resgatar" tema="meta" @click="abrirAporte('resgate', metaSel)" />
-          <BotaoAcao compacto :icone="Plus" rotulo="Nova meta" tema="meta" @click="abrirNovaMeta" />
-        </BarraAcoes>
       </section>
+      <div class="bloco-saldo-obj">
+        <slot name="abas" />
+        <div class="saldo-obj">
+          <div class="saldo-linha">
+            <span class="palco-rot">Total guardado em metas<AjudaSecao secao="objetivos.liquidez" /></span>
+            <strong class="palco-num numero-tabular"><Valor :valor="totalAtingidoMetas" /></strong>
+          </div>
+          <small class="palco-sub">{{ metas.length === 1 ? '1 meta' : metas.length + ' metas' }} · <template v-if="totalMetas - totalAtingidoMetas > 0">faltam <Valor :valor="Math.max(0, totalMetas - totalAtingidoMetas)" /></template><template v-else>tudo guardado</template></small>
+          <BarraAcoes compacto :colunas="3" rotulo="Ações das metas" class="acoes-palco">
+            <BotaoAcao compacto :icone="PiggyBank" rotulo="Guardar" tema="meta" destaque @click="abrirAporte('aporte', metaSel)" />
+            <BotaoAcao compacto :icone="ArrowUpFromLine" rotulo="Resgatar" tema="meta" @click="abrirAporte('resgate', metaSel)" />
+            <BotaoAcao compacto :icone="Plus" rotulo="Nova meta" tema="meta" @click="abrirNovaMeta" />
+          </BarraAcoes>
+        </div>
+      </div>
 
       <section class="grade-aneis" aria-label="Metas (toque para ver o extrato)">
         <button v-for="m in metas" :key="m.id" type="button" class="meta-anel" :style="{ '--cm': corMeta(m).cor }" @click="abrirMeta(m.id)">
@@ -477,19 +482,26 @@ onMounted(carregarConectados);
 
     <!-- ===== ABA INVESTIMENTOS ===== -->
     <template v-else>
-      <section class="palco-obj inv" aria-label="Total investido">
-        <span class="palco-rot">Total investido</span>
-        <strong class="palco-num numero-tabular"><Valor :valor="totalInvestido" /></strong>
-        <small v-for="l in linhasTopoInv" :key="l.rotulo" class="palco-sub">{{ l.rotulo }} <Valor :valor="l.valor" /></small>
+      <section class="palco-obj inv" aria-label="Investimentos">
         <div v-if="partesOrbe.length" class="palco-orbe" role="img" :aria-label="'Onde está investido: ' + fatiasPizza.map((f) => `${f.rotulo} ${f.pct}%`).join(', ')">
           <Orbe :partes="partesOrbe" :tamanho="460" />
         </div>
-        <BarraAcoes compacto :colunas="carteira.tem_corretora ? 3 : 2" rotulo="Ações dos investimentos" class="acoes-palco">
-          <BotaoAcao compacto :icone="PiggyBank" rotulo="Guardar" tema="investimento" destaque @click="abrirOperacao('guardar')" />
-          <BotaoAcao v-if="carteira.tem_corretora" compacto :icone="ArrowLeftRight" rotulo="Transferir" tema="investimento" @click="modalTransf = true" />
-          <BotaoAcao compacto :icone="Flag" rotulo="Posição inicial" tema="investimento" data-posicao-inicial @click="abrirPosicao()" />
-        </BarraAcoes>
       </section>
+      <div class="bloco-saldo-obj inv">
+        <slot name="abas" />
+        <div class="saldo-obj">
+          <div class="saldo-linha">
+            <span class="palco-rot">Total investido</span>
+            <strong class="palco-num numero-tabular"><Valor :valor="totalInvestido" /></strong>
+          </div>
+          <small v-for="l in linhasTopoInv" :key="l.rotulo" class="palco-sub">{{ l.rotulo }} <Valor :valor="l.valor" /></small>
+          <BarraAcoes compacto :colunas="carteira.tem_corretora ? 3 : 2" rotulo="Ações dos investimentos" class="acoes-palco">
+            <BotaoAcao compacto :icone="PiggyBank" rotulo="Guardar" tema="investimento" destaque @click="abrirOperacao('guardar')" />
+            <BotaoAcao v-if="carteira.tem_corretora" compacto :icone="ArrowLeftRight" rotulo="Transferir" tema="investimento" @click="modalTransf = true" />
+            <BotaoAcao compacto :icone="Flag" rotulo="Posição inicial" tema="investimento" data-posicao-inicial @click="abrirPosicao()" />
+          </BarraAcoes>
+        </div>
+      </div>
       <p v-if="avisoOp" class="aviso-op" role="status">{{ avisoOp }}</p>
 
       <CardPadrao v-if="!carteira.tem_corretora" tema="investimento" ajuda="objetivos.corretora" titulo="Cadastre sua corretora como conta">
@@ -631,7 +643,15 @@ onMounted(carregarConectados);
 .legenda-palco b { color: var(--cor-texto); font-weight: 600; }
 .legenda-palco small { font-size: 11.5px; }
 .legenda-palco .pt { width: 8px; height: 8px; border-radius: 50%; }
-.acoes-palco { width: 100%; max-width: 360px; }
+.acoes-palco { width: 100%; }
+/* Bloco único abaixo do orbe: abas (Metas | Investimentos) + saldo discreto + ações. Variante: abas embaixo (.abas-embaixo) */
+.bloco-saldo-obj { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: var(--raio-card, 16px); background: var(--cor-card); border: 1px solid var(--cor-card-borda); }
+.bloco-saldo-obj.abas-embaixo > :first-child { order: 2; }
+.saldo-obj { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 0; }
+.saldo-linha { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.saldo-obj .palco-num { font-size: 22px; }
+.saldo-obj .palco-rot { font-size: 13.5px; }
+.saldo-obj .acoes-palco { margin-top: 8px; }
 .legenda-aneis { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; }
 .pct-leg { color: var(--cor-texto-suave); font-size: 12px; }
 .legenda-aneis li { display: flex; align-items: center; gap: 10px; }

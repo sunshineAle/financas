@@ -4,10 +4,11 @@
 //   arrastar para a ESQUERDA = pausar/ativar · arrastar para a DIREITA = excluir (com "Desfazer" no aviso).
 // Só passa da metade da largura conta; abaixo disso a linha volta suave. O arraste só começa quando o movimento
 // horizontal domina, então a rolagem vertical da página continua normal (touch-action: pan-y).
+// Homologação 1.0, seção 16: sem as abas Despesas | Entradas — blocos em sequência na rolagem: Regras de despesa,
+// Regras de entrada e Regras de metas e investimentos (seção 15), cada um com contagem e "+ Nova regra" do tipo.
 import { ref, computed, onMounted } from 'vue';
 import { Plus, Trash2, Pause, Play } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
-import AbasSeletor from '../components/AbasSeletor.vue';
 import IconeCategoria from '../components/IconeCategoria.vue';
 import IconeCat from '../components/IconeCat.vue';
 import RegraModal from '../components/RegraModal.vue';
@@ -15,11 +16,15 @@ import { avisar } from '../services/avisos.js';
 
 const regras = ref([]);
 const carregando = ref(true);
-const aba = ref('saida');
+const BLOCOS = [
+  { tipo: 'saida', titulo: 'Regras de despesa', vazio: 'Nenhuma regra de despesa. Ao corrigir a categoria de um lançamento em Transações, o app sugere criar uma.' },
+  { tipo: 'entrada', titulo: 'Regras de entrada', vazio: 'Nenhuma regra de entrada ainda.' },
+  { tipo: 'reserva', titulo: 'Regras de metas e investimentos', vazio: 'Ex.: “APLICACAO RDB” → Guardar na Reserva de Liberdade, ou “COMPRA MXRF11” → aporte no MXRF11.' },
+];
 const modal = ref(false);
 const inicialModal = ref({});
 const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const lista = computed(() => regras.value.filter((r) => r.tipo === aba.value));
+const listaDe = (tipo) => regras.value.filter((r) => r.tipo === tipo);
 const pedir = (url, op = {}) => fetch(url, { credentials: 'include', ...op, headers: { 'Content-Type': 'application/json', ...(op.headers || {}) } });
 
 async function carregar() {
@@ -49,7 +54,7 @@ async function desfazer(r) {
   avisar('Regra restaurada', { tipo: 'ok', grupo: 'regras', duracao: 2500 });
 }
 
-function novaRegra() { inicialModal.value = { tipo: aba.value }; modal.value = true; }
+function novaRegra(tipo) { inicialModal.value = { tipo }; modal.value = true; }
 function editar(r) { inicialModal.value = { ...r }; modal.value = true; }
 async function salva({ aplicadas, editada }) {
   modal.value = false;
@@ -135,11 +140,10 @@ onMounted(carregar);
 <template>
   <div class="pagina">
     <h1>Regras de categorização</h1>
-    <AbasSeletor v-model="aba" :abas="[{ id: 'saida', rotulo: 'Despesas' }, { id: 'entrada', rotulo: 'Entradas' }]" :tema="aba" bloco />
-    <CardPadrao ajuda="regras" :titulo="aba === 'saida' ? 'Regras de despesa' : 'Regras de entrada'" :subtitulo="`${lista.length} regra(s)`">
-      <p v-if="!carregando && !lista.length" class="nota">Nenhuma regra ainda. Ao corrigir a categoria de um lançamento em Transações, o app sugere criar uma.</p>
+    <CardPadrao v-for="bl in BLOCOS" :key="bl.tipo" :ajuda="bl.tipo === 'reserva' ? 'regras.reserva' : 'regras'" :titulo="bl.titulo" :subtitulo="`${listaDe(bl.tipo).length} ${listaDe(bl.tipo).length === 1 ? 'regra' : 'regras'}`" :data-bloco-regras="bl.tipo">
+      <p v-if="!carregando && !listaDe(bl.tipo).length" class="nota">{{ bl.vazio }}</p>
       <transition-group tag="ul" name="regra" class="lista">
-        <li v-for="r in lista" :key="r.id" class="regra-item" :class="{ off: !r.ativa, arrastando: dxDe(r) !== 0 }">
+        <li v-for="r in listaDe(bl.tipo)" :key="r.id" class="regra-item" :class="{ off: !r.ativa, arrastando: dxDe(r) !== 0 }">
           <div class="fundo excluir" :class="{ pronto: passouMeio(r) && dxDe(r) > 0 }" aria-hidden="true" :style="{ opacity: dxDe(r) > 0 ? 1 : 0 }">
             <Trash2 :size="20" :stroke-width="2.2" /><span>Excluir</span>
           </div>
@@ -153,7 +157,7 @@ onMounted(carregar);
             @pointerdown="inicio($event, r)" @pointermove="mover" @pointerup="fim" @pointercancel="cancelar" @click="tocar(r)" @dragstart.prevent>
             <span class="ic">
               <span v-if="r.icone" class="item-ic"><IconeCat :chave="r.icone" :tamanho="22" /></span>
-              <IconeCategoria v-else :valor="r.categoriaIcone" :tipo="r.tipo" :tamanho="40" />
+              <IconeCategoria v-else :valor="r.tipo === 'reserva' ? (r.metaId ? '🎯' : 'acoes') : r.categoriaIcone" :tipo="r.tipo === 'reserva' ? (r.metaId ? 'meta' : 'investimento') : r.tipo" :tamanho="40" />
             </span>
             <span class="txt">
               <b>“{{ r.padrao }}” → {{ r.categoriaNome }}</b>
@@ -162,8 +166,8 @@ onMounted(carregar);
           </button>
         </li>
       </transition-group>
+      <button type="button" class="nova" @click="novaRegra(bl.tipo)"><Plus :size="18" :stroke-width="2.4" /> Nova regra</button>
     </CardPadrao>
-    <button type="button" class="nova" @click="novaRegra"><Plus :size="18" :stroke-width="2.4" /> Nova regra</button>
     <RegraModal :aberto="modal" :inicial="inicialModal" @fechar="modal = false" @salvo="salva" @alternar="alternarNoModal" @excluir="excluirNoModal" />
   </div>
 </template>
@@ -198,6 +202,7 @@ h1 { margin: 0; font: 700 22px var(--fonte-display); }
 .regra-leave-to { opacity: 0; max-height: 0; }
 .regra-enter-active { transition: opacity var(--anim-padrao, .25s) ease, transform var(--anim-padrao, .25s) var(--anim-curva, ease); }
 .regra-enter-from { opacity: 0; transform: translateY(-6px); }
-.nova { align-self: flex-start; min-height: 44px; padding: 0 18px; border-radius: 12px; border: none; background: var(--cor-interface, var(--cor-primaria)); color: var(--cor-sobre-cor, #fff); font: 600 14px var(--fonte-texto); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.nova { align-self: flex-start; min-height: 40px; padding: 0 14px; border-radius: 12px; border: 1px dashed var(--cor-borda); background: none; color: var(--cor-interface, var(--cor-primaria)); font: 600 13.5px var(--fonte-texto); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 4px; }
+.nova:hover { background: var(--cor-realce); }
 @media (prefers-reduced-motion: reduce) { .frente.solto, .frente.saindo, .regra-leave-active, .regra-enter-active { transition: none; } }
 </style>

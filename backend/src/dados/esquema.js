@@ -360,6 +360,11 @@ const TABELAS = {
       // Anotação 48: subcategoria e ícone do ITEM (chave do set v2) que a regra grava junto com a categoria.
       'subcategoria TEXT',
       'icone TEXT',
+      // Homologação 1.0, seção 15: regra com destino além de categoria (tipo 'reserva'):
+      // destino = 'guardar' | 'resgatar' (meta_id) ou 'aporte' | 'resgate_inv' (ativo_id). Nada disso conta como entrada/saída.
+      'destino TEXT',
+      'meta_id TEXT',
+      'ativo_id TEXT',
     ],
     fk: { usuario_id: 'usuarios', conta_id: 'contas', categoria_id: 'categorias_orcamento' },
     exporta: true,

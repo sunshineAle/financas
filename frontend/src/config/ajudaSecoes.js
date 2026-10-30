@@ -68,6 +68,13 @@ export const AJUDA_SECOES = {
       'Não lança transações: o que de fato sair continua vindo do seu extrato. Para mudar ou apagar, abra o Custo de vida.',
     ],
   },
+  'regras.reserva': {
+    titulo: 'Regras de metas e investimentos',
+    texto: [
+      'Ensine o app a reconhecer movimentos do extrato que não são gasto nem entrada: “APLICACAO RDB” → Guardar na Reserva de Liberdade; “COMPRA MXRF11” → aporte no MXRF11.',
+      'Na importação, a linha que combinar vira Guardar/Resgatar na meta ou aporte/resgate do investimento, fora das entradas e saídas. No resgate da meta, o que passar do guardado vira Rendimento.',
+    ],
+  },
   'categoria.regras': {
     titulo: 'Pelas regras',
     texto: [
@@ -131,6 +138,14 @@ export const AJUDA_SECOES = {
   },
 
   // ---------- Cartões ----------
+  'cartoes.tipos': {
+    titulo: 'Tipos de crédito',
+    texto: [
+      'Cartão de crédito: fatura mensal; os dias de fechamento e vencimento definem em qual fatura cai cada compra.',
+      'Cartão de loja: também tem fatura. Com bandeira (Visa, Mastercard, Elo…) é aceito em qualquer lugar; sem bandeira, só na loja ou rede dele.',
+      'Crediário: cada compra vira parcelas cobradas no vencimento. Cheque especial fica em Contas (saldo negativo) e empréstimo, financiamento ou consignado em Dívidas.',
+    ],
+  },
   'cartoes.tipo-cartao': {
     titulo: 'Cartão de crédito',
     texto: 'Os dias de fechamento e vencimento definem em qual fatura cai cada compra e cada parcela. A bandeira está escrita no cartão físico (opcional).',
@@ -138,7 +153,7 @@ export const AJUDA_SECOES = {
   },
   'cartoes.tipo-loja': {
     titulo: 'Cartão de loja',
-    texto: 'Funciona como cartão de crédito, com fatura mensal, mas só pode ser usado na própria loja.',
+    texto: 'Funciona como cartão de crédito, com fatura mensal. Com bandeira é aceito em qualquer lugar; sem bandeira, só na loja ou rede dele.',
     manual: 'cartoes',
   },
   'cartoes.tipo-crediario': {

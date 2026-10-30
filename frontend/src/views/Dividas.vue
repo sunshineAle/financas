@@ -404,7 +404,7 @@ const opcoesUrgencia = [{ valor: '', rotulo: 'Automática (recomendado)' }, { va
 // Origem = de onde a dívida veio. Situação = como ela está agora (define a aba).
 const opcoesOrigem = [
   { valor: 'cartao', rotulo: 'Cartão' },
-  { valor: 'crediario', rotulo: 'Crediário / carnê' },
+  { valor: 'crediario', rotulo: 'Crediário' },
   { valor: 'emprestimo', rotulo: 'Empréstimo / financiamento' },
   { valor: 'conta_atrasada', rotulo: 'Conta atrasada' },
   { valor: 'pessoa', rotulo: 'Pessoa' },

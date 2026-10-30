@@ -85,4 +85,41 @@ function aplicarNasAntigas(usuarioId, regra) {
   return linhas.length;
 }
 
-module.exports = { normalizar, acharRegra, casa, afetadas, aplicarNasAntigas, registrarUso, arredondar };
+// Homologação 1.0, seção 15: regra de METAS E INVESTIMENTOS (tipo 'reserva') que casa com a linha do extrato.
+// O sinal precisa combinar com o destino: guardar/aporte = saída da conta; resgatar/resgate_inv = entrada.
+const SAI = new Set(['guardar', 'aporte']);
+function acharRegraReserva(usuarioId, transacao) {
+  const v = Number(transacao.valor) || 0;
+  if (!v) return null;
+  const candidatas = regrasAtivas(usuarioId, 'reserva').filter((r) => casa(r, transacao) && (SAI.has(r.destino) ? v < 0 : v > 0));
+  if (!candidatas.length) return null;
+  return candidatas.sort((a, b) => peso(b) - peso(a))[0];
+}
+
+// "Aplicar nas antigas" de uma regra de metas/investimentos: as transações comuns que casam saem dos totais e,
+// se o destino é uma meta, viram Guardar/Resgatar nela (com o rendimento separado no resgate, como nas caixinhas).
+function aplicarReservaNasAntigas(usuarioId, regra) {
+  const sai = SAI.has(regra.destino);
+  const txs = db.prepare(
+    `SELECT * FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND tipo_mov IS NULL AND ${sai ? 'valor < 0' : 'valor > 0'} ORDER BY date(data), rowid`
+  ).all(usuarioId).filter((t) => casa(regra, { descricao: t.descricao, valor: t.valor, contaId: t.conta_id }));
+  if (!txs.length) return 0;
+  const carteiraDb = require('./carteiraDb');
+  let n = 0;
+  dados.transacao(() => {
+    for (const t of txs) {
+      if (regra.meta_id) {
+        const C = require('./caixinhas');
+        const reserva = carteiraDb.buscarReserva(usuarioId);
+        const meta = reserva && db.prepare('SELECT * FROM metas_reserva WHERE id = ? AND reserva_id = ? AND excluido_em IS NULL').get(regra.meta_id, reserva.id);
+        try { if (meta) { C.vincularTransacao(usuarioId, reserva, t, meta, { sentido: regra.destino }); n++; continue; } } catch { /* cai para fora dos totais */ }
+        carteiraDb.tirarDosTotais(t.id, 'reserva_pendente'); n++;
+      } else {
+        carteiraDb.tirarDosTotais(t.id, sai ? 'reserva_aporte' : 'reserva_resgate_inv'); n++;
+      }
+    }
+  });
+  return n;
+}
+
+module.exports = { normalizar, acharRegra, acharRegraReserva, aplicarReservaNasAntigas, casa, afetadas, aplicarNasAntigas, registrarUso, arredondar };

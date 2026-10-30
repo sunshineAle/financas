@@ -23,8 +23,12 @@ const emDetalhe = computed(() => !!(metaAberta.value || ativoAberto.value));
 <template>
   <div class="pagina">
     <CabecalhoPagina titulo="Objetivos" sem-mes />
-    <AbasSeletor v-if="!emDetalhe" v-model="aba" :abas="ABAS" tema="meta" degrade="linear-gradient(135deg, var(--cor-meta), var(--cor-investimento))" swipe bloco />
-    <ReservaLiberdade embutido :aba="ativoAberto ? 'investimentos' : metaAberta ? 'metas' : aba" :meta-aberta="metaAberta" :ativo-aberto="ativoAberto" />
+    <!-- Homologação 1.0 (29/10, 22h15): as abas saem do topo e ficam abaixo do orbe, junto do bloco do saldo -->
+    <ReservaLiberdade embutido :aba="ativoAberto ? 'investimentos' : metaAberta ? 'metas' : aba" :meta-aberta="metaAberta" :ativo-aberto="ativoAberto">
+      <template #abas>
+        <AbasSeletor v-if="!emDetalhe" v-model="aba" :abas="ABAS" tema="meta" degrade="linear-gradient(135deg, var(--cor-meta), var(--cor-investimento))" bloco />
+      </template>
+    </ReservaLiberdade>
   </div>
 </template>
 

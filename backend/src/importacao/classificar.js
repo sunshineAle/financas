@@ -125,12 +125,29 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
   };
   const metasCaixinha = integ.metasDaConta(usuarioId, conta.id);
   const caixinhaPorIdx = new Map();
-  if (metasCaixinha.length) {
+  // Homologação 1.0, seção 15: regras de metas e investimentos (tipo 'reserva') valem antes das caixinhas.
+  const RG = require('../utils/regras');
+  const temRegraReserva = !!db.prepare("SELECT 1 FROM regras_categorias WHERE usuario_id = ? AND tipo = 'reserva' AND ativa = 1 AND excluido_em IS NULL LIMIT 1").get(usuarioId);
+  const investimentoPorIdx = new Map();
+  const metaPorId = {};
+  const metaDaRegra = (id) => (metaPorId[id] ||= db.prepare('SELECT m.* FROM metas_reserva m JOIN reserva_liberdade r ON r.id = m.reserva_id WHERE m.id = ? AND r.usuario_id = ? AND m.excluido_em IS NULL').get(id, usuarioId) || null);
+  if (metasCaixinha.length || temRegraReserva) {
     const guardado = {};
     metasCaixinha.forEach((m) => { guardado[m.id] = integ.guardadoNaMeta(m.reserva_id, m.id); });
     linhas.filter((l) => !l.foraPeriodo && !casamento.has(l.idx)).slice().sort((a, b) => String(a.data).localeCompare(String(b.data)))
       .forEach((l) => {
-        const c = integ.casarCaixinha(l.descricao, l.valor, metasCaixinha);
+        let c = null;
+        const rr = temRegraReserva ? RG.acharRegraReserva(usuarioId, { descricao: l.descricao, valor: l.valor, contaId: conta.id }) : null;
+        if (rr && rr.ativo_id) {
+          const a = db.prepare('SELECT id, nome, ticker FROM ativos WHERE id = ?').get(rr.ativo_id);
+          if (a) { investimentoPorIdx.set(l.idx, { regraId: rr.id, ativoId: a.id, nome: a.ticker || a.nome, sentido: rr.destino }); return; }
+        }
+        if (rr && rr.meta_id && metaDaRegra(rr.meta_id)) {
+          const meta = metaDaRegra(rr.meta_id);
+          if (guardado[meta.id] === undefined) guardado[meta.id] = integ.guardadoNaMeta(meta.reserva_id, meta.id);
+          c = { sentido: rr.destino, meta, porNome: true, porRegra: true, opcoes: [meta] };
+        }
+        if (!c && metasCaixinha.length) c = integ.casarCaixinha(l.descricao, l.valor, metasCaixinha);
         if (!c) return;
         let rendimento = 0;
         if (c.meta) {
@@ -165,6 +182,15 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
     if (l.valor < 0) {
       const c = categorizarTransacao(l.descricao, categorias, { usuarioId, valor: l.valor, contaId: conta.id });
       if (c) { r.categoriaId = c; r.categoriaNome = nomeCat[c]; r.categoriaAuto = true; }
+    }
+    // Seção 15: regra de investimento — aporte/resgate de um ativo, fora das entradas e saídas
+    const inv = investimentoPorIdx.get(l.idx);
+    if (inv) {
+      r.status = 'investimento';
+      r.categoriaId = null; r.categoriaNome = null; r.categoriaAuto = false;
+      r.investimento = inv;
+      r.observacao = `${inv.sentido === 'aporte' ? 'Aporte em' : 'Resgate de'} ${inv.nome} (pela regra): não conta como ${inv.sentido === 'aporte' ? 'saída' : 'entrada'}. Registre as cotas em Investimentos.`;
+      return r;
     }
     // Anotação 56: caixinha do banco ligada a uma meta (Guardar/Resgatar fora das entradas e saídas)
     const cx = caixinhaPorIdx.get(l.idx);

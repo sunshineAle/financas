@@ -23,6 +23,8 @@ import CampoTexto from '../components/CampoTexto.vue';
 import CampoValor from '../components/CampoValor.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
 import CampoBase from '../components/CampoBase.vue';
+import AjudaSecao from '../components/AjudaSecao.vue';
+import CampoTipo from '../components/CampoTipo.vue';
 import CartaoFace from '../components/CartaoFace.vue';
 import CartaoGraficos from '../components/CartaoGraficos.vue';
 import CartaoLista from '../components/CartaoLista.vue';
@@ -243,11 +245,12 @@ const saldoInicial = ref(saldoInicialVazio());
 const inicioAberto = ref(false);
 let tipoTocado = false;
 let bandeiraTocada = false;
-function abrirNovo() { editandoId.value = null; erro.value = ''; erros.value = {}; formulario.value = formVazio(); saldoInicial.value = saldoInicialVazio(); inicioAberto.value = false; tipoTocado = false; bandeiraTocada = false; modalAberto.value = true; }
+function abrirNovo() { editandoId.value = null; erro.value = ''; erros.value = {}; formulario.value = formVazio(); saldoInicial.value = saldoInicialVazio(); inicioAberto.value = false; tipoTocado = false; bandeiraTocada = false; lojaTemBandeira.value = null; modalAberto.value = true; }
 function editar(c) {
   editandoId.value = c.id; erro.value = ''; erros.value = {};
   tipoTocado = true; bandeiraTocada = true;
   formulario.value = { nome: c.nome, contaId: c.contaId ?? '', limite: c.limite ?? 0, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento, icone: c.icone || '💳', cor: c.cor || '', tipoCredito: c.tipoCredito || 'cartao', taxaJuros: c.taxaJuros ?? '', cet: c.cet ?? '', bandeira: c.bandeira || '' };
+  lojaTemBandeira.value = null;
   modalAberto.value = true;
 }
 
@@ -256,7 +259,7 @@ function editar(c) {
 const TIPOS_CREDITO = [
   { id: 'cartao', rotulo: 'Cartão de crédito', icone: CreditCard, exemplo: 'Nubank, Inter, Itaú' },
   { id: 'loja', rotulo: 'Cartão de loja', icone: Store, exemplo: 'Renner, C&A, Riachuelo' },
-  { id: 'crediario', rotulo: 'Crediário / carnê', icone: ReceiptText, exemplo: 'Sparcelado, Casas Bahia, Magalu' },
+  { id: 'crediario', rotulo: 'Crediário', icone: ReceiptText, exemplo: 'Sparcelado, Casas Bahia, Magalu' },
   { id: 'cheque', rotulo: 'Cheque especial', icone: Landmark, exemplo: 'Limite da conta' },
   { id: 'emprestimo', rotulo: 'Empréstimo', icone: HandCoins, exemplo: 'Financiamento, consignado' },
 ];
@@ -269,6 +272,14 @@ const BANDEIRAS = [
   { id: 'amex', rotulo: 'Amex' }, { id: 'hipercard', rotulo: 'Hipercard' }, { id: '', rotulo: 'Não sei' },
 ];
 function escolherBandeira(id) { bandeiraTocada = true; formulario.value.bandeira = id; }
+// Seção 18 (Contador): cartão de loja COM bandeira (Visa, Mastercard, Elo…) é aceito em qualquer lugar; SEM bandeira
+// (private label) só na loja/rede dele. No cadastro: "Tem bandeira?" Sim → escolher; Não → selo "uso restrito à loja".
+const lojaTemBandeira = ref(null); // null = ainda não respondeu (segue a bandeira sugerida)
+const temBandeiraLoja = computed({
+  get: () => (lojaTemBandeira.value === null ? (formulario.value.bandeira ? 'sim' : 'nao') : lojaTemBandeira.value),
+  set: (v) => { lojaTemBandeira.value = v; bandeiraTocada = true; if (v === 'nao') formulario.value.bandeira = ''; },
+});
+const BANDEIRAS_LOJA = computed(() => BANDEIRAS.filter((b) => b.id));
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 // Sugestão pela instituição/nome. Bancos com várias bandeiras (Itaú, Bradesco, BB...) ficam sem sugestão.
 function sugerirBandeira(nome, icone) {
@@ -300,7 +311,7 @@ const fmtTaxa = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDig
 // Linha do nome abaixo do carrossel: "Renner · Cartão de loja · uso restrito à loja", "Sparcelado · Crediário · 4,9% a.m."
 const detalhesTipo = (c) => {
   const p = [c.tipoCreditoRotulo || 'Cartão de crédito'];
-  if (c.tipoCredito === 'loja') p.push('uso restrito à loja');
+  if (c.tipoCredito === 'loja' && !c.bandeira) p.push('uso restrito à loja'); // seção 18: com bandeira, aceito em qualquer lugar
   if (c.taxaJuros > 0) p.push(`${fmtTaxa(c.taxaJuros)} a.m.`);
   return p.join(' · ');
 };
@@ -548,26 +559,18 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
     </Modal>
 
     <!-- Cadastro / edição -->
-    <FormularioModal :aberto="modalAberto" :ajuda="naoViraCartao ? '' : 'cartoes.tipo-' + tipoForm" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão ou crédito'" tema="saida" :rotulo-salvar="tipoForm === 'cheque' ? 'Ir para Contas' : tipoForm === 'emprestimo' ? 'Ir para Dívidas' : editandoId ? 'Salvar alterações' : 'Adicionar'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
-      <CampoBase rotulo="Tipo de crédito">
+    <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar cartão' : 'Novo cartão ou crédito'" tema="saida" :rotulo-salvar="tipoForm === 'cheque' ? 'Ir para Contas' : tipoForm === 'emprestimo' ? 'Ir para Dívidas' : editandoId ? 'Salvar alterações' : 'Adicionar'" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="fecharModal">
+      <CampoBase>
+        <span class="sf-rotulo rotulo-tipo">Tipo de crédito<AjudaSecao secao="cartoes.tipos" /></span>
         <div class="tipos-credito" role="radiogroup" aria-label="Tipo de crédito">
           <button v-for="t in tiposVisiveis" :key="t.id" type="button" role="radio" :aria-checked="tipoForm === t.id" :class="['tipo-op', { ativo: tipoForm === t.id }]" :data-tipo="t.id" @click="escolherTipo(t.id)">
             <component :is="t.icone" :size="18" :stroke-width="2" aria-hidden="true" />
-            <span class="tipo-txt"><strong>{{ t.rotulo }}</strong><small>{{ t.exemplo }}</small></span>
+            <span class="tipo-txt"><strong>{{ t.rotulo }}</strong></span>
           </button>
         </div>
       </CampoBase>
 
-      <div v-if="naoViraCartao" class="explica-tipo" data-explica-tipo>
-        <template v-if="tipoForm === 'cheque'">
-          <p><strong>Cheque especial não é cartão.</strong> É a sua conta ficando com saldo negativo. Para acompanhar, deixe o saldo da conta negativo em Contas: o app mostra o valor e avisa que esses juros estão entre os mais caros.</p>
-        </template>
-        <template v-else>
-          <p><strong>Empréstimo, financiamento e consignado ficam em Dívidas.</strong> Lá você registra as parcelas, os juros e o plano de quitação. Assim a mesma dívida não é contada duas vezes.</p>
-        </template>
-      </div>
-
-      <template v-else>
+      <template v-if="!naoViraCartao">
         <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" :rotulo="tipoForm === 'cartao' ? 'Instituição do cartão' : 'Loja ou instituição'" :placeholder="tipoForm === 'crediario' ? 'Ex: Sparcelado, Casas Bahia, Magalu' : tipoForm === 'loja' ? 'Ex: Renner, C&A, Riachuelo' : 'Ex: Nubank, Inter, Itaú'" padrao="💳" :erro="erros.nome" obrigatorio tema="saida" />
         <CampoSelecao v-model="formulario.contaId" :rotulo="tipoForm === 'crediario' ? 'Conta que paga as parcelas' : 'Conta que paga a fatura'" :opcoes="[{ valor: '', rotulo: 'Nenhuma (sem vínculo)' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" tema="saida" />
         <div class="duas-campos">
@@ -576,9 +579,11 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
         </div>
         <CampoValor v-model="formulario.limite" :rotulo="tipoForm === 'crediario' ? 'Limite da loja (opcional)' : 'Limite (opcional)'" tipo="saida" />
 
-        <CampoBase v-if="tipoForm !== 'crediario'" rotulo="Bandeira" :dica="formulario.bandeira ? `Sugerida pelo nome: ${nomeBandeira(formulario.bandeira)}. Pode trocar.` : ''">
+        <CampoTipo v-if="tipoForm === 'loja'" v-model="temBandeiraLoja" rotulo="Tem bandeira?" :opcoes="[{ id: 'sim', rotulo: 'Sim', tema: 'saida' }, { id: 'nao', rotulo: 'Não', tema: 'saida' }]" data-tem-bandeira />
+        <p v-if="tipoForm === 'loja' && temBandeiraLoja === 'nao'" class="selo-restrito" data-uso-restrito>uso restrito à loja</p>
+        <CampoBase v-if="tipoForm === 'cartao' || (tipoForm === 'loja' && temBandeiraLoja === 'sim')" rotulo="Bandeira" :dica="formulario.bandeira ? `Sugerida pelo nome: ${nomeBandeira(formulario.bandeira)}. Pode trocar.` : ''">
           <div class="bandeiras" role="radiogroup" aria-label="Bandeira">
-            <button v-for="b in BANDEIRAS" :key="b.id || 'nao-sei'" type="button" role="radio" :aria-checked="formulario.bandeira === b.id" :class="['band-op', { ativo: formulario.bandeira === b.id }]" :data-bandeira="b.id || 'nao-sei'" @click="escolherBandeira(b.id)">
+            <button v-for="b in (tipoForm === 'loja' ? BANDEIRAS_LOJA : BANDEIRAS)" :key="b.id || 'nao-sei'" type="button" role="radio" :aria-checked="formulario.bandeira === b.id" :class="['band-op', { ativo: formulario.bandeira === b.id }]" :data-bandeira="b.id || 'nao-sei'" @click="escolherBandeira(b.id)">
               <IconeBandeira v-if="b.id" :bandeira="b.id" :tamanho="16" colorido />
               <span>{{ b.rotulo }}</span>
             </button>
@@ -723,4 +728,6 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .inicio-cab small { font-size: 12px; color: var(--cor-texto-suave); }
 .inicio-cab .seta { transition: transform var(--anim-padrao) var(--anim-curva); }
 .inicio-cab .seta.aberta { transform: rotate(180deg); }
+.rotulo-tipo { display: inline-flex; align-items: center; }
+.selo-restrito { margin: -4px 0 0; align-self: flex-start; display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); border: 1px dashed var(--cor-borda); }
 </style>

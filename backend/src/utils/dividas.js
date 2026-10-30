@@ -137,7 +137,7 @@ function riscoDivida(d, hoje = hojeISO()) {
 // Origem = de onde a dívida veio. Situação = como ela está agora. A aba da página é a situação.
 const ORIGENS = ['cartao', 'crediario', 'emprestimo', 'conta_atrasada', 'pessoa', 'outra'];
 const SITUACOES = ['em_dia', 'atrasada', 'negativada', 'em_acordo', 'quitada'];
-const ROTULO_ORIGEM = { cartao: 'Cartão', crediario: 'Crediário / carnê', emprestimo: 'Empréstimo / financiamento', conta_atrasada: 'Conta atrasada', pessoa: 'Pessoa', outra: 'Outra' };
+const ROTULO_ORIGEM = { cartao: 'Cartão', crediario: 'Crediário', emprestimo: 'Empréstimo / financiamento', conta_atrasada: 'Conta atrasada', pessoa: 'Pessoa', outra: 'Outra' };
 const ROTULO_SITUACAO = { em_dia: 'Em dia', atrasada: 'Atrasada', negativada: 'Negativada', em_acordo: 'Em acordo', quitada: 'Quitada' };
 
 // Dívidas antigas (só com `tipo`/`negativada`/`status`) ganham origem e situação sem perder nada.
