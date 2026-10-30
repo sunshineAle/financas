@@ -697,4 +697,11 @@ onMounted(carregarConectados);
 .seletor-icone { display: flex; flex-wrap: wrap; gap: 6px; }
 .opc-icone { padding: 3px; border-radius: 14px; border: 2px solid transparent; background: none; cursor: pointer; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .opc-icone.ativo { border-color: var(--cor-meta); background: var(--cor-meta-fundo); }
+/* Seção 2 (aprovada 30/10): acento discreto no bloco do saldo (violeta nas metas, petróleo nos investimentos) */
+.bloco-saldo-obj { position: relative; overflow: hidden; }
+.bloco-saldo-obj::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, var(--meta-violeta-medio, #5E18D8), var(--meta-orquidea-medio, #AF32BD) 60%, transparent); pointer-events: none; }
+.bloco-saldo-obj::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--meta-violeta-medio, #5E18D8) 13%, transparent), transparent 60%); }
+.bloco-saldo-obj.inv::before { background: linear-gradient(90deg, #22C3D6, #0B5C68 60%, transparent); }
+.bloco-saldo-obj.inv::after { background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, #22C3D6 13%, transparent), transparent 60%); }
+.bloco-saldo-obj > * { position: relative; z-index: 1; }
 </style>

@@ -1,5 +1,15 @@
 [
   {
+    "versao": "0.11",
+    "data": "2026-10-30",
+    "resumo": "Cards do topo mais discretos: o fundo é igual ao dos outros cards, a cor da página aparece só numa faixa fina e o valor ficou um pouco menor.",
+    "itens": [
+      "Transações, Cartões, Dívidas, Categorias, Custo de vida e os detalhes de conta e investimento com o card de topo discreto.",
+      "Janela Patrimônio: card do topo com Ativos, Passivos e a barra da proporção.",
+      "Metas e Investimentos: o bloco do saldo ganhou o mesmo acento discreto."
+    ]
+  },
+  {
     "versao": "0.10",
     "data": "2026-10-29",
     "resumo": "Início mais claro: \"Seus saldos\" mostra contas, guardado, faturas e dívidas formando o Patrimônio, e o mês futuro mostra o previsto. Formulários mais curtos, \"+\" com recorrência e regra, regras para metas e investimentos, e painel do perfil mais prático.",

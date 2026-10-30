@@ -107,16 +107,16 @@ const mesFatura = (chave) => {
       <p v-else-if="erro" class="estado erro" role="alert">{{ erro }}</p>
       <template v-if="dados">
         <!-- Resumo: líquido = ativos − passivos -->
-        <div class="resumo">
-          <div class="liquido">
-            <small>Patrimônio líquido</small>
-            <strong class="numero-tabular" :class="{ negativo: dados.patrimonioLiquido < 0 }"><Valor :valor="dados.patrimonioLiquido" /></strong>
-          </div>
-          <div class="conta numero-tabular">
-            <span class="pos"><Valor :valor="dados.totalAtivos" /></span>
-            <span class="op">−</span>
-            <span class="neg"><Valor :valor="dados.totalPassivos" /></span>
-          </div>
+        <!-- Seção 2 (aprovada 30/10): card de topo discreto — líquido, Ativos e Passivos e a barra da proporção -->
+        <div class="resumo" data-resumo-patrimonio>
+          <div class="res-cab"><span>Patrimônio líquido</span><small>hoje</small></div>
+          <strong class="res-valor numero-tabular" :class="{ negativo: dados.patrimonioLiquido < 0 }"><Valor :valor="dados.patrimonioLiquido" /></strong>
+          <small class="res-sub">o que você tem − o que deve</small>
+          <dl class="res-linhas">
+            <div><dt>Ativos</dt><dd class="pos numero-tabular"><Valor :valor="dados.totalAtivos" /></dd></div>
+            <div><dt>Passivos</dt><dd class="neg numero-tabular"><Valor :valor="dados.totalPassivos" /></dd></div>
+          </dl>
+          <div class="res-barra" aria-hidden="true"><i :style="{ width: (dados.totalAtivos + dados.totalPassivos > 0 ? Math.round(dados.totalAtivos / (dados.totalAtivos + dados.totalPassivos) * 100) : 0) + '%' }"></i></div>
         </div>
 
         <p v-if="!dados.confere" class="aviso" role="status">
@@ -209,16 +209,23 @@ const mesFatura = (chave) => {
 .estado { color: var(--cor-texto-suave); text-align: center; padding: 24px 0; }
 .estado.erro { color: var(--cor-saida-texto); }
 
-.resumo { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.liquido { display: flex; flex-direction: column; gap: 2px; }
-.liquido small { color: var(--cor-texto-suave); font-size: 0.8rem; }
-.liquido strong { font-size: 1.6rem; font-weight: 700; color: var(--cor-entrada-texto); }
-.liquido strong.negativo { color: var(--cor-saida-texto); }
-.conta { display: flex; gap: 6px; align-items: baseline; font-size: 0.85rem; }
-.conta .pos { color: var(--cor-entrada-texto); }
-.conta .neg { color: var(--cor-saida-texto); }
-.conta .op { color: var(--cor-texto-suave); }
-
+.resumo { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: var(--raio-card, 16px); background: var(--cor-fundo); border: 1px solid var(--cor-borda); }
+.resumo::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, var(--meta-violeta-medio, #5E18D8), var(--cor-investimento, #1597A8) 60%, transparent); }
+.resumo::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--meta-violeta-medio, #5E18D8) 13%, transparent), transparent 60%); }
+.resumo > * { position: relative; z-index: 1; }
+.res-cab { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--cor-texto-suave); }
+.res-cab small { font-weight: 400; }
+.res-valor { font-family: var(--fonte-display); font-size: 26px; font-weight: 700; line-height: 1.15; }
+.res-valor.negativo { color: var(--cor-saida-texto); }
+.res-sub { font-size: 12.5px; color: var(--cor-texto-suave); }
+.res-linhas { margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.res-linhas > div { display: flex; justify-content: space-between; }
+.res-linhas dt { color: var(--cor-texto-suave); }
+.res-linhas dd { margin: 0; font-weight: 700; }
+.res-linhas .pos { color: var(--cor-entrada-texto); }
+.res-linhas .neg { color: var(--cor-saida-texto); }
+.res-barra { height: 6px; border-radius: 6px; background: var(--cor-trilho); margin-top: 8px; overflow: hidden; }
+.res-barra i { display: block; height: 100%; background: linear-gradient(90deg, var(--meta-violeta-medio, #5E18D8), var(--cor-investimento, #1597A8)); }
 .aviso {
   display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 0.82rem;
   background: color-mix(in srgb, var(--cor-amarelo) 16%, transparent); color: var(--cor-texto);

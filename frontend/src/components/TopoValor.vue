@@ -1,5 +1,8 @@
 <script setup>
 // <TopoValor> — card de topo de valores de TODAS as páginas (exceto o Dashboard).
+// Homologação 1.0, seção 2 (aprovada em 30/10/2026, prévia previa-cards-discretos.png): card DISCRETO — fundo igual aos
+// outros cards, o degradê do tema/sinal vira só ACENTO (faixa fina no topo + brilho bem suave no canto), valor menor (26 px)
+// na cor do sinal, ações no estilo normal dos botões. Sem a assinatura de arcos no fundo.
 // Modelo: card "Saldo total" do Dashboard — degradê do tema da página, rótulo pequeno, valor grande,
 // linhas de informação embaixo e um círculo decorativo se misturando ao fundo. Texto sempre branco
 // (--cor-sobre-cor): os degradês dos temas foram escolhidos para dar contraste nos dois temas claro/escuro.
@@ -118,36 +121,38 @@ const negativo = computed(() => estado.value === 'neg');
 
 <style scoped>
 .topo-valor {
-  position: relative; overflow: hidden; border-radius: 22px; padding: 18px 18px 16px; color: var(--cor-sobre-cor);
-  background: var(--sinal-fundo, var(--tema-degrade)); display: flex; flex-direction: column; gap: 6px; box-shadow: var(--sombra-suave);
+  --acento-1: var(--meta-violeta-medio, #5E18D8); --acento-2: var(--cor-investimento, #1597A8); --valor-cor: var(--cor-texto); --cor-sobre-cor: var(--cor-texto);
+  position: relative; overflow: hidden; border-radius: var(--raio-card, 16px); padding: 16px 16px 14px; color: var(--cor-texto);
+  background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); display: flex; flex-direction: column; gap: 4px;
   font-family: var(--fonte-texto); min-width: 0;
 }
-.assinatura { position: absolute; z-index: 0; pointer-events: none; fill: none; stroke: var(--cor-sobre-cor); stroke-opacity: 0.14; stroke-width: 2.4; stroke-linecap: round; }
-.assinatura .ponto { fill: var(--cor-sobre-cor); fill-opacity: 0.2; stroke: none; }
+/* acento: faixa fina no topo + brilho suave no canto superior esquerdo */
+.topo-valor::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; z-index: 0; background: linear-gradient(90deg, var(--acento-1), var(--acento-2) 60%, transparent); }
+.topo-valor::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--acento-1) 13%, transparent), transparent 60%); }
+.tema-meta { --acento-1: var(--meta-violeta-medio, #5E18D8); --acento-2: var(--meta-orquidea-medio, #AF32BD); --valor-cor: var(--cor-texto); }
+.tema-investimento { --acento-1: #22C3D6; --acento-2: var(--investimento-esmeralda-escuro, #0B5C68); }
+.sinal-pos { --acento-1: #4CC27A; --acento-2: #167A42; --valor-cor: var(--cor-entrada-texto, var(--cor-entrada)); }
+.sinal-zero { --acento-1: #B9EBD6; --acento-2: #9FE3C8; --valor-cor: var(--sinal-zero-texto, var(--cor-texto)); }
+.sinal-neg { --acento-1: #CE2239; --acento-2: #DFA511; --valor-cor: var(--cor-saida-texto, var(--cor-saida)); }
+.assinatura { display: none; }
 .topo-valor > :not(.assinatura) { position: relative; z-index: 1; }
-.acoes-topo { margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--cor-sobre-cor) 24%, transparent);
-  --acao-bolha: 38px; --acao-bolha-bg: color-mix(in srgb, var(--cor-sobre-cor) 16%, transparent); --acao-bolha-borda: color-mix(in srgb, var(--cor-sobre-cor) 22%, transparent);
-  --acao-bolha-hover: color-mix(in srgb, var(--cor-sobre-cor) 28%, transparent); --acao-cor: var(--cor-sobre-cor); --acao-texto: var(--cor-sobre-cor);
-  --acao-destaque-bg: var(--cor-sobre-cor); --acao-destaque-cor: var(--sinal-destaque-cor, var(--tema-cor)); }
+.acoes-topo { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--cor-borda);
+  --acao-bolha: 36px; --acao-cor: var(--acento-1); --acao-texto: var(--cor-texto-suave);
+  --acao-destaque-bg: linear-gradient(135deg, var(--acento-1), var(--acento-2)); --acao-destaque-cor: #fff; }
 .acoes-topo :deep(.barra-acoes) { grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 4px 2px; }
 .acoes-topo :deep(.acao) { gap: 4px; padding: 2px; font-size: 11px; }
-.topo-valor > .lateral { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; align-items: center; gap: 6px; }
-.rotulo { font-size: 14px; opacity: 0.92; }
-.periodo { opacity: 0.8; }
-.valor { font-family: var(--fonte-display); font-size: clamp(28px, 7vw, 38px); line-height: 1.15; overflow-wrap: anywhere; }
-.valor .sinal-ico { vertical-align: 0.12em; margin-right: 8px; }
-.sinal-ico { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
-  background: color-mix(in srgb, var(--cor-sobre-cor) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--cor-sobre-cor) 55%, transparent); }
+.topo-valor > .lateral { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 6px; color: var(--cor-texto-suave); }
+.rotulo { font-size: 13px; font-weight: 600; color: var(--cor-texto-suave); padding-right: 40px; }
+.periodo { font-weight: 400; }
+.valor { font-family: var(--fonte-display); font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; color: var(--valor-cor); }
+.valor .sinal-ico { vertical-align: 0.12em; margin-right: 6px; }
+.sinal-ico { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+  background: color-mix(in srgb, var(--valor-cor) 14%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--valor-cor) 50%, transparent); }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-/* REGRA DO SINAL: fundo claro (escuro no tema escuro) e texto escuro; tudo que herda --cor-sobre-cor (bordas, olho, ações) acompanha */
-.sinal-pos { --sinal-fundo: var(--degrade-sinal-pos); --cor-sobre-cor: var(--sinal-pos-texto); --tema-cor: var(--sinal-pos-texto); --sinal-destaque-cor: var(--sinal-pos-de); }
-.sinal-zero { --sinal-fundo: var(--degrade-sinal-zero); --cor-sobre-cor: var(--sinal-zero-texto); --tema-cor: var(--sinal-zero-texto); --sinal-destaque-cor: var(--sinal-zero-de); }
-.sinal-neg { --sinal-fundo: var(--degrade-sinal-neg); --cor-sobre-cor: var(--sinal-neg-texto); --tema-cor: var(--sinal-neg-texto); --sinal-destaque-cor: var(--sinal-neg-de); }
-.sinal-pos, .sinal-zero, .sinal-neg { box-shadow: var(--sombra-suave), inset 0 0 0 1px color-mix(in srgb, var(--cor-sobre-cor) 14%, transparent); }
-.linhas { margin: 6px 0 0; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--cor-sobre-cor) 28%, transparent); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.linhas { margin: 6px 0 0; padding-top: 8px; border-top: 1px solid var(--cor-borda); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .linhas > div { display: flex; justify-content: space-between; gap: 12px; }
-.linhas dt { opacity: 0.9; }
+.linhas dt { color: var(--cor-texto-suave); }
 .linhas dd { margin: 0; font-weight: 600; }
-.linhas .destaque { padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--cor-sobre-cor) 28%, transparent); font-size: 14px; }
-.linhas .destaque dt { opacity: 1; font-weight: 600; }
+.linhas .destaque { padding-top: 6px; border-top: 1px dashed var(--cor-borda); font-size: 14px; }
+.linhas .destaque dt { color: var(--cor-texto); font-weight: 600; }
 </style>

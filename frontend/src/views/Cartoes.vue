@@ -730,4 +730,8 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .inicio-cab .seta.aberta { transform: rotate(180deg); }
 .rotulo-tipo { display: inline-flex; align-items: center; }
 .selo-restrito { margin: -4px 0 0; align-self: flex-start; display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); border: 1px dashed var(--cor-borda); }
+/* Seção 2 (aprovada 30/10): card da fatura discreto, com acento carmim → âmbar */
+.c-fatura { position: relative; overflow: hidden; }
+.c-fatura::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, #CE2239, #DFA511 60%, transparent); pointer-events: none; }
+.c-fatura::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, #CE2239 13%, transparent), transparent 60%); }
 </style>
