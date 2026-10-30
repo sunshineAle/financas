@@ -12,7 +12,7 @@ const router = useRouter();
   <div class="pag-pat">
     <nav class="atalhos-pat" aria-label="Partes do patrimônio">
       <button type="button" @click="router.push('/contas')"><Landmark :size="18" :stroke-width="1.8" />Contas<ChevronRight :size="15" :stroke-width="2" /></button>
-      <button type="button" @click="router.push('/objetivos')"><Target :size="18" :stroke-width="1.8" />Metas e Investimentos<ChevronRight :size="15" :stroke-width="2" /></button>
+      <button type="button" @click="router.push('/objetivos')"><Target :size="18" :stroke-width="1.8" />Objetivos<ChevronRight :size="15" :stroke-width="2" /></button>
     </nav>
     <PatrimonioDetalhe pagina aberto />
   </div>

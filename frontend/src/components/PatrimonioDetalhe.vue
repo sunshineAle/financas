@@ -186,13 +186,11 @@ const mesFatura = (chave) => {
             </ul>
             <button v-if="abertos[l + b.chave] && b.chave === 'contas' && b.itens.length === 1" type="button" class="ver-extrato" @click="irItem(b, b.itens[0])">Ver extrato da conta<ChevronRight :size="15" :stroke-width="2" aria-hidden="true" /></button>
           </li>
-            </section>
-        </div>
-      </template>
+          </template>
         </ul>
 
         <!-- Compromissos futuros: informativo, fora do total -->
-        <div v-if="lado === 'passivos' || compromissos.total > 0" class="compromissos">
+        <div v-if="l === 'passivos' || (!duplo && compromissos.total > 0)" class="compromissos">
           <button type="button" class="comp-topo" :aria-expanded="!!abertos.compromissos" :disabled="!compromissos.itens.length" @click="alternar('compromissos')">
             <CalendarClock :size="18" :stroke-width="2" aria-hidden="true" />
             <span class="comp-nome">Compromissos futuros<small>Parcelas das próximas faturas · fora do total</small></span>
@@ -205,6 +203,8 @@ const mesFatura = (chave) => {
               <b class="numero-tabular"><Valor :valor="i.valor" /></b>
             </li>
           </ul>
+        </div>
+        </section>
         </div>
       </template>
     </div>

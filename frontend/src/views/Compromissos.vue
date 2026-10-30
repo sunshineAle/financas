@@ -43,7 +43,7 @@ function situacaoFatura(c) {
   if (f.paga) return 'paga';
   const dias = Math.ceil((new Date(f.vence + 'T12:00:00') - new Date()) / 86400000);
   if (dias < 0) return 'vencida';
-  return `vence ${dataCurta(f.vence)}`;
+  return `fatura vence ${dataCurta(f.vence)}`;
 }
 const cartoesOrdenados = computed(() => [...cartoes.value].sort((a, b) => (b.faturaAberta?.total || 0) - (a.faturaAberta?.total || 0)));
 const principaisDividas = computed(() => dividas.value.slice(0, 3));
@@ -79,7 +79,7 @@ const maxFuturo = computed(() => Math.max(1, ...mesesFuturos.value.map((m) => m.
           <li v-for="c in cartoesOrdenados.slice(0, 4)" :key="c.id">
             <button type="button" class="linha" @click="router.push(`/cartoes/${c.id}/extrato`)">
               <IconeBanco :icone="c.icone || ''" :nome="c.nome" :tamanho="36" padrao="💳" />
-              <span class="l-nome">{{ c.nome }}<small>{{ tipoDe(c) }} · {{ situacaoFatura(c) }}</small></span>
+              <span class="l-nome">{{ c.nome }}<small>{{ situacaoFatura(c) }}<template v-if="c.tipoCredito && c.tipoCredito !== 'cartao'"> · {{ tipoDe(c) }}</template></small></span>
               <b class="numero-tabular" :class="{ alerta: situacaoFatura(c) === 'vencida' }"><Valor :valor="c.faturaAberta?.total || 0" /></b>
             </button>
           </li>

@@ -169,7 +169,7 @@ onUnmounted(() => { window.removeEventListener('scroll', aoRolar); clearTimeout(
           <component :is="iconeDe(g)" :size="22" :stroke-width="1.7" class="icone-item" />
           <i v-if="temSubmenu(g)" class="sinal" aria-hidden="true"></i>
         </span>
-        <span class="rotulo">{{ rotuloDe(g) }}</span>
+        <span class="rotulo" :class="{ longo: rotuloDe(g).length > 10 }">{{ rotuloDe(g) }}</span>
       </button>
     </template>
   </nav>
@@ -224,6 +224,7 @@ onUnmounted(() => { window.removeEventListener('scroll', aoRolar); clearTimeout(
 .item.ativo .sinal { opacity: 0; }
 .sinal-bolha { top: 9px; right: 9px; opacity: 0.85; color: #fff; }
 .rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rotulo.longo { font-size: 10.5px; letter-spacing: -0.2px; } /* "Compromissos" cabe inteiro no rodapé de 360–390 px */
 
 /* Bolha elevada do item ativo: desliza de um grupo para outro */
 .bolha {
