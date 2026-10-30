@@ -8,7 +8,7 @@
 // \"Minhas finanças\" e a página \"Aparência e avisos\" deixam de existir. Emite `ir(rota)` (atalhos) e `abrir(id)` (lista).
 // Props: extras = itens a mais no início da lista (ex.: Relatórios na tela Mais do celular).
 import { ref, computed } from 'vue';
-import { CalendarClock, PiggyBank, Wand2, Tags, CalendarDays, DatabaseBackup, Bell, ShieldCheck, Info, Heart, ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff } from 'lucide-vue-next';
+import { CalendarClock, PiggyBank, Wand2, Tags, CalendarDays, DatabaseBackup, Bell, ShieldCheck, Info, Heart, ChevronRight, Sun, Moon, SunMoon, Zap, ZapOff, Gauge } from 'lucide-vue-next';
 import AjudaSecao from './AjudaSecao.vue';
 import { modoTema, definirTema, movimento, definirMovimento } from '../services/tema.js';
 import { lerInicio, gravarInicio, descreverInicio, intervaloDoMes } from '../utils/mesFinanceiro.js';
@@ -32,8 +32,9 @@ const LISTA = computed(() => [
   { id: 'apoie', rotulo: 'Apoie o desenvolvedor', icone: Heart },
 ]);
 const TEMAS = [{ id: 'claro', rotulo: 'Claro', icone: Sun }, { id: 'escuro', rotulo: 'Escuro', icone: Moon }, { id: 'auto', rotulo: 'Automático', icone: SunMoon }];
-const ANIM = [{ id: 'normal', rotulo: 'Normais', icone: Zap }, { id: 'reduzido', rotulo: 'Reduzidas', icone: ZapOff }];
-const animAtual = computed(() => (movimento.value === 'reduzido' ? 'reduzido' : 'normal'));
+// 30/10: Animações com as três opções (do aparelho · normais · reduzidas)
+const ANIM = [{ id: 'auto', rotulo: 'Do aparelho', icone: Gauge }, { id: 'normal', rotulo: 'Normais', icone: Zap }, { id: 'reduzido', rotulo: 'Reduzidas', icone: ZapOff }];
+const animAtual = computed(() => movimento.value || 'auto');
 
 // ---- Início do mês financeiro (mesma regra da anotação 51) ----
 const ini = lerInicio();
@@ -111,9 +112,8 @@ async function salvarInicio() {
 .perfil-conteudo { display: flex; flex-direction: column; font-family: var(--fonte-texto); color: var(--cor-texto); }
 .setor { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--cor-borda); }
 .setor:first-child { border-top: 0; padding-top: 0; }
-.blocos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 380px) { .blocos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.quadrado { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 6px; padding: 10px; border-radius: 14px; border: 1px solid var(--cor-card-borda, var(--cor-borda)); background: var(--cor-card, var(--cor-fundo-elevado)); color: var(--cor-texto); font: 600 12px/1.2 var(--fonte-texto); text-align: left; cursor: pointer; }
+.blocos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } /* 30/10: dois e dois */
+.quadrado { min-height: 76px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 6px; padding: 10px; border-radius: 14px; border: 1px solid var(--cor-card-borda, var(--cor-borda)); background: var(--cor-card, var(--cor-fundo-elevado)); color: var(--cor-texto); font: 600 12px/1.2 var(--fonte-texto); text-align: left; cursor: pointer; }
 .quadrado:hover { background: var(--cor-realce); }
 .ic { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: color-mix(in srgb, var(--cor-primaria) 12%, transparent); color: var(--cor-primaria); }
 .retangulo { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; border: 1px solid var(--cor-card-borda, var(--cor-borda)); background: var(--cor-card, var(--cor-fundo-elevado)); }
@@ -122,16 +122,15 @@ async function salvarInicio() {
 .ret-cab b { display: inline-flex; align-items: center; font-size: 13.5px; }
 .ret-cab small { font-size: 12px; color: var(--cor-texto-suave); }
 .segmentos { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); }
-.segmentos button { flex: 1; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 9px; background: none; color: var(--cor-texto-suave); font: 600 12.5px var(--fonte-texto); cursor: pointer; white-space: nowrap; }
+.segmentos button { flex: 1; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 9px; background: none; color: var(--cor-texto-suave); font: 600 12.5px var(--fonte-texto); cursor: pointer; white-space: nowrap; }
 .segmentos button.on { background: var(--cor-interface, var(--cor-primaria)); color: #fff; }
-.segmentos.peq button { min-height: 30px; font-size: 12px; padding: 0 6px; }
+.segmentos.peq button { min-height: 28px; font-size: 11.5px; padding: 0 6px; gap: 4px; }
 .ret-acoes { display: flex; gap: 8px; }
 .ret-acoes select { flex: 1; min-height: 38px; border-radius: 10px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 500 13px var(--fonte-texto); padding: 0 8px; }
 .aplicar { min-height: 38px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--cor-interface, var(--cor-primaria)); color: #fff; font: 600 13px var(--fonte-texto); cursor: pointer; }
 .config { gap: 10px; }
-.conf-linha { display: flex; align-items: center; gap: 10px; }
-.conf-nome { flex: 0 0 76px; font-size: 13.5px; font-weight: 600; }
-.conf-linha .segmentos { flex: 1; }
+.conf-linha { display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+.conf-nome { font-size: 12.5px; font-weight: 600; color: var(--cor-texto-suave); }
 .lista { gap: 2px; }
 .linha { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 6px; border: none; border-radius: 12px; background: none; color: var(--cor-texto); font: 600 14px var(--fonte-texto); cursor: pointer; text-align: left; }
 .linha:hover { background: var(--cor-realce); }

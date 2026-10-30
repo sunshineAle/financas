@@ -1,5 +1,17 @@
 [
   {
+    "versao": "0.12",
+    "data": "2026-10-30",
+    "resumo": "Transações em blocos: gastos por categoria, suas categorias com o limite e as últimas transações. \"Ver todas\" abre o extrato completo, e tocar numa categoria mostra o mês a mês, o limite e as subcategorias.",
+    "itens": [
+      "Transações: gráfico de gastos ou entradas por categoria (rosca ou barras), o bloco Categorias com o gasto e o limite de cada uma (as maiores em destaque) e o aviso das transações sem categoria.",
+      "Últimas transações do mês e o botão \"Ver todas\": no extrato completo, toque ou arraste nas barras do topo para escolher o mês.",
+      "Toque numa categoria para ver o gasto mês a mês, definir ou mudar o limite, filtrar pelas subcategorias e ver as transações dela.",
+      "No computador: botão \"+ Adicionar\" no menu lateral, com Transação, Criar recorrência e Regra de transação.",
+      "Painel da foto: atalhos dois a dois, painel mais estreito e Animações com as três opções. No celular, a foto mostra o seu nome e os avisos, com o botão para abrir o menu completo."
+    ]
+  },
+  {
     "versao": "0.11",
     "data": "2026-10-30",
     "resumo": "Cards do topo mais discretos: o fundo é igual ao dos outros cards, a cor da página aparece só numa faixa fina e o valor ficou um pouco menor.",

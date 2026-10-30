@@ -61,6 +61,13 @@ export const AJUDA_SECOES = {
     ],
     manual: 'transacoes',
   },
+  'transacoes.categorias': {
+    titulo: 'Categorias',
+    texto: [
+      'Quanto saiu em cada categoria no período, com o limite (se tiver). As que mais pesaram aparecem primeiro, com o selo "maior gasto".',
+      'Toque numa categoria para ver o mês a mês, mudar o limite, filtrar pelas subcategorias e ver as transações dela.',
+    ],
+  },
   recorrencia: {
     titulo: 'Criar recorrência',
     texto: [

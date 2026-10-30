@@ -21,7 +21,11 @@ import CampoConta from '../components/CampoConta.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
 import IconeCategoria from '../components/IconeCategoria.vue';
 import BarraDegrade from '../components/BarraDegrade.vue';
-import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, Filter, Landmark, CreditCard, Pencil } from 'lucide-vue-next';
+import DashRosca from '../components/DashRosca.vue';
+import RelBarrasH from '../components/RelBarrasH.vue';
+import RelBarrasMes from '../components/RelBarrasMes.vue';
+import SeletorPopup from '../components/SeletorPopup.vue';
+import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, ChevronLeft, Filter, Landmark, CreditCard, Pencil, ChartPie, ChartBar, TriangleAlert } from 'lucide-vue-next';
 import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
 import { avisar } from '../services/avisos.js';
@@ -38,8 +42,10 @@ const hojeISO = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_
 
 const filtroConta = ref(route.query.conta ? String(route.query.conta) : '');
 const filtroTipo = ref(route.query.tipo === 'entrada' || route.query.tipo === 'saida' ? route.query.tipo : '');
-const filtroCategoria = ref(route.query.categoria ? String(route.query.categoria) : '');
-const filtroReceita = ref(route.query.receita ? String(route.query.receita) : '');
+// Seção 5 (0.12): a categoria agora abre o DETALHE DA CATEGORIA (?cat=s-<id> | e-<nome> | s-0), filtrado no próprio
+// navegador a partir das transações do mês; os links antigos (?categoria= / ?receita=) são convertidos ao abrir.
+const filtroCategoria = ref('');
+const filtroReceita = ref('');
 const nomeFiltroCategoria = computed(() => (filtroReceita.value ? `Entrada: ${filtroReceita.value}` : categorias.value.find((c) => c.id === filtroCategoria.value)?.nome || String(route.query.nomeCategoria || '')));
 function limparFiltroCategoria() { filtroCategoria.value = ''; filtroReceita.value = ''; router.replace({ path: '/transacoes' }); }
 
@@ -183,11 +189,10 @@ async function carregarSugestoes(categoriaId, categoriaReceita) {
 
 watch(() => route.query, (q) => {
   if (route.path !== '/transacoes') return;
+  if (q.categoria || q.receita) { router.replace({ path: '/transacoes', query: { cat: q.categoria ? `s-${q.categoria}` : `e-${q.receita}` } }); return; }
   filtroConta.value = q.conta ? String(q.conta) : '';
-  filtroCategoria.value = q.categoria ? String(q.categoria) : '';
-  filtroReceita.value = q.receita ? String(q.receita) : '';
   filtroTipo.value = q.tipo === 'entrada' || q.tipo === 'saida' ? q.tipo : '';
-});
+}, { immediate: true });
 
 async function salvarSub(t, valor) {
   const r = await pedir(`/api/transacoes/${t.id}`, {
@@ -540,16 +545,130 @@ const gruposPorCategoria = computed(() => {
 });
 
 function alternarAberta(chave) { abertas.value = { ...abertas.value, [chave]: !abertas.value[chave] }; }
+
+// ===== Seção 5 (Versão 0.12): Transações em blocos · Extrato · Detalhe da categoria =====
+// modo 'blocos' (padrão): gráfico por categoria + bloco Categorias + Últimas transações (+ "Ver todas");
+// modo 'extrato' (?ver=extrato): lista completa por dia; as barras do topo escolhem o mês (o filtro de meses some);
+// modo 'categoria' (?cat=…): chips das categorias, gráfico por mês, limite, subcategorias e as transações dela.
+const modo = computed(() => (route.query.cat ? 'categoria' : route.query.ver === 'extrato' ? 'extrato' : 'blocos'));
+function irModo(q) { router.push({ path: '/transacoes', query: q }); }
+function voltarBlocos() { if (window.history.length > 1 && route.query.ver !== undefined || route.query.cat) router.back(); else irModo({}); }
+const abaGrafico = ref('saida'); // 'saida' | 'entrada'
+const tipoGrafico = ref('rosca'); // 'rosca' | 'barras'
+const gruposTipo = (tipo) => (gruposPorCategoria.value.find((s) => s.id === tipo) || { itens: [] }).itens;
+const segmentosGrafico = computed(() => gruposTipo(abaGrafico.value).map((g) => ({ nome: g.info.nome, valor: Math.abs(g.total), cor: g.info.cor || 'var(--cor-texto-suave)', chave: g.chave })));
+const barrasGrafico = computed(() => gruposTipo(abaGrafico.value).map((g) => ({ id: g.chave, rotulo: g.info.nome, valor: Math.abs(g.total), icone: g.info.icone || '', cor: g.info.cor || 'var(--cor-texto-suave)', detalhe: `${Math.round(g.pct)}% · ${g.itens.length} lançamento(s)` })));
+function abrirCategoria(chave) { if (chave) irModo({ cat: chave }); }
+// Bloco Categorias: despesas do período com gasto e limite; as 3 maiores ganham destaque
+const blocoCategorias = computed(() => {
+  const meses = anoInteiro.value ? 12 : 1;
+  const porChave = Object.fromEntries(gruposTipo('saida').map((g) => [g.chave, g]));
+  const lista = categorias.value.map((c, i) => {
+    const g = porChave[`s-${c.id}`];
+    const gasto = g ? Math.abs(g.total) : 0;
+    const teto = (Number(c.teto_mensal) || 0) * meses;
+    return { chave: `s-${c.id}`, id: c.id, nome: c.nome, icone: c.icone, cor: corDespesa(c, i), gasto, teto, pct: teto > 0 ? Math.round((gasto / teto) * 100) : 0, qtd: g ? g.itens.length : 0 };
+  }).filter((c) => c.gasto > 0 || c.teto > 0).sort((a, b) => b.gasto - a.gasto);
+  return lista.map((c, i) => ({ ...c, destaque: i < 3 && c.gasto > 0 }));
+});
+const semCategoria = computed(() => transacoes.value.filter((t) => t.ignorada !== 1 && ['s-0', 'e-0'].includes(infoDe(t).chave)));
+const ultimas = computed(() => ordenadas.value.filter((t) => t.ignorada !== 1).slice(0, 5));
+function faixaCat(pct) {
+  if (pct >= 100) return { de: 'var(--saida-carmim-medio)', ate: 'var(--saida-vermelho-medio)' };
+  if (pct >= 95) return { de: '#E6F9F1', ate: '#9FE3C8' };
+  return { de: 'var(--saida-ambar-medio)', ate: 'var(--saida-carmim-medio)' };
+}
+
+// Extrato: barras dos últimos 12 meses (até o mês escolhido ou o atual) — tocar/arrastar escolhe o mês
+const mesesExtrato = ref([]);
+async function carregarMesesExtrato() {
+  try {
+    const r = await pedir(`/api/dashboard?mes=${periodo.value.chave}`);
+    const d = r.ok ? await r.json() : null;
+    const fluxo = (d && d.fluxoCaixa) || [];
+    const fim = fluxo.findIndex((m) => m.chave === periodo.value.chave);
+    const ate = fim >= 0 ? Math.max(fim + 1, Math.min(fluxo.length, 12)) : fluxo.length;
+    mesesExtrato.value = fluxo.slice(Math.max(0, ate - 12), ate).map((m) => ({ chave: m.chave, rotulo: MESES_CURTOS[Number(m.chave.slice(5, 7)) - 1], entradas: m.entradas, saidas: m.saidas }));
+  } catch { mesesExtrato.value = []; }
+}
+const indiceExtrato = computed(() => mesesExtrato.value.findIndex((m) => m.chave === periodo.value.chave));
+function escolherMesExtrato(i) { const m = mesesExtrato.value[i]; if (!m) return; const [a, mm] = m.chave.split('-').map(Number); escolher(a, mm); }
+watch(() => [modo.value, periodo.value.chave], () => { if (modo.value === 'extrato' && (indiceExtrato.value < 0 || !mesesExtrato.value.length)) carregarMesesExtrato(); }, { immediate: true });
+const moedaInt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v || 0);
+
+// Detalhe da categoria
+const catAtual = computed(() => String(route.query.cat || ''));
+const catTipo = computed(() => (catAtual.value.startsWith('e-') ? 'entrada' : 'saida'));
+const catObj = computed(() => (catAtual.value.startsWith('s-') && catAtual.value !== 's-0' ? categorias.value.find((c) => `s-${c.id}` === catAtual.value) || null : null));
+const catItens = computed(() => transacoes.value.filter((t) => t.ignorada !== 1 && infoDe(t).chave === catAtual.value));
+const catInfo = computed(() => (catItens.value[0] ? infoDe(catItens.value[0]) : catObj.value ? { nome: catObj.value.nome, icone: catObj.value.icone, cor: corDespesa(catObj.value, 0) } : { nome: catAtual.value === 's-0' || catAtual.value === 'e-0' ? 'Sem categoria' : catAtual.value.slice(2), icone: '', cor: null }));
+const catTotal = computed(() => catItens.value.reduce((s, t) => s + Math.abs(t.valor), 0));
+const chipsCategorias = computed(() => {
+  const base = gruposTipo(catTipo.value).map((g) => ({ chave: g.chave, nome: g.info.nome, icone: g.info.icone, cor: g.info.cor }));
+  if (catTipo.value === 'saida') categorias.value.forEach((c, i) => { if (!base.some((b) => b.chave === `s-${c.id}`)) base.push({ chave: `s-${c.id}`, nome: c.nome, icone: c.icone, cor: corDespesa(c, i) }); });
+  return base;
+});
+const subFiltro = ref('');
+watch(catAtual, () => { subFiltro.value = ''; });
+const catSubs = computed(() => [...new Set(catItens.value.map((t) => t.subcategoria).filter(Boolean))]);
+const catLista = computed(() => catItens.value.filter((t) => !subFiltro.value || t.subcategoria === subFiltro.value).sort((a, b) => (a.data < b.data ? 1 : -1)));
+const catGrafico = ref('barras'); // barras por mês | rosca por subcategoria
+const catSegmentos = computed(() => {
+  const m = new Map();
+  catItens.value.forEach((t) => { const k = t.subcategoria || 'Sem subcategoria'; m.set(k, (m.get(k) || 0) + Math.abs(t.valor)); });
+  const cores = ['var(--saida-carmim-medio)', 'var(--saida-tangerina-medio)', 'var(--saida-ambar-medio)', '#C2307A', '#8E7CC3', '#3A9AD9', '#4F5D75'];
+  const coresE = ['#17713D', '#22A55A', '#5BAA3A', '#8BBF2E', '#63C98A'];
+  return [...m].map(([nome, valor], i) => ({ nome, valor, cor: (catTipo.value === 'entrada' ? coresE : cores)[i % 7 % (catTipo.value === 'entrada' ? 5 : 7)] }));
+});
+// gráfico por mês da categoria: os 6 meses até o escolhido (busca só os da categoria)
+const catMeses = ref([]);
+async function carregarCatMeses() {
+  const c = catAtual.value;
+  if (!c || anoInteiro.value) { catMeses.value = []; return; }
+  const [a, m] = periodo.value.chave.split('-').map(Number);
+  const chaves = Array.from({ length: 6 }, (_, i) => { const t = a * 12 + (m - 1) - (5 - i); return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`; });
+  const q = (k) => { const p = new URLSearchParams({ mes: k }); if (c.startsWith('s-') && c !== 's-0') p.set('categoriaId', c.slice(2)); else if (c.startsWith('e-') && c !== 'e-0') p.set('categoriaReceita', c.slice(2)); return p; };
+  try {
+    const res = await Promise.all(chaves.map((k) => pedir(`/api/transacoes?${q(k)}`).then((r) => r.json())));
+    if (c !== catAtual.value) return;
+    catMeses.value = chaves.map((k, i) => {
+      const itens = (res[i].transacoes || []).filter((t) => t.ignorada !== 1 && infoDe(t).chave === c);
+      return { chave: k, rotulo: MESES_CURTOS[Number(k.slice(5, 7)) - 1], valor: itens.reduce((s, t) => s + Math.abs(t.valor), 0) };
+    });
+  } catch { catMeses.value = []; }
+}
+watch(() => [catAtual.value, periodo.value.chave, transacoes.value.length], () => { if (modo.value === 'categoria') carregarCatMeses(); }, { immediate: true });
+const catMaiorMes = computed(() => Math.max(1, ...catMeses.value.map((x) => x.valor)));
+// Limite da categoria (só despesas com categoria)
+const limiteAberto = ref(false);
+const limiteValor = ref(0);
+const limiteErro = ref('');
+function abrirLimite() { limiteValor.value = Number(catObj.value?.teto_mensal) || 0; limiteErro.value = ''; limiteAberto.value = true; }
+async function salvarLimite() {
+  const c = catObj.value;
+  if (!c) return;
+  const r = await pedir(`/api/categorias/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tetoMensal: Number(limiteValor.value) || 0 }) });
+  if (!r.ok) { limiteErro.value = (await r.json().catch(() => ({}))).erro || 'Não foi possível salvar o limite.'; return; }
+  limiteAberto.value = false;
+  await carregarApoio();
+  avisar(Number(limiteValor.value) > 0 ? `Limite de ${c.nome}: ${moeda(Number(limiteValor.value))} por mês.` : `${c.nome} ficou sem limite.`, { tipo: 'ok' });
+}
 const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !filtroCategoria.value && !filtroReceita.value);
 </script>
 
 <template>
   <div class="pagina">
     <ReservasAuto @decidido="carregar" />
-    <CabecalhoPagina titulo="Transações" cor="var(--entrada-cobalto-medio)">
+    <CabecalhoPagina titulo="Transações" cor="var(--entrada-cobalto-medio)" :sem-mes="modo === 'extrato'">
     <template #corpo>
-    <div v-deslizar-mes class="area-mes">
-      <TopoValor tema="entrada" :variante="1" rotulo="Saldo do mês" :periodo="periodoTxt" :valor="saldoAnim" :linhas="[{ rotulo: 'Entradas', valor: entradasAnim }, { rotulo: 'Saídas', valor: saidasAnim }]">
+    <div v-deslizar-mes class="area-mes" :class="'modo-' + modo">
+      <!-- ===== Extrato / Detalhe da categoria: cabeçalho com voltar ===== -->
+      <div v-if="modo !== 'blocos'" class="cab-sub">
+        <button type="button" class="voltar-sub" aria-label="Voltar para Transações" data-voltar-transacoes @click="voltarBlocos"><ChevronLeft :size="18" :stroke-width="2" />Transações</button>
+        <b>{{ modo === 'extrato' ? 'Todas as transações' : catInfo.nome }}</b>
+      </div>
+
+      <TopoValor v-if="modo === 'blocos'" tema="entrada" :variante="1" rotulo="Saldo do mês" :periodo="periodoTxt" :valor="saldoAnim" :linhas="[{ rotulo: 'Entradas', valor: entradasAnim }, { rotulo: 'Saídas', valor: saidasAnim }]">
         <template #rotulo>Saldo do mês<AjudaSecao v-if="resumo.quantidadeCartao" secao="transacoes.cartao" /></template>
         <div class="sobra">
           <BarraDegrade :pct="sobra.pct" de="var(--entrada-ceu-medio)" ate="var(--cor-sobre-cor)" :altura="8" />
@@ -565,7 +684,16 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         </template>
       </TopoValor>
 
-      <CardPadrao v-if="filtroAberto" class="painel-filtro" @click.stop>
+      <!-- Extrato: barras que escolhem o mês + filtro -->
+      <CardPadrao v-if="modo === 'extrato'" class="painel-extrato" data-extrato>
+        <div class="cab-extrato">
+          <span class="ext-mes">{{ anoInteiro ? ano : `${MESES[periodo.mes - 1]} de ${ano}` }}</span>
+          <button type="button" class="botao-filtro" :class="{ on: filtrosAtivos }" @click.stop="filtroAberto = !filtroAberto"><Filter :size="15" :stroke-width="2" />{{ filtrosAtivos ? `Filtro (${filtrosAtivos})` : 'Filtro' }}</button>
+        </div>
+        <RelBarrasMes :meses="mesesExtrato" :selecionado="indiceExtrato" :formato="moedaInt" @escolher="escolherMesExtrato" />
+      </CardPadrao>
+
+      <CardPadrao v-if="filtroAberto && modo === 'extrato'" class="painel-filtro" @click.stop>
         <CampoSelecao v-model="filtroConta" rotulo="Conta" :opcoes="[{ valor: '', rotulo: 'Todas as contas' }, ...contas.map((c) => ({ valor: c.id, rotulo: c.nome }))]" />
         <CampoSelecao v-model="filtroTipo" rotulo="Tipo" :opcoes="[{ valor: '', rotulo: 'Entradas e saídas' }, { valor: 'entrada', rotulo: 'Só entradas' }, { valor: 'saida', rotulo: 'Só saídas' }]" />
       </CardPadrao>
@@ -578,20 +706,106 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <button type="button" class="botao-icone" aria-label="Fechar aviso" @click="aviso = null">Fechar</button>
       </p>
 
-      <AbasSeletor v-model="visao" :abas="[{ id: 'data', rotulo: 'Por data' }, { id: 'categoria', rotulo: 'Por categoria' }]" tema="neutro" bloco />
+      <!-- ===== BLOCOS (padrão) ===== -->
+      <template v-if="modo === 'blocos'">
+        <!-- 1. Gastos | Entradas por categoria (rosca ↔ barras) -->
+        <CardPadrao class="bloco-tx" data-bloco-grafico>
+          <div class="cab-bloco">
+            <div class="mini-abas" role="tablist" aria-label="Gastos ou entradas por categoria">
+              <button type="button" role="tab" :aria-selected="abaGrafico === 'saida'" :class="{ on: abaGrafico === 'saida' }" @click="abaGrafico = 'saida'">Gastos por categoria</button>
+              <button type="button" role="tab" :aria-selected="abaGrafico === 'entrada'" :class="{ on: abaGrafico === 'entrada' }" @click="abaGrafico = 'entrada'">Entradas</button>
+            </div>
+            <button type="button" class="troca-graf" :aria-label="tipoGrafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" @click="tipoGrafico = tipoGrafico === 'rosca' ? 'barras' : 'rosca'"><component :is="tipoGrafico === 'rosca' ? ChartBar : ChartPie" :size="16" :stroke-width="2" /></button>
+          </div>
+          <DashRosca v-if="tipoGrafico === 'rosca'" compacta :key="abaGrafico + periodo.chave" :segmentos="segmentosGrafico" :rotulo-total="abaGrafico === 'saida' ? 'gasto total' : 'entrou'" :rotulo-vazio="abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.'" @clicar="(f) => abrirCategoria(f.chave)" />
+          <template v-else>
+            <RelBarrasH v-if="barrasGrafico.length" :itens="barrasGrafico" :formato="moeda" clicavel :de="abaGrafico === 'saida' ? 'var(--saida-ambar-medio)' : '#4CC27A'" :ate="abaGrafico === 'saida' ? 'var(--saida-carmim-medio)' : '#167A42'" @clicar="(i) => abrirCategoria(i.id)" />
+            <p v-else class="nota-vazia">{{ abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.' }}</p>
+          </template>
+        </CardPadrao>
 
-      <p v-if="filtroCategoria || filtroReceita" class="chip-filtro">
-        Categoria: <strong>{{ nomeFiltroCategoria }}</strong>
-        <button type="button" class="botao-icone" @click="limparFiltroCategoria">Ver todas</button>
-      </p>
+        <!-- 2. Categorias: gasto e limite, maiores em destaque, aviso de sem categoria -->
+        <CardPadrao class="bloco-tx" titulo="Categorias" ajuda="transacoes.categorias" data-bloco-categorias>
+          <button v-if="semCategoria.length" type="button" class="aviso-semcat" data-sem-categoria @click="abrirCategoria('s-0')">
+            <TriangleAlert :size="17" :stroke-width="2" /><span><b>{{ semCategoria.length }} sem categoria</b> — toque para categorizar</span><ChevronRight :size="16" :stroke-width="2" />
+          </button>
+          <ul v-if="blocoCategorias.length" class="lista-cat">
+            <li v-for="c in blocoCategorias" :key="c.chave">
+              <button type="button" class="linha-cat" :class="{ destaque: c.destaque }" @click="abrirCategoria(c.chave)">
+                <IconeCategoria :valor="c.icone || ''" tipo="saida" :cor="c.cor" :tamanho="38" />
+                <span class="lc-corpo">
+                  <span class="lc-topo"><span class="lc-nome">{{ c.nome }}<small v-if="c.destaque" class="selo-maior">maior gasto</small></span><b class="numero-tabular">{{ moeda(c.gasto) }}</b></span>
+                  <BarraDegrade v-if="c.teto > 0" :pct="c.pct" :de="faixaCat(c.pct).de" :ate="faixaCat(c.pct).ate" :altura="6" :marcador="false" />
+                  <small class="lc-sub numero-tabular">{{ c.teto > 0 ? `${c.pct}% de ${moeda(c.teto)}` : 'sem limite' }} · {{ c.qtd }} lançamento(s)</small>
+                </span>
+              </button>
+            </li>
+          </ul>
+          <p v-else class="nota-vazia">Nenhum gasto categorizado neste período.</p>
+        </CardPadrao>
 
+        <!-- 3. Últimas transações + Ver todas -->
+        <CardPadrao class="bloco-tx" titulo="Últimas transações" data-bloco-ultimas>
+          <div v-if="ultimas.length" class="cartao-lista-sem">
+            <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+          </div>
+          <p v-else class="nota-vazia">Nenhuma transação {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
+          <button type="button" class="ver-todas" data-ver-todas @click="irModo({ ver: 'extrato' })">Ver todas<ChevronRight :size="16" :stroke-width="2" /></button>
+        </CardPadrao>
+      </template>
+
+      <!-- ===== DETALHE DA CATEGORIA ===== -->
+      <template v-if="modo === 'categoria'">
+        <div class="chips-cat" role="tablist" aria-label="Trocar de categoria">
+          <button v-for="c in chipsCategorias" :key="c.chave" type="button" role="tab" :aria-selected="c.chave === catAtual" :class="['chip-c', { on: c.chave === catAtual }]" @click="router.replace({ path: '/transacoes', query: { cat: c.chave } })">
+            <IconeCategoria :valor="c.icone || ''" :tipo="catTipo" :cor="c.cor || undefined" :tamanho="22" />{{ c.nome }}
+          </button>
+        </div>
+        <CardPadrao class="bloco-tx" data-detalhe-categoria>
+          <div class="cat-cab-det">
+            <IconeCategoria :valor="catInfo.icone || ''" :tipo="catTipo" :cor="catInfo.cor || undefined" :tamanho="44" />
+            <span class="cd-txt"><b>{{ catInfo.nome }}</b><small>{{ anoInteiro ? ano : `${MESES[periodo.mes - 1]} de ${ano}` }} · {{ catItens.length }} lançamento(s)</small></span>
+            <strong class="cd-total numero-tabular" :class="catTipo === 'entrada' ? 'pos' : 'neg'">{{ moeda(catTotal) }}</strong>
+          </div>
+          <div v-if="catObj" class="limite-cat">
+            <template v-if="Number(catObj.teto_mensal) > 0">
+              <BarraDegrade :pct="Math.round(catTotal / (catObj.teto_mensal * (anoInteiro ? 12 : 1)) * 100)" :de="faixaCat(Math.round(catTotal / (catObj.teto_mensal * (anoInteiro ? 12 : 1)) * 100)).de" :ate="faixaCat(Math.round(catTotal / (catObj.teto_mensal * (anoInteiro ? 12 : 1)) * 100)).ate" :altura="8" :marcador="false" />
+              <span class="lim-txt numero-tabular">Limite {{ moeda(catObj.teto_mensal) }}/mês · {{ catTotal <= catObj.teto_mensal * (anoInteiro ? 12 : 1) ? `ainda pode gastar ${moeda(catObj.teto_mensal * (anoInteiro ? 12 : 1) - catTotal)}` : `passou ${moeda(catTotal - catObj.teto_mensal * (anoInteiro ? 12 : 1))}` }}</span>
+            </template>
+            <button type="button" class="link-lim" data-limite @click="abrirLimite">{{ Number(catObj.teto_mensal) > 0 ? 'Mudar limite' : 'Definir limite' }}</button>
+          </div>
+          <div class="cab-bloco">
+            <span class="sub-tit">{{ catGrafico === 'barras' ? 'Mês a mês' : 'Por subcategoria' }}</span>
+            <button type="button" class="troca-graf" :aria-label="catGrafico === 'barras' ? 'Ver em rosca' : 'Ver em barras'" @click="catGrafico = catGrafico === 'barras' ? 'rosca' : 'barras'"><component :is="catGrafico === 'barras' ? ChartPie : ChartBar" :size="16" :stroke-width="2" /></button>
+          </div>
+          <div v-if="catGrafico === 'barras'" class="meses-cat" aria-label="Gasto da categoria nos últimos 6 meses">
+            <div v-for="m in catMeses" :key="m.chave" class="mc" :class="{ sel: m.chave === periodo.chave }">
+              <span class="mc-v numero-tabular">{{ moedaInt(m.valor) }}</span>
+              <span class="mc-barra" :class="catTipo" :style="{ height: Math.max(3, (m.valor / catMaiorMes) * 100) + '%' }"></span>
+              <span class="mc-r">{{ m.rotulo }}</span>
+            </div>
+            <p v-if="!catMeses.length" class="nota-vazia">Gráfico por mês disponível na visão de mês.</p>
+          </div>
+          <DashRosca v-else compacta :segmentos="catSegmentos" rotulo-total="no período" rotulo-vazio="Sem lançamentos." />
+        </CardPadrao>
+        <div v-if="catSubs.length" class="chips-sub" role="group" aria-label="Filtrar por subcategoria">
+          <button type="button" :class="['chip-s', { on: !subFiltro }]" @click="subFiltro = ''">Todas</button>
+          <button v-for="sb in catSubs" :key="sb" type="button" :class="['chip-s', { on: subFiltro === sb }]" @click="subFiltro = subFiltro === sb ? '' : sb">{{ sb }}</button>
+        </div>
+        <CardPadrao class="cartao-lista" sem-padding>
+          <LinhaTransacao v-for="t in catLista" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+          <p v-if="!catLista.length" class="nota-vazia pad">Nenhuma transação nesta categoria {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
+        </CardPadrao>
+      </template>
+
+      <template v-if="modo === 'extrato'">
       <p v-if="!carregando && transacoes.length === 0" class="vazio">
         <Receipt :size="28" :stroke-width="1.6" />
         <span>Nenhuma transação {{ semFiltros ? (anoInteiro ? 'neste ano' : 'neste mês') : 'neste filtro' }}.</span>
       </p>
 
-      <div v-else :key="`${periodo.chave}-${visao}`" class="lista-wrap">
-        <template v-if="visao === 'data' && !anoInteiro">
+      <div v-else :key="`${periodo.chave}-extrato`" class="lista-wrap">
+        <template v-if="!anoInteiro">
           <section v-for="g in gruposPorDia" :key="g.iso" class="grupo">
             <header class="titulo-grupo">
               <span>{{ g.rotulo }}</span>
@@ -603,7 +817,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           </section>
         </template>
 
-        <template v-else-if="visao === 'data'">
+        <template v-else>
           <CardPadrao v-for="g in gruposPorMes" :key="g.m" tag="button" clicavel @abrir="escolher(ano, g.m)">
             <span class="cartao-mes">
               <span class="mes-topo">
@@ -621,32 +835,18 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           </CardPadrao>
         </template>
 
-        <template v-else>
-          <section v-for="sec in gruposPorCategoria" :key="sec.id" class="grupo">
-            <header class="titulo-grupo"><span>{{ sec.titulo }}</span></header>
-            <CardPadrao class="cartao-lista" sem-padding>
-              <div v-for="g in sec.itens" :key="g.chave" class="cat-grupo">
-                <button type="button" class="cat-cab" :aria-expanded="!!abertas[g.chave]" @click="alternarAberta(g.chave)">
-                  <IconeCategoria :valor="g.info.neutra ? (g.info.tipoNeutro === 'fatura' ? 'fatura-fechada' : 'transferir') : (g.info.icone || '')" :tipo="g.tipo === 'entrada' ? 'entrada' : 'saida'" :cor="g.info.neutra ? 'var(--cor-texto-suave)' : (g.info.cor || '')" :tamanho="40" />
-                  <span class="cat-textos">
-                    <span class="cat-nome">{{ g.info.nome }}</span>
-                    <span class="cat-qtd">{{ g.itens.length }} lançamento(s) · {{ Math.round(g.pct) }}%</span>
-                    <span class="cat-trilho"><span class="cat-fill" :style="{ width: Math.min(100, g.pct) + '%', '--c': g.info.cor || 'var(--cor-texto-suave)' }"></span></span>
-                  </span>
-                  <span class="cat-total numero-tabular" :class="g.info.neutra ? 'neutro' : g.total < 0 ? 'negativo' : 'positivo'">{{ g.total < 0 ? '−' : '+' }} {{ moeda(Math.abs(g.total)) }}</span>
-                  <ChevronDown :size="18" :stroke-width="2" class="seta-cat" :class="{ aberta: abertas[g.chave] }" />
-                </button>
-                <div v-if="abertas[g.chave]" class="cat-itens">
-                  <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
-                </div>
-              </div>
-            </CardPadrao>
-          </section>
-        </template>
       </div>
+      </template>
     </div>
     </template>
     </CabecalhoPagina>
+    <SeletorPopup :aberto="limiteAberto" :titulo="catObj ? `Limite de ${catObj.nome}` : 'Limite'" tema="saida" @fechar="limiteAberto = false">
+      <div class="form-limite">
+        <CampoValor v-model="limiteValor" tipo="saida" rotulo="Limite por mês" dica="Deixe zero para ficar sem limite." />
+        <p v-if="limiteErro" class="erro-lim" role="alert">{{ limiteErro }}</p>
+        <button type="button" class="salvar-lim" data-salvar-limite @click="salvarLimite">Salvar limite</button>
+      </div>
+    </SeletorPopup>
 
     <div v-if="menu" class="menu-pontos" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
       <button type="button" @click="abrirEdicao(menu.t)">Editar</button>
@@ -740,7 +940,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 <style scoped>
 .pagina {
   --txt-entrada: var(--entrada-royal-claro); --txt-saida: var(--saida-carmim-claro);
-  padding: 0 0 var(--espaco-fim); max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao);
+  padding: 0 0 var(--espaco-fim); max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--espaco-secao);
 }
 :global(:root[data-theme='light']) .pagina { --txt-entrada: var(--entrada-royal-medio); --txt-saida: var(--saida-carmim-medio); }
 
@@ -833,4 +1033,73 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .resumo-tx .detalhes-tx { margin: 0; }
 .resumo-tx:hover .detalhes-tx { border-color: color-mix(in srgb, var(--cor-primaria) 40%, var(--cor-borda)); }
 .editar-dados { align-self: flex-end; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--cor-primaria); }
+/* ===== Seção 5 (0.12): blocos, extrato e detalhe da categoria ===== */
+.cab-sub { display: flex; align-items: center; gap: 10px; }
+.cab-sub b { font-family: var(--fonte-display); font-size: 17px; }
+.voltar-sub { display: inline-flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); font: 600 13px var(--fonte-texto); cursor: pointer; }
+.voltar-sub:hover { color: var(--cor-texto); background: var(--cor-realce); }
+.bloco-tx { gap: 10px; }
+.cab-bloco { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mini-abas { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); }
+.mini-abas button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--cor-texto-suave); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
+.mini-abas button.on { background: var(--cor-interface, var(--cor-primaria)); color: #fff; }
+.troca-graf { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); cursor: pointer; }
+.troca-graf:hover { color: var(--cor-texto); background: var(--cor-realce); }
+.nota-vazia { margin: 0; font-size: 13px; color: var(--cor-texto-suave); }
+.nota-vazia.pad { padding: 14px; }
+.aviso-semcat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--cor-amarelo) 40%, transparent); background: color-mix(in srgb, var(--cor-amarelo) 10%, transparent); color: var(--cor-texto); font: 13.5px var(--fonte-texto); text-align: left; cursor: pointer; }
+.aviso-semcat svg:first-child { color: var(--cor-amarelo); flex: none; }
+.aviso-semcat span { flex: 1; }
+.lista-cat { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.linha-cat { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 6px; border: 0; border-radius: 12px; background: none; color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
+.linha-cat:hover { background: var(--cor-realce); }
+.linha-cat.destaque { background: color-mix(in srgb, var(--cor-saida) 6%, transparent); }
+.lc-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lc-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.lc-nome { font-size: 14.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.lc-topo b { font-family: var(--fonte-display); font-size: 14.5px; }
+.lc-sub { font-size: 12px; color: var(--cor-texto-suave); }
+.selo-maior { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--cor-saida-texto, var(--cor-saida)); background: color-mix(in srgb, var(--cor-saida) 14%, transparent); }
+.ver-todas { align-self: center; display: inline-flex; align-items: center; gap: 2px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-primaria); font: 600 13.5px var(--fonte-texto); cursor: pointer; }
+.ver-todas:hover { background: var(--cor-realce); }
+.cartao-lista-sem { display: flex; flex-direction: column; }
+.painel-extrato { gap: 10px; }
+.cab-extrato { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ext-mes { font-family: var(--fonte-display); font-size: 15px; font-weight: 600; }
+.ext-mes::first-letter { text-transform: uppercase; }
+.botao-filtro { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
+.botao-filtro.on { color: var(--cor-primaria); border-color: var(--cor-primaria); }
+.chips-cat, .chips-sub { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.chips-cat::-webkit-scrollbar, .chips-sub::-webkit-scrollbar { display: none; }
+.chip-c { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px 0 6px; border-radius: 999px; border: 1.5px solid var(--cor-borda); background: var(--cor-card); color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); white-space: nowrap; cursor: pointer; }
+.chip-c.on { border-color: var(--cor-primaria); background: var(--cor-realce); }
+.chip-s { flex: none; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: var(--cor-card); color: var(--cor-texto-suave); font: 600 12px var(--fonte-texto); white-space: nowrap; cursor: pointer; }
+.chip-s.on { color: var(--cor-texto); border-color: var(--cor-primaria); }
+.cat-cab-det { display: flex; align-items: center; gap: 12px; }
+.cd-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cd-txt b { font-family: var(--fonte-display); font-size: 17px; }
+.cd-txt small { font-size: 12px; color: var(--cor-texto-suave); }
+.cd-txt small::first-letter { text-transform: uppercase; }
+.cd-total { font-family: var(--fonte-display); font-size: 19px; }
+.cd-total.neg { color: var(--cor-saida-texto, var(--cor-saida)); }
+.cd-total.pos { color: var(--cor-entrada-texto, var(--cor-entrada)); }
+.limite-cat { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); }
+.lim-txt { font-size: 12.5px; color: var(--cor-texto-suave); }
+.link-lim { align-self: flex-start; min-height: 32px; padding: 0; border: 0; background: none; color: var(--cor-primaria); font: 600 13px var(--fonte-texto); cursor: pointer; }
+.sub-tit { font-size: 13px; font-weight: 600; color: var(--cor-texto-suave); }
+.meses-cat { display: flex; align-items: flex-end; gap: 6px; height: 130px; }
+.mc { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; opacity: 0.6; }
+.mc.sel { opacity: 1; }
+.mc-v { font-size: 9.5px; color: var(--cor-texto-suave); white-space: nowrap; }
+.mc-barra { width: min(22px, 60%); border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, #E15F0E, #CE2239); }
+.mc-barra.entrada { background: linear-gradient(180deg, #4CC27A, #167A42); }
+.mc-r { font-size: 10px; font-weight: 600; color: var(--cor-texto-suave); }
+.form-limite { display: flex; flex-direction: column; gap: 10px; }
+.erro-lim { margin: 0; font-size: 13px; color: var(--cor-alerta-texto, var(--cor-alerta)); }
+.salvar-lim { min-height: 46px; border-radius: 12px; border: 0; background: var(--cor-interface, var(--cor-primaria)); color: #fff; font: 600 14.5px var(--fonte-texto); cursor: pointer; }
+/* PC: gráfico + categorias lado a lado, últimas transações embaixo (seção 17) */
+@media (min-width: 1100px) {
+  .modo-blocos { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .modo-blocos > :not([data-bloco-grafico]):not([data-bloco-categorias]) { grid-column: 1 / -1; }
+}
 </style>

@@ -7,7 +7,7 @@
 // lista) · rodapé Bloquear agora. Com "ocultar valores" ligado, os valores em R$ dos avisos ficam escondidos.
 import { ref, computed, watch, nextTick, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { X, CalendarClock, TriangleAlert, Info, Pencil, Lock, ArrowLeft } from 'lucide-vue-next';
+import { X, CalendarClock, TriangleAlert, Info, Pencil, Lock, ArrowLeft, ChevronRight } from 'lucide-vue-next';
 import AvatarMini from './AvatarMini.vue';
 import Modal from './Modal.vue';
 import PerfilConteudo from './PerfilConteudo.vue';
@@ -89,7 +89,9 @@ onUnmounted(() => window.removeEventListener('keydown', aoTeclar));
           </li>
         </ul>
       </template>
-      <PerfilConteudo @ir="ir" @abrir="abrir" />
+      <!-- 30/10: no celular a foto mostra só o nome e os avisos; o menu completo fica na tela Mais -->
+      <p v-if="!qtd" class="sem-avisos">Nenhum aviso agora.</p>
+      <button type="button" class="menu-completo" data-menu-completo @click="ir('/mais')">Abrir o menu completo<ChevronRight :size="18" :stroke-width="1.8" /></button>
     </div>
     <template #rodape>
       <button type="button" class="bloquear" @click="bloquearAgora"><Lock :size="17" :stroke-width="1.9" aria-hidden="true" />Bloquear agora</button>
@@ -182,7 +184,10 @@ li.info .ic { background: var(--cor-entrada-fundo); color: var(--cor-primaria); 
 
 /* PC/web: painel lateral à direita, por cima da página */
 .fundo-painel { position: fixed; inset: 0; z-index: 900; background: rgba(8, 6, 20, 0.18); }
-.flutuante { position: absolute; top: 60px; right: 14px; width: min(420px, calc(100vw - 28px)); max-height: calc(100vh - 76px); display: flex; flex-direction: column; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 20px; box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6); overflow: hidden; transform-origin: top right; }
+.sem-avisos { margin: 0; font-size: 13px; color: var(--cor-texto-suave); }
+.menu-completo { display: flex; align-items: center; justify-content: space-between; min-height: 50px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); font: 600 14.5px var(--fonte-texto); cursor: pointer; }
+.menu-completo:hover { background: var(--cor-realce); }
+.flutuante { position: absolute; top: 60px; right: 14px; width: min(360px, calc(100vw - 28px)); max-height: calc(100vh - 76px); display: flex; flex-direction: column; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda); border-radius: 20px; box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6); overflow: hidden; transform-origin: top right; }
 /* setinha apontando para a foto */
 .flutuante::before { content: ''; position: absolute; top: -6px; right: 22px; width: 12px; height: 12px; background: var(--cor-fundo-elevado); border-left: 1px solid var(--cor-borda); border-top: 1px solid var(--cor-borda); transform: rotate(45deg); }
 .corpo-painel { flex: 1; overflow-y: auto; padding: 16px 16px 10px; overscroll-behavior: contain; }

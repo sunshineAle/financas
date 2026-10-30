@@ -6,6 +6,7 @@ import BarraRodape from './BarraRodape.vue';
 import AvisoToast from './AvisoToast.vue';
 import LancamentoModal from './LancamentoModal.vue';
 import RecorrenciaModal from './RecorrenciaModal.vue';
+import MenuAdicionarWeb from './MenuAdicionarWeb.vue';
 import RegraModal from './RegraModal.vue';
 import { novaRegraAberta, acaoRapidaFoiSalva } from '../services/acoesRapidas.js';
 import { avisar as avisarRegra } from '../services/avisos.js';
@@ -114,6 +115,8 @@ onUnmounted(() => { limparTempos(); document.removeEventListener('pointerdown', 
           </button>
         </div>
 
+        <!-- 30/10: "+ Adicionar" no PC, com os mesmos dois níveis do "+" do celular -->
+        <MenuAdicionarWeb :expandido="expandido" />
         <nav class="nav-lateral" aria-label="Navegação principal">
           <router-link
             v-for="item in itensMenu"

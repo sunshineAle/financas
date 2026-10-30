@@ -182,7 +182,7 @@ function abrir() {
 
 <template>
   <div class="linha-tx-envoltorio" :class="{ arrastavel, aberta }">
-  <div v-if="arrastavel" class="acoes-arraste" :aria-hidden="!aberta">
+  <div v-if="arrastavel" class="acoes-arraste" :aria-hidden="!aberta" :style="{ visibility: dx < 0 ? 'visible' : 'hidden' }">
     <button type="button" class="ac editar" :tabindex="aberta ? 0 : -1" @click.stop="acao('editar')"><Pencil :size="18" :stroke-width="2" aria-hidden="true" />Editar</button>
     <button type="button" class="ac excluir" :tabindex="aberta ? 0 : -1" :disabled="!podeExcluir" :title="podeExcluir ? '' : 'Esta transação não pode ser excluída'" @click.stop="acao('excluir')"><Trash2 :size="18" :stroke-width="2" aria-hidden="true" />Excluir</button>
   </div>
