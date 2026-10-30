@@ -4,6 +4,7 @@
 import { ref, computed } from 'vue';
 import { Landmark, Handshake, ShoppingBag, CreditCard, Ban, TriangleAlert, ChevronDown } from 'lucide-vue-next';
 import CampoBase from './CampoBase.vue';
+import SeletorPopup from './SeletorPopup.vue';
 import Valor from './Valor.vue';
 
 const props = defineProps({ modelValue: { type: [String, Number], default: '' }, dividas: { type: Array, default: () => [] }, rotulo: { type: String, default: 'Vincular a acordo, dívida ou crediário (opcional)' }, tema: String });
@@ -22,9 +23,10 @@ const sub = (d) => [TIPOS[d.tipo] || 'Dívida', d.credor || d.conta_nome, d.cart
     <button type="button" class="item-div on" :aria-expanded="aberto" data-divida-escolhida @click="aberto = !aberto">
       <span class="ic" :class="{ neutro: !escolhida }"><component :is="escolhida ? icone(escolhida) : Ban" :size="18" :stroke-width="2" aria-hidden="true" /></span>
       <span class="txt"><b>{{ escolhida ? escolhida.nome : 'Nenhum' }}</b><small v-if="escolhida">{{ sub(escolhida) }}</small></span>
-      <span class="trocar">{{ aberto ? 'Fechar' : 'Trocar' }}<ChevronDown :size="16" :stroke-width="2" :style="{ transform: aberto ? 'rotate(180deg)' : null }" aria-hidden="true" /></span>
+      <span class="trocar">Trocar<ChevronDown :size="16" :stroke-width="2" aria-hidden="true" /></span>
     </button>
-    <div v-if="aberto" class="lista-div" role="radiogroup" :aria-label="rotulo">
+    <SeletorPopup :aberto="aberto" titulo="Vincular a acordo, dívida ou crediário" :tema="tema" @fechar="aberto = false">
+    <div class="lista-div" role="radiogroup" :aria-label="rotulo">
       <button type="button" role="radio" class="item-div nenhum" :class="{ on: !modelValue }" :aria-checked="!modelValue" @click="escolher('')">
         <span class="ic"><Ban :size="18" :stroke-width="2" aria-hidden="true" /></span><span class="txt"><b>Nenhum</b></span>
       </button>
@@ -34,13 +36,14 @@ const sub = (d) => [TIPOS[d.tipo] || 'Dívida', d.credor || d.conta_nome, d.cart
         <span class="num numero-tabular"><b><Valor :valor="d.saldo" /></b><small v-if="d.valor_parcela">parcela <Valor :valor="d.valor_parcela" /></small></span>
       </button>
     </div>
+    </SeletorPopup>
   </CampoBase>
 </template>
 
 <style scoped>
 .trocar { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: var(--tema-cor, var(--cor-primaria)); }
 .ic.neutro { background: var(--cor-realce); color: var(--cor-texto-suave); }
-.lista-div { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; padding: 2px; }
+.lista-div { display: flex; flex-direction: column; gap: 6px; padding: 2px; }
 .item-div { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 6px 12px 6px 8px; border-radius: 14px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: inherit; text-align: left; cursor: pointer; }
 .item-div.on { border-color: var(--tema-cor, var(--cor-primaria)); background: var(--tema-fundo, var(--cor-realce)); }
 .item-div.nenhum { min-height: 44px; }

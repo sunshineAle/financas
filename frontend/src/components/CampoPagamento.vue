@@ -1,13 +1,14 @@
 <script setup>
 // <CampoPagamento v-model:conta-id="x.contaId" v-model:cartao-id="x.cartaoId" v-model:meio="x.pagamento" :contas :cartoes />
 // \"Pagou com\" / \"Recebeu em\" (homologação 1.0, 29/10 22h24): UM campo para todas as formas — contas (débito/Pix) e
-// cartões de crédito, cartões de loja e crediários (carnê digital) — em lista de quadros. Fechado, mostra só a escolha;
-// tocar EXPANDE e mostra as outras opções (agrupadas), detalhadas: logo, nome e tipo. Escolher recolhe de novo.
+// cartões de crédito, cartões de loja e crediários (carnê digital). O campo mostra só a escolha; tocar abre uma JANELINHA
+// por cima (SeletorPopup, 22h35) com as opções agrupadas e detalhadas (logo, nome e tipo). Escolher fecha a janela.
 // meio = 'conta' | 'cartao'. Sem `cartoes` (ex.: entrada) a lista mostra só as contas.
 import { ref, computed } from 'vue';
 import { ChevronDown } from 'lucide-vue-next';
 import IconeBanco from './IconeBanco.vue';
 import CampoBase from './CampoBase.vue';
+import SeletorPopup from './SeletorPopup.vue';
 
 const props = defineProps({
   contaId: { type: [String, Number], default: '' },
@@ -42,12 +43,13 @@ const grupos = computed(() => [
   <CampoBase :rotulo="rotulo" :erro="erro" :tema="tema">
     <p v-if="!opcoes.length" class="sf-dica">Nenhuma conta cadastrada.</p>
     <template v-else>
-      <button v-if="atual" type="button" class="quadro escolhido" :aria-expanded="aberto" data-pagou-com @click="aberto = !aberto">
+      <button v-if="atual" type="button" class="quadro escolhido" :aria-expanded="aberto" aria-haspopup="dialog" data-pagou-com @click="aberto = !aberto">
         <IconeBanco :icone="atual.icone" :nome="atual.nome" :tamanho="32" :padrao="atual.padrao" />
         <span class="txt"><b>{{ atual.nome }}</b><small>{{ atual.tipo }}</small></span>
-        <span class="trocar">{{ aberto ? 'Fechar' : 'Trocar' }}<ChevronDown :size="16" :stroke-width="2" :class="{ girado: aberto }" aria-hidden="true" /></span>
+        <span class="trocar">Trocar<ChevronDown :size="16" :stroke-width="2" aria-hidden="true" /></span>
       </button>
-      <div v-if="aberto" class="opcoes" role="radiogroup" :aria-label="rotulo">
+      <SeletorPopup :aberto="aberto" :titulo="rotulo" :tema="tema" @fechar="aberto = false">
+      <div class="opcoes" role="radiogroup" :aria-label="rotulo">
         <template v-for="g in grupos" :key="g.titulo">
           <small v-if="grupos.length > 1" class="grupo">{{ g.titulo }}</small>
           <button v-for="o in g.itens" :key="o.chave" type="button" role="radio" :aria-checked="atual && atual.chave === o.chave" :class="['quadro', { ativo: atual && atual.chave === o.chave }]" @click="escolher(o)">
@@ -56,6 +58,7 @@ const grupos = computed(() => [
           </button>
         </template>
       </div>
+      </SeletorPopup>
     </template>
   </CampoBase>
 </template>
@@ -71,6 +74,6 @@ const grupos = computed(() => [
 .trocar { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: var(--tema-cor, var(--cor-primaria)); }
 .trocar svg { transition: transform var(--anim-rapida) ease; }
 .trocar svg.girado { transform: rotate(180deg); }
-.opcoes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.opcoes { display: flex; flex-direction: column; gap: 6px; padding: 2px; }
 .grupo { margin: 4px 2px 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cor-texto-suave); }
 </style>

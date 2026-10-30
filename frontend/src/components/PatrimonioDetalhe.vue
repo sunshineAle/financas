@@ -134,7 +134,7 @@ const mesFatura = (chave) => {
               <span>{{ grafico === 'rosca' ? 'Barras' : 'Rosca' }}</span>
             </button>
           </div>
-          <DashRosca v-if="grafico === 'rosca'" :segmentos="segmentos" :rotulo-total="lado === 'ativos' ? 'ativos' : 'passivos'"
+          <DashRosca v-if="grafico === 'rosca'" compacta :segmentos="segmentos" :rotulo-total="lado === 'ativos' ? 'ativos' : 'passivos'"
             :rotulo-vazio="lado === 'ativos' ? 'Nenhum ativo ainda.' : 'Nenhum passivo. Ótimo!'" />
           <ul v-else class="barras">
             <li v-for="b in blocos" :key="b.chave">
@@ -203,6 +203,8 @@ const mesFatura = (chave) => {
 </template>
 
 <style scoped>
+/* 30/10: Ativos | Passivos com fundo mais escuro e contorno, para a aba não se misturar com o fundo da janela */
+.patrimonio :deep(.abas) { background: var(--cor-fundo); border: 1px solid color-mix(in srgb, var(--cor-texto) 14%, var(--cor-borda)); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25); }
 .patrimonio { display: flex; flex-direction: column; gap: 14px; }
 .estado { color: var(--cor-texto-suave); text-align: center; padding: 24px 0; }
 .estado.erro { color: var(--cor-saida-texto); }
@@ -223,7 +225,7 @@ const mesFatura = (chave) => {
 }
 .aviso svg { color: var(--cor-amarelo); flex-shrink: 0; }
 
-.grafico { display: flex; flex-direction: column; gap: 10px; }
+.grafico { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--raio-card, 16px); background: var(--cor-fundo); border: 1px solid var(--cor-borda); } /* 22h35: gráfico + legenda num card destacado */
 .grafico-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .total-lado { font-size: 0.85rem; color: var(--cor-texto-suave); }
 .total-lado b { color: var(--cor-texto); }
@@ -242,7 +244,8 @@ const mesFatura = (chave) => {
 .blocos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 /* Blocos no padrão dos cards do Início (homologação 1.0, 29/10 22h24): card destacado, colunas alinhadas
    [anel | nome e quantidade | total | abrir] e itens alinhados com a coluna do nome */
-.bloco { border: 1px solid var(--cor-card-borda, var(--cor-borda)); border-radius: var(--raio-card, 16px); background: var(--cor-card); overflow: hidden; box-shadow: var(--sombra-suave, none); }
+.bloco { border: 1px solid var(--cor-borda); border-radius: var(--raio-card, 16px); background: var(--cor-fundo); overflow: hidden; } /* 22h35: mais escuro que o fundo da janela, para separar cada bloco */
+.bloco:hover { border-color: color-mix(in srgb, var(--cor-texto) 18%, var(--cor-borda)); }
 .bloco-topo { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto 40px; align-items: center; column-gap: 12px; padding: 12px 6px 12px 14px; }
 .bloco-total { font-family: var(--fonte-display); font-size: 16px !important; font-weight: 700; text-align: right; }
 .anel-pct { font-size: 0.62rem; font-weight: 600; color: var(--cor-texto-suave); }

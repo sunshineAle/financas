@@ -11,6 +11,7 @@ const props = defineProps({
   rotuloTotal: { type: String, default: 'total' },
   rotuloVazio: { type: String, default: 'Sem dados neste período.' },
   maximo: { type: Number, default: 8 },
+  compacta: { type: Boolean, default: false }, // legenda com menos espaço entre as linhas (ex.: janela Patrimônio)
 });
 const emit = defineEmits(['clicar']);
 
@@ -79,7 +80,7 @@ const foco = computed(() => (ativo.value !== null ? fatias.value[ativo.value] : 
         <small v-else>—</small>
       </div>
     </div>
-    <ul class="legenda">
+    <ul class="legenda" :class="{ compacta }">
       <li v-for="f in fatias" :key="f.i" :class="{ ativa: ativo === f.i }" @mouseenter="ativo = f.i" @mouseleave="ativo = null" @click="emit('clicar', f)">
         <i :style="{ background: f.cor }"></i>
         <span class="nome">{{ f.nome }}</span>
@@ -102,6 +103,7 @@ const foco = computed(() => (ativo.value !== null ? fatias.value[ativo.value] : 
 .legenda { list-style: none; margin: 0; padding: 0; flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .legenda li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 8px; border-radius: 10px; font-size: 14px; cursor: pointer; transition: background var(--anim-rapida) ease; }
 .legenda li.ativa, .legenda li:hover { background: var(--cor-realce); }
+.legenda.compacta li { min-height: 32px; padding: 2px 8px; }
 .legenda i { width: 12px; height: 12px; border-radius: 4px; flex: none; background-image: linear-gradient(135deg, rgba(255,255,255,.18), rgba(0,0,0,.18)); }
 .nome { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .val { color: var(--cor-texto-suave); font-size: 13px; text-align: right; white-space: nowrap; }

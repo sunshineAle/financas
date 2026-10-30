@@ -1,5 +1,22 @@
 [
   {
+    "versao": "0.10",
+    "data": "2026-10-29",
+    "resumo": "Início mais claro: \"Seus saldos\" mostra contas, guardado, faturas e dívidas formando o Patrimônio, e o mês futuro mostra o previsto. Formulários mais curtos, \"+\" com recorrência e regra, regras para metas e investimentos, e painel do perfil mais prático.",
+    "itens": [
+      "Início: embaixo do orbe aparece o Patrimônio; abaixo do filtro de meses, o bloco \"Seus saldos\" (Contas, Guardado, Faturas e Dívidas). Escolha um mês futuro para ver o \"Previsto\" no próprio Saldo do mês.",
+      "\"Revise suas transações\" aparece no Início quando há algo para você confirmar.",
+      "Relatórios: gráfico de linha no topo (entradas, saídas e resultado). Toque ou arraste nele para escolher o mês. E um novo \"Resumo financeiro\" explica cada número.",
+      "Botão \"+\": Transação (Entrada, Saída, Transferência), Criar recorrência (com ou sem prazo, entra no Custo de vida) e Regra de transação.",
+      "Lançar ficou mais curto: data e parcelas ao lado do valor, \"Pagou com\" num lugar só (conta, cartão, cartão de loja ou crediário), categoria e subcategoria mais rápidas.",
+      "Arraste uma transação para a esquerda para Editar ou Excluir. Estornar, Ignorar e Criar regra ficam no detalhe.",
+      "Regras em blocos (despesa, entrada, metas e investimentos). Agora uma regra também pode Guardar ou Resgatar numa meta, ou registrar aporte e resgate de investimento.",
+      "Metas e Investimentos com o orbe no topo. Patrimônio com contas detalhadas, e voltar de uma conta ou meta leva ao mesmo lugar.",
+      "Cartão de loja com bandeira é aceito em qualquer lugar; sem bandeira, só na loja. \"Crediário\" ficou com nome curto.",
+      "No computador, a foto do perfil abre um painel ao lado dela, com atalhos, início do mês, tema e animações ali mesmo. Importar foi para Dados e backup."
+    ]
+  },
+  {
     "versao": "0.9",
     "data": "2026-10-29",
     "resumo": "Comece com o saldo certo: saldo inicial em contas, metas, investimentos e cartões. Patrimônio com Ativos e Passivos no Início, tipos de crédito, transações com o banco e o meio de pagamento, e telas mais limpas.",

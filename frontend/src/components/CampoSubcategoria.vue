@@ -1,6 +1,7 @@
 <script setup>
 // <CampoSubcategoria v-model="sub" :sugestoes="['Uber do trabalho', …]" /> — subcategoria em PÍLULAS embaixo da categoria
-// (homologação 1.0, seção 14): as existentes + "+ Nova", no lugar da lista. Tocar na escolhida de novo tira a escolha.
+// (homologação 1.0, seção 14): as existentes + "+ Nova", numa fileira só que desliza para o lado (22h35).
+// Tocar na escolhida de novo tira a escolha.
 import { ref, computed, nextTick } from 'vue';
 import { Plus, Check } from 'lucide-vue-next';
 import CampoBase from './CampoBase.vue';
@@ -35,7 +36,9 @@ function confirmar() { const n = nova.value.trim().slice(0, 80); if (n) emit('up
 </template>
 
 <style scoped>
-.pilulas { display: flex; flex-wrap: wrap; gap: 6px; }
+.pilulas { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.pilulas::-webkit-scrollbar { display: none; }
+.pil { flex: none; white-space: nowrap; }
 .pil { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
 .pil.on { border-color: var(--tema-cor, var(--cor-primaria)); background: var(--tema-fundo, var(--cor-realce)); }
 .pil.nova { border-style: dashed; color: var(--tema-cor, var(--cor-primaria)); }

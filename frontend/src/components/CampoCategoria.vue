@@ -6,12 +6,14 @@
 //   automatica (texto da 1ª opção "sem escolha", ex.: 'Automática'; vazio = não mostra), permitirNova (padrão true).
 // Eventos: update:modelValue, criada(categoria) — o pai pode recarregar a lista dele.
 // Homologação 1.0, seção 14 (ajuste de 29/10 22h24): COMPACTO por padrão — um quadro com a categoria escolhida;
-// tocar EXPANDE ali mesmo a grade de quadradinhos com todas (mais usadas primeiro, + "Nova categoria"); escolher recolhe.
+// tocar abre uma JANELINHA por cima (SeletorPopup, 22h35) com a grade de quadradinhos (mais usadas primeiro,
+// + "Nova categoria"); escolher fecha a janela.
 // `grade` mostra a grade sempre aberta, como antes. (Pílulas ficam só para a subcategoria.)
 // A opção sem escolha "Automática" passa a se chamar "Pelas regras" (com "?" explicando).
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Plus, Sparkles, ChevronDown } from 'lucide-vue-next';
 import AjudaSecao from './AjudaSecao.vue';
+import SeletorPopup from './SeletorPopup.vue';
 import IconeCategoria from './IconeCategoria.vue';
 import CampoBase from './CampoBase.vue';
 import CampoTexto from './CampoTexto.vue';
@@ -123,11 +125,11 @@ async function criar() {
       <span v-if="!selecionada" class="ic-p auto"><Sparkles :size="18" :stroke-width="1.9" aria-hidden="true" /></span>
       <IconeCategoria v-else :valor="selecionada.icone" :tipo="t" :cor="selecionada.cor || undefined" :tamanho="34" />
       <b>{{ selecionada ? selecionada.nome : (automatica ? rotuloAuto : 'Escolha a categoria') }}</b>
-      <span class="trocar">{{ todasAberta ? 'Fechar' : 'Trocar' }}<ChevronDown :size="16" :stroke-width="2" :class="{ girado: todasAberta }" aria-hidden="true" /></span>
+      <span class="trocar">Trocar<ChevronDown :size="16" :stroke-width="2" aria-hidden="true" /></span>
     </button>
     <p v-if="!grade && automatica && ehPelasRegras && String(modelValue) === ''" class="sf-dica pelas-regras">A categoria vem da regra que combinar com a descrição.<AjudaSecao secao="categoria.regras" /></p>
 
-    <div v-if="grade || todasAberta" :class="grade ? 'grade-direta' : 'grade-expandida'">
+    <component :is="grade ? 'div' : SeletorPopup" v-bind="grade ? { class: 'grade-direta' } : { aberto: todasAberta, titulo: rotulo, tema: tema || t }" @fechar="fecharTodas">
     <div ref="painel">
     <div class="grade" role="radiogroup" :aria-label="rotulo">
       <button v-if="automatica" type="button" role="radio" :aria-checked="String(modelValue) === ''" :class="['sf-opcao', 'cat', { ativo: String(modelValue) === '' }]" @click="grade ? escolher(null) : escolherNaJanela(null)">
@@ -155,7 +157,7 @@ async function criar() {
       </div>
     </div>
     </div>
-    </div>
+    </component>
   </CampoBase>
 </template>
 
@@ -182,7 +184,7 @@ async function criar() {
 .topo-todas { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-family: var(--fonte-display); font-size: 16px; }
 .fechar-todas { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--cor-realce); color: var(--cor-texto); display: grid; place-items: center; cursor: pointer; }
 .painel-todas .grade { max-height: none; }
-.grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; overscroll-behavior: contain; }
+.grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; max-height: none; padding: 2px; overscroll-behavior: contain; }
 .cat { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 80px; padding: 10px 6px; border-radius: 14px; background: var(--cor-fundo); border: 1.5px solid var(--cor-borda); color: var(--cor-texto); font: 600 12px/1.2 var(--fonte-texto); text-align: center; cursor: pointer; transition: border-color var(--anim-rapida) ease, background var(--anim-padrao) ease, transform var(--anim-rapida) ease; }
 .cat:hover { border-color: color-mix(in srgb, var(--tc, var(--tema-cor, var(--cor-primaria))) 40%, var(--cor-borda)); }
 .cat:active { transform: scale(0.97); }
