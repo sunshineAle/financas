@@ -126,7 +126,7 @@ const temExtras = computed(() => !!(parcela.value || props.t.recorrente || props
 const temMenu = computed(() => !props.arrastavel && (props.menu || !!slots.menu));
 
 // ---- arrastar para a esquerda (só com `arrastavel`) ----
-const LARG_ACOES = 136; // dois botões de 68px
+const LARG_ACOES = 128; // dois botões de 56px + espaços
 const dx = ref(0);
 const aberta = ref(false);
 const arrastando = ref(false);
@@ -239,12 +239,13 @@ function abrir() {
 .linha-tx-envoltorio.arrastavel .linha-tx { position: relative; z-index: 1; background: var(--cor-card); touch-action: pan-y; transition: transform var(--anim-padrao, .2s) var(--anim-curva, ease), background var(--anim-rapida) ease; }
 .linha-tx-envoltorio.arrastavel .linha-tx[data-arrastando] { transition: none; }
 .linha-tx-envoltorio.arrastavel .linha-tx.clicavel:hover, .linha-tx-envoltorio.arrastavel .linha-tx:focus-visible { background: color-mix(in srgb, var(--cor-texto) 6%, var(--cor-card)); }
-.acoes-arraste { position: absolute; inset: 0 0 0 auto; display: flex; z-index: 0; }
-.ac { width: 68px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; padding: 0; font: 600 11.5px var(--fonte-texto); color: #fff; cursor: pointer; }
-.ac.editar { background: var(--cor-interface, #3446C4); }
-.ac.excluir { background: var(--cor-alerta, #D5211A); }
+/* Ações do arraste (30/10): discretas — botões finos e arredondados, recuados das bordas (não encostam na linha de baixo), sem vermelho. */
+.acoes-arraste { position: absolute; top: 6px; bottom: 6px; right: 4px; display: flex; gap: 6px; z-index: 0; }
+.ac { width: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 12px; padding: 0; font: 600 11px var(--fonte-texto); cursor: pointer; }
+.ac.editar { background: var(--cor-interface-selecao); color: var(--cor-interface-link); border-color: color-mix(in srgb, var(--cor-interface) 30%, transparent); }
+.ac.excluir { background: color-mix(in srgb, var(--cor-amarelo) 14%, var(--cor-card)); color: var(--cor-amarelo); border-color: color-mix(in srgb, var(--cor-amarelo) 30%, transparent); }
 .ac:disabled { opacity: 0.45; cursor: not-allowed; }
-.ac:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.ac:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: -3px; }
 .linha-tx {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
