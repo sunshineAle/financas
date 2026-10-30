@@ -718,7 +718,23 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <p v-else class="nota-vazia">Nenhuma transação {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
           <button type="button" class="ver-todas" data-ver-todas @click="irModo({ ver: 'extrato' })">Ver todas<ChevronRight :size="16" :stroke-width="2" /></button>
         </CardPadrao>
-        <!-- 2. Categorias: as 3 maiores ("Ver todas" abre o resto aqui mesmo), aviso de sem categoria -->
+        <!-- 2. Gastos | Entradas por categoria (logo abaixo das Últimas transações, 30/10 08h09) (rosca ↔ barras) -->
+        <CardPadrao class="bloco-tx" data-bloco-grafico>
+          <div class="cab-bloco">
+            <div class="mini-abas" role="tablist" aria-label="Gastos ou entradas por categoria">
+              <button type="button" role="tab" :aria-selected="abaGrafico === 'saida'" :class="{ on: abaGrafico === 'saida' }" @click="abaGrafico = 'saida'">Gastos por categoria</button>
+              <button type="button" role="tab" :aria-selected="abaGrafico === 'entrada'" :class="{ on: abaGrafico === 'entrada' }" @click="abaGrafico = 'entrada'">Entradas</button>
+            </div>
+            <button type="button" class="troca-graf" :aria-label="tipoGrafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" @click="tipoGrafico = tipoGrafico === 'rosca' ? 'barras' : 'rosca'"><component :is="tipoGrafico === 'rosca' ? ChartBar : ChartPie" :size="16" :stroke-width="2" /></button>
+          </div>
+          <DashRosca v-if="tipoGrafico === 'rosca'" compacta :key="abaGrafico + periodo.chave" :segmentos="segmentosGrafico" :rotulo-total="abaGrafico === 'saida' ? 'gasto total' : 'entrou'" :rotulo-vazio="abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.'" @clicar="(f) => abrirCategoria(f.chave)" />
+          <template v-else>
+            <RelBarrasH v-if="barrasGrafico.length" :itens="barrasGrafico" :formato="moeda" clicavel :de="abaGrafico === 'saida' ? 'var(--saida-ambar-medio)' : '#4CC27A'" :ate="abaGrafico === 'saida' ? 'var(--saida-carmim-medio)' : '#167A42'" @clicar="(i) => abrirCategoria(i.id)" />
+            <p v-else class="nota-vazia">{{ abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.' }}</p>
+          </template>
+        </CardPadrao>
+
+        <!-- 3. Categorias: as 3 maiores ("Ver todas" abre o resto aqui mesmo), aviso de sem categoria -->
         <CardPadrao class="bloco-tx" titulo="Categorias" ajuda="transacoes.categorias" data-bloco-categorias>
           <button v-if="semCategoria.length" type="button" class="aviso-semcat" data-sem-categoria @click="abrirCategoria('s-0')">
             <TriangleAlert :size="17" :stroke-width="2" /><span><b>{{ semCategoria.length }} sem categoria</b> — toque para categorizar</span><ChevronRight :size="16" :stroke-width="2" />
@@ -737,22 +753,6 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           </ul>
           <p v-else class="nota-vazia">Nenhum gasto categorizado neste período.</p>
           <button v-if="blocoCategorias.length > 3" type="button" class="ver-todas" data-ver-categorias :aria-expanded="todasCategorias" @click="todasCategorias = !todasCategorias">{{ todasCategorias ? 'Ver menos' : `Ver todas (${blocoCategorias.length})` }}<ChevronRight :size="16" :stroke-width="2" :class="{ girado: todasCategorias }" /></button>
-        </CardPadrao>
-
-        <!-- 3. Gastos | Entradas por categoria (rosca ↔ barras) -->
-        <CardPadrao class="bloco-tx" data-bloco-grafico>
-          <div class="cab-bloco">
-            <div class="mini-abas" role="tablist" aria-label="Gastos ou entradas por categoria">
-              <button type="button" role="tab" :aria-selected="abaGrafico === 'saida'" :class="{ on: abaGrafico === 'saida' }" @click="abaGrafico = 'saida'">Gastos por categoria</button>
-              <button type="button" role="tab" :aria-selected="abaGrafico === 'entrada'" :class="{ on: abaGrafico === 'entrada' }" @click="abaGrafico = 'entrada'">Entradas</button>
-            </div>
-            <button type="button" class="troca-graf" :aria-label="tipoGrafico === 'rosca' ? 'Ver em barras' : 'Ver em rosca'" @click="tipoGrafico = tipoGrafico === 'rosca' ? 'barras' : 'rosca'"><component :is="tipoGrafico === 'rosca' ? ChartBar : ChartPie" :size="16" :stroke-width="2" /></button>
-          </div>
-          <DashRosca v-if="tipoGrafico === 'rosca'" compacta :key="abaGrafico + periodo.chave" :segmentos="segmentosGrafico" :rotulo-total="abaGrafico === 'saida' ? 'gasto total' : 'entrou'" :rotulo-vazio="abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.'" @clicar="(f) => abrirCategoria(f.chave)" />
-          <template v-else>
-            <RelBarrasH v-if="barrasGrafico.length" :itens="barrasGrafico" :formato="moeda" clicavel :de="abaGrafico === 'saida' ? 'var(--saida-ambar-medio)' : '#4CC27A'" :ate="abaGrafico === 'saida' ? 'var(--saida-carmim-medio)' : '#167A42'" @clicar="(i) => abrirCategoria(i.id)" />
-            <p v-else class="nota-vazia">{{ abaGrafico === 'saida' ? 'Nenhum gasto neste período.' : 'Nenhuma entrada neste período.' }}</p>
-          </template>
         </CardPadrao>
 
       </template>
@@ -1101,9 +1101,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .form-limite { display: flex; flex-direction: column; gap: 10px; }
 .erro-lim { margin: 0; font-size: 13px; color: var(--cor-alerta-texto, var(--cor-alerta)); }
 .salvar-lim { min-height: 46px; border-radius: 12px; border: 0; background: var(--cor-interface, var(--cor-primaria)); color: #fff; font: 600 14.5px var(--fonte-texto); cursor: pointer; }
-/* PC: últimas transações + categorias lado a lado, gráfico embaixo (seção 17; ordem de 30/10, 03h04) */
+/* PC: últimas transações + gráfico lado a lado, categorias embaixo (seção 17; ordem de 30/10, 08h09) */
 @media (min-width: 1100px) {
   .modo-blocos { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  .modo-blocos > :not([data-bloco-ultimas]):not([data-bloco-categorias]) { grid-column: 1 / -1; }
+  .modo-blocos > :not([data-bloco-ultimas]):not([data-bloco-grafico]) { grid-column: 1 / -1; }
 }
 </style>
