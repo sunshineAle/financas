@@ -4,7 +4,7 @@
 // final sumindo (regra do degradê); o Patrimônio líquido fica no centro e a legenda ao lado, sem quebrar linha.
 // É uma POSIÇÃO de hoje (não muda com o mês). O detalhe de cada número fica em Relatórios › Resumo financeiro.
 //   <SeusSaldos :saldos="{ contas, guardado, faturas, dividas, patrimonio }" @patrimonio="abrir detalhe" />
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { ChevronRight } from 'lucide-vue-next';
 import Valor from './Valor.vue';
@@ -22,76 +22,81 @@ const ITENS = [
   { chave: 'faturas', nome: 'Faturas', sinal: '−', de: 'var(--saida-ambar-medio, #DFA511)', cor: 'var(--saida-tangerina-medio, #E15F0E)' },
   { chave: 'dividas', nome: 'Dívidas', sinal: '−', de: 'var(--saida-tangerina-medio, #E15F0E)', cor: 'var(--saida-carmim-medio, #CE2239)' },
 ];
-const ESP = 3.5, VAO = 3; // espessura e vão entre os arcos, em px (o tamanho do bloco é fixo: 150 × 75)
-const L = 150;
+// Pedido de 02/11 (23h06): volta ao padrão dos cards de topo atuais (TopoValor discreto), e o CONTORNO do card vira o
+// gráfico — cada cor da legenda ocupa no contorno a fração do seu valor (|contas| + |guardado| + |faturas| + |dívidas| = 100%),
+// começando no canto de cima à esquerda e andando no sentido horário. Desenhado num <rect> SVG com pathLength=100.
+const caixa = ref(null);
+const tam = ref({ w: 0, h: 0 });
+let obs = null;
+onMounted(() => {
+  if (!caixa.value || typeof ResizeObserver === 'undefined') return;
+  obs = new ResizeObserver(([e]) => { const r = e.target.getBoundingClientRect(); tam.value = { w: Math.round(r.width), h: Math.round(r.height) }; });
+  obs.observe(caixa.value);
+});
+onBeforeUnmount(() => obs?.disconnect());
+const VAO = 0.8; // vão entre as cores, em % do contorno
 const arcos = computed(() => {
   const s = props.saldos || {};
-  const max = Math.max(1, ...ITENS.map((i) => Math.abs(s[i.chave] || 0)));
-  return ITENS.map((i, n) => {
+  const total = ITENS.reduce((t, i) => t + Math.abs(s[i.chave] || 0), 0) || 1;
+  let ini = 0;
+  return ITENS.map((i) => {
     const v = s[i.chave] || 0;
-    const graus = Math.abs(v) < 0.005 ? 0 : Math.max(6, (Math.abs(v) / max) * 180);
-    const fora = L / 2 - n * (ESP + VAO);
-    const g = pronto.value ? graus : 0;
-    // conic: 0deg = topo; a meia-lua começa na esquerda (270deg) e anda no sentido horário até a direita
-    const fundo = g ? `conic-gradient(from 270deg, ${i.de} 0deg, ${i.cor} ${(g * 0.5).toFixed(1)}deg, color-mix(in srgb, ${i.cor} 10%, transparent) ${g.toFixed(1)}deg, transparent ${g.toFixed(1)}deg)` : 'none';
-    const mascara = `radial-gradient(circle closest-side, transparent ${fora - ESP - 0.5}px, #000 ${fora - ESP}px, #000 ${fora}px, transparent ${fora + 0.5}px)`;
-    return { ...i, v, fora, fundo, mascara };
+    const frac = (Math.abs(v) / total) * 100;
+    const len = frac > VAO * 2 ? frac - VAO : frac > 0 ? Math.max(0.6, frac * 0.6) : 0;
+    const seg = { ...i, v, pct: Math.round(frac), ini, len };
+    ini += frac;
+    return seg;
   });
 });
 const patrimonio = computed(() => props.saldos?.patrimonio || 0);
 </script>
 
 <template>
-  <section v-if="saldos" class="seus-saldos" aria-labelledby="t-seus-saldos" data-seus-saldos>
-    <div class="cabeca">
-      <h2 id="t-seus-saldos">Seus saldos <small>hoje</small><AjudaSecao secao="inicio.saldos" /></h2>
+  <section v-if="saldos" ref="caixa" class="seus-saldos" aria-labelledby="t-seus-saldos" data-seus-saldos>
+    <svg v-if="tam.w" class="contorno" :viewBox="`0 0 ${tam.w} ${tam.h}`" :width="tam.w" :height="tam.h" aria-hidden="true">
+      <rect class="trilho" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100" />
+      <rect v-for="a in arcos" v-show="a.len > 0" :key="a.chave" class="seg" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100"
+        :stroke="a.cor" :stroke-dasharray="`${pronto ? a.len : 0} ${100 - (pronto ? a.len : 0)}`" :stroke-dashoffset="-a.ini" />
+    </svg>
+    <div class="rotulo">
+      <h2 id="t-seus-saldos">Seus saldos <small>· hoje</small></h2><AjudaSecao secao="inicio.saldos" />
     </div>
-    <div class="corpo">
-      <button type="button" class="meia-lua" :aria-label="`Patrimônio líquido: ver Ativos e Passivos`" aria-haspopup="dialog" @click="emit('patrimonio')">
-        <span class="recorte" aria-hidden="true">
-          <i v-for="a in arcos" :key="a.chave" class="trilho" :style="{ '-webkit-mask': a.mascara, mask: a.mascara }"></i>
-          <i v-for="a in arcos" :key="a.chave + 'v'" class="arco" :style="{ background: a.fundo, '-webkit-mask': a.mascara, mask: a.mascara }"></i>
-        </span>
-        <span class="centro">
-          <b class="numero-tabular" :class="{ neg: patrimonio < 0 }"><Valor :valor="patrimonio" /></b>
-          <small>Patrimônio</small>
-        </span>
-      </button>
-      <ul class="legenda">
-        <li v-for="a in arcos" :key="a.chave">
-          <i class="ponto" :style="{ background: `linear-gradient(135deg, ${a.de}, ${a.cor})` }" aria-hidden="true"></i>
-          <span class="nome">{{ a.nome }}</span>
-          <b class="numero-tabular"><span class="sinal" aria-hidden="true">{{ a.sinal }}</span><Valor :valor="Math.abs(a.v)" /></b>
-        </li>
-      </ul>
-    </div>
+    <button type="button" class="valor numero-tabular" :class="{ neg: patrimonio < 0 }" :aria-label="`Patrimônio líquido: ver Ativos e Passivos`" @click="emit('patrimonio')">
+      <Valor :valor="patrimonio" /><small>Patrimônio</small>
+    </button>
+    <dl class="linhas">
+      <div v-for="a in arcos" :key="a.chave">
+        <dt><i class="ponto" :style="{ background: a.cor }" aria-hidden="true"></i>{{ a.nome }} <small>{{ a.pct }}%</small></dt>
+        <dd class="numero-tabular"><span class="sinal" aria-hidden="true">{{ a.sinal }}</span><Valor :valor="Math.abs(a.v)" /></dd>
+      </div>
+    </dl>
     <button type="button" class="link" data-detalhes-relatorios @click="router.push('/relatorios')">Detalhes em Relatórios<ChevronRight :size="15" :stroke-width="2" /></button>
   </section>
 </template>
 
 <style scoped>
-.seus-saldos { background: var(--cor-card); border: 1px solid var(--cor-card-borda); border-radius: var(--raio-card, 16px); padding: 14px 16px 6px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.cabeca h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-family: var(--fonte-display); font-size: 16px; }
-.cabeca small { font-family: var(--fonte-texto); font-weight: 400; font-size: 12px; color: var(--cor-texto-suave); }
-.corpo { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.meia-lua { position: relative; flex: none; width: 150px; height: 77px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; border-radius: 12px; }
-.meia-lua:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
-.recorte { position: absolute; left: 0; top: 0; width: 150px; height: 75px; overflow: hidden; }
-.trilho, .arco { position: absolute; left: 0; top: 0; width: 150px; height: 150px; border-radius: 50%; }
-.trilho { background: var(--cor-trilho); opacity: 0.55; }
-.arco { transition: background var(--anim-lenta) var(--anim-curva-suave, ease); }
-.centro { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; line-height: 1.1; width: 92px; gap: 1px; }
-.centro b { font-family: var(--fonte-display); font-size: 13.5px; white-space: nowrap; }
-.centro b.neg { color: var(--cor-saida-texto, var(--cor-saida)); }
-.centro small { font-size: 10.5px; color: var(--cor-texto-suave); }
-.legenda { list-style: none; margin: 0; padding: 0 0 2px; flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 8px auto auto; justify-content: end; gap: 6px 6px; align-items: center; font-size: 12px; white-space: nowrap; }
-.legenda li { display: contents; }
-.ponto { width: 8px; height: 8px; border-radius: 50%; }
-.nome { color: var(--cor-texto-suave); }
-.legenda b { justify-self: end; font-weight: 600; color: var(--cor-texto); }
+/* Mesmo padrão do TopoValor (card discreto: fundo de card, valor de 26 px, linhas embaixo); o contorno é o gráfico. */
+.seus-saldos { position: relative; overflow: hidden; background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); border-radius: var(--raio-card, 16px); padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.seus-saldos::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--cor-entrada) 10%, transparent), transparent 60%); }
+.seus-saldos > :not(.contorno) { position: relative; z-index: 1; }
+.contorno { position: absolute; inset: -1px; z-index: 2; pointer-events: none; overflow: visible; }
+.contorno rect { fill: none; stroke-width: 2.5; }
+.contorno .trilho { stroke: var(--cor-borda); stroke-width: 1; }
+.contorno .seg { stroke-linecap: butt; transition: stroke-dasharray var(--anim-lenta, .6s) var(--anim-curva-suave, ease); }
+.rotulo { display: flex; align-items: center; gap: 6px; }
+.rotulo h2 { margin: 0; font: 600 13px var(--fonte-texto); color: var(--cor-texto-suave); }
+.rotulo small { font-weight: 400; font-size: 13px; }
+.valor { align-self: flex-start; display: inline-flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; cursor: pointer; font-family: var(--fonte-display); font-size: 26px; line-height: 1.15; color: var(--cor-texto); border-radius: 8px; }
+.valor small { font: 500 12px var(--fonte-texto); color: var(--cor-texto-suave); }
+.valor.neg { color: var(--cor-saida-texto, var(--cor-saida)); }
+.valor:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
+.linhas { margin: 6px 0 0; padding-top: 8px; border-top: 1px solid var(--cor-borda); display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.linhas > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.linhas dt { display: inline-flex; align-items: center; gap: 7px; color: var(--cor-texto-suave); white-space: nowrap; }
+.linhas dt small { font-size: 11.5px; opacity: .8; }
+.linhas dd { margin: 0; font-weight: 600; white-space: nowrap; }
+.ponto { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .sinal { color: var(--cor-texto-suave); font-weight: 500; margin-right: 2px; }
 .link { align-self: flex-end; display: inline-flex; align-items: center; gap: 2px; min-height: 36px; padding: 0; border: 0; background: none; color: var(--cor-primaria); font: 600 13px var(--fonte-texto); cursor: pointer; }
 .link:hover { text-decoration: underline; }
-@media (max-width: 360px) { .corpo { gap: 8px; } .legenda { font-size: 11.5px; gap: 5px 4px; } }
-@media (min-width: 600px) { .corpo { justify-content: flex-start; gap: 28px; } .legenda { justify-content: start; font-size: 13px; } }
 </style>

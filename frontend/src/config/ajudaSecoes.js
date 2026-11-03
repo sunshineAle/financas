@@ -30,8 +30,8 @@ export const AJUDA_SECOES = {
   'inicio.saldos': {
     titulo: 'Seus saldos',
     texto: [
-      'Contas + Guardado (Reserva de Liberdade, metas e investimentos) − Faturas abertas − Dívidas = Patrimônio, no centro.',
-      'É a posição de hoje: não muda com o mês escolhido. Toque no centro para ver Ativos e Passivos.',
+      'Contas + Guardado (Reserva de Liberdade, metas e investimentos) − Faturas abertas − Dívidas = Patrimônio. O contorno do card mostra quanto cada um pesa: cada cor ocupa a parte do seu valor.',
+      'É a posição de hoje: não muda com o mês escolhido. Toque no valor para ver Ativos e Passivos.',
     ],
   },
   'patrimonio.passivos': {
