@@ -203,9 +203,9 @@ onUnmounted(() => { limparTempos(); document.removeEventListener('pointerdown', 
 .marca {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   width: 100%;
-  padding: 0 0 0 4px;
+  padding: 0 0 0 7px;
   border: none;
   background: none;
   cursor: pointer;
@@ -214,7 +214,7 @@ onUnmounted(() => { limparTempos(); document.removeEventListener('pointerdown', 
   border-radius: 12px;
 }
 .marca:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
-.logo-marca { width: 36px; flex-shrink: 0; }
+.logo-marca { width: 36px; flex-shrink: 0; margin-inline: 0 !important; } /* 02/11: logo alinhado ao ícone do "+ Adicionar" e nome alinhado aos textos do menu */
 .nome-marca { font-family: var(--fonte-display); font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
 
 .nav-lateral {
