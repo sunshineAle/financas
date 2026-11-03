@@ -26,6 +26,7 @@ const ITENS = [
 // gráfico — cada cor da legenda ocupa no contorno a fração do seu valor (|contas| + |guardado| + |faturas| + |dívidas| = 100%),
 // começando no canto de cima à esquerda e andando no sentido horário. Desenhado num <rect> SVG com pathLength=100.
 const caixa = ref(null);
+const idMascara = `ss-revela-${Math.random().toString(36).slice(2, 8)}`;
 const tam = ref({ w: 0, h: 0 });
 let obs = null;
 onMounted(() => {
@@ -48,15 +49,51 @@ const arcos = computed(() => {
     return seg;
   });
 });
+// 02/11 (23h12): transição SUAVE entre as cores (regra do degradê, como nos outros gráficos). O contorno é desenhado em
+// pequenos trechos; perto de cada divisa a cor vai se misturando com a vizinha numa faixa de até 7% da volta.
+const PASSOS = 160;
+const trechos = computed(() => {
+  const segs = arcos.value.filter((a) => a.len > 0);
+  if (!segs.length) return [];
+  const lista = [];
+  for (let k = 0; k < PASSOS; k++) {
+    const p = (k + 0.5) * (100 / PASSOS);
+    let i = segs.findIndex((a) => p >= a.ini && p < a.ini + a.len + VAO);
+    if (i < 0) i = segs.length - 1;
+    const a = segs[i];
+    const b = segs[(i + 1) % segs.length];
+    const ant = segs[(i - 1 + segs.length) % segs.length];
+    const faixa = Math.min(7, a.len / 2);
+    const fim = a.ini + a.len + VAO;
+    let cor = a.cor;
+    if (segs.length > 1 && p > fim - faixa / 2) cor = `color-mix(in srgb, ${b.cor} ${Math.round(Math.min(1, (p - (fim - faixa / 2)) / faixa) * 100)}%, ${a.cor})`;
+    else if (segs.length > 1 && p < a.ini + faixa / 2) cor = `color-mix(in srgb, ${ant.cor} ${Math.round(Math.max(0, (a.ini + faixa / 2 - p) / faixa) * 100)}%, ${a.cor})`;
+    lista.push({ k, ini: k * (100 / PASSOS), cor });
+  }
+  return lista;
+});
+// brilho do card (como no TopoValor): tom da maior parte do contorno
+const corBrilho = computed(() => [...arcos.value].sort((x, y) => y.len - x.len)[0]?.cor || 'var(--cor-entrada)');
 const patrimonio = computed(() => props.saldos?.patrimonio || 0);
 </script>
 
 <template>
-  <section v-if="saldos" ref="caixa" class="seus-saldos" aria-labelledby="t-seus-saldos" data-seus-saldos>
+  <section v-if="saldos" ref="caixa" class="seus-saldos" :style="{ '--brilho': corBrilho }" aria-labelledby="t-seus-saldos" data-seus-saldos>
     <svg v-if="tam.w" class="contorno" :viewBox="`0 0 ${tam.w} ${tam.h}`" :width="tam.w" :height="tam.h" aria-hidden="true">
+      <defs>
+        <mask :id="idMascara" maskUnits="userSpaceOnUse" x="-4" y="-4" :width="tam.w + 8" :height="tam.h + 8">
+          <rect class="revela" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100" :stroke-dasharray="`${pronto ? 100 : 0} 100`" />
+        </mask>
+      </defs>
       <rect class="trilho" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100" />
-      <rect v-for="a in arcos" v-show="a.len > 0" :key="a.chave" class="seg" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100"
-        :stroke="a.cor" :stroke-dasharray="`${pronto ? a.len : 0} ${100 - (pronto ? a.len : 0)}`" :stroke-dashoffset="-a.ini" />
+      <g :mask="`url(#${idMascara})`">
+        <g class="brilho-borda">
+          <rect v-for="t in trechos" :key="'b' + t.k" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100"
+            :stroke="t.cor" :stroke-dasharray="`${100 / PASSOS + 0.15} 100`" :stroke-dashoffset="-t.ini" />
+        </g>
+        <rect v-for="t in trechos" :key="t.k" class="seg" x="1" y="1" :width="tam.w - 2" :height="tam.h - 2" rx="15" pathLength="100"
+          :stroke="t.cor" :stroke-dasharray="`${100 / PASSOS + 0.15} 100`" :stroke-dashoffset="-t.ini" />
+      </g>
     </svg>
     <div class="rotulo">
       <h2 id="t-seus-saldos">Seus saldos <small>· hoje</small></h2><AjudaSecao secao="inicio.saldos" />
@@ -77,12 +114,14 @@ const patrimonio = computed(() => props.saldos?.patrimonio || 0);
 <style scoped>
 /* Mesmo padrão do TopoValor (card discreto: fundo de card, valor de 26 px, linhas embaixo); o contorno é o gráfico. */
 .seus-saldos { position: relative; overflow: hidden; background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); border-radius: var(--raio-card, 16px); padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.seus-saldos::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--cor-entrada) 10%, transparent), transparent 60%); }
+.seus-saldos::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--brilho, var(--cor-entrada)) 16%, transparent), transparent 62%), radial-gradient(90% 60% at 100% 100%, color-mix(in srgb, var(--brilho, var(--cor-entrada)) 7%, transparent), transparent 60%); }
 .seus-saldos > :not(.contorno) { position: relative; z-index: 1; }
 .contorno { position: absolute; inset: -1px; z-index: 2; pointer-events: none; overflow: visible; }
 .contorno rect { fill: none; stroke-width: 2.5; }
 .contorno .trilho { stroke: var(--cor-borda); stroke-width: 1; }
-.contorno .seg { stroke-linecap: butt; transition: stroke-dasharray var(--anim-lenta, .6s) var(--anim-curva-suave, ease); }
+.contorno .seg { stroke-linecap: butt; }
+.contorno .brilho-borda rect { stroke-width: 6; opacity: .35; filter: blur(3px); }
+.contorno .revela { fill: none; stroke: #fff; stroke-width: 10; transition: stroke-dasharray 1.1s var(--anim-curva-suave, ease); }
 .rotulo { display: flex; align-items: center; gap: 6px; }
 .rotulo h2 { margin: 0; font: 600 13px var(--fonte-texto); color: var(--cor-texto-suave); }
 .rotulo small { font-weight: 400; font-size: 13px; }
