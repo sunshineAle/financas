@@ -263,7 +263,8 @@ const TIPOS_CREDITO = [
   { id: 'cheque', rotulo: 'Cheque especial', icone: Landmark, exemplo: 'Limite da conta' },
   { id: 'emprestimo', rotulo: 'Empréstimo', icone: HandCoins, exemplo: 'Financiamento, consignado' },
 ];
-const tiposVisiveis = computed(() => (editandoId.value ? TIPOS_CREDITO.slice(0, 3) : TIPOS_CREDITO));
+// 02/11: cheque especial (limite da conta) e empréstimo (entra como dívida) saíram das opções; o "?" diz onde ficam.
+const tiposVisiveis = computed(() => TIPOS_CREDITO.slice(0, 3));
 const tipoForm = computed(() => formulario.value.tipoCredito);
 const naoViraCartao = computed(() => tipoForm.value === 'cheque' || tipoForm.value === 'emprestimo');
 function escolherTipo(id) { tipoTocado = true; formulario.value.tipoCredito = id; erro.value = ''; }
@@ -709,10 +710,11 @@ onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
 .acoes-form .sec { background: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto); }
 .acoes-form .perigo-btn { background: transparent; border: 1px solid var(--cor-saida); color: var(--cor-saida-texto); }
 /* tipo de crédito e bandeira (anotações 53 e 58) */
-.tipos-credito { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tipos-credito { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tipo-op { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; text-align: left; border-radius: 14px; border: 1.5px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto-suave); cursor: pointer; font: inherit; }
 .tipo-op .tipo-txt { display: flex; flex-direction: column; min-width: 0; }
 .tipo-op strong { font-size: 13.5px; color: var(--cor-texto); font-weight: 600; }
+@media (max-width: 520px) { .tipo-op { flex-direction: column; justify-content: center; text-align: center; gap: 6px; padding: 10px 6px; } .tipo-op .tipo-txt { align-items: center; } .tipo-op strong { font-size: 12.5px; line-height: 1.2; } }
 .tipo-op small { font-size: 11.5px; color: var(--cor-texto-suave); overflow-wrap: anywhere; }
 .tipo-op.ativo { border-color: var(--cor-saida); background: var(--cor-saida-fundo); color: var(--cor-saida-texto); }
 .tipo-op:focus-visible, .band-op:focus-visible, .inicio-cab:focus-visible { outline: 2px solid var(--cor-saida); outline-offset: 2px; }
