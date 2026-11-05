@@ -29,7 +29,7 @@ import OperacaoModal from '../components/OperacaoModal.vue';
 import TransferirCorretoraModal from '../components/TransferirCorretoraModal.vue';
 import ReservasAuto from '../components/ReservasAuto.vue';
 import PosicaoInicialModal from '../components/PosicaoInicialModal.vue';
-import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Landmark, Flag } from 'lucide-vue-next';
+import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Flag } from 'lucide-vue-next';
 import { resolverChave, CATALOGO, ESCOLHAS } from '../utils/icones.js';
 import { META_V2, iconeCat } from '../utils/iconesCategoria.js';
 import { api, carregarCdi, comCdi, infoCdi, dataHoraBR, moeda, numeroBR } from '../services/investimentos.js';
@@ -505,12 +505,6 @@ onMounted(carregarConectados);
         </div>
       </div>
       <p v-if="avisoOp" class="aviso-op" role="status">{{ avisoOp }}</p>
-
-      <CardPadrao v-if="!carteira.tem_corretora" tema="investimento" ajuda="objetivos.corretora" titulo="Cadastre sua corretora como conta">
-        <template #rodape>
-          <BarraAcoes compacto :colunas="1"><BotaoAcao compacto :icone="Landmark" rotulo="Ir para Contas" tema="investimento" @click="router.push('/contas')" /></BarraAcoes>
-        </template>
-      </CardPadrao>
 
       <CardPadrao titulo="Onde está investido">
         <ul v-if="fatiasPizza.length" class="legenda-rosca">

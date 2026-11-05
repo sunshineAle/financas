@@ -1,5 +1,13 @@
 [
   {
+    "versao": "1.1.3",
+    "data": "2026-11-05",
+    "resumo": "A aba Investimentos ficou mais limpa: saiu o aviso grande para cadastrar a corretora como conta.",
+    "itens": [
+      "Investimentos: saiu o card \"Cadastre sua corretora como conta\". A explicação continua no Manual."
+    ]
+  },
+  {
     "versao": "1.1.2",
     "data": "2026-11-05",
     "resumo": "O aviso de versão nova aparece sozinho, e o limite do cartão passa a contar a fatura que venceu e ainda não foi paga.",
