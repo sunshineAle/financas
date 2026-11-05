@@ -58,6 +58,10 @@
   --meta-violeta-escuro: #3C0F8A;
   --meta-violeta-medio: #5E18D8;
   --meta-violeta-claro: #A87EF1;
+  /* índigo: usado pelas metas (3ª meta em diante) e pela lista de cores de meta; faltava e deixava a esfera preta */
+  --meta-indigo-escuro: #2E1C8C;
+  --meta-indigo-medio: #4A34D6;
+  --meta-indigo-claro: #9C8DF0;
   --meta-roxo-escuro: #4D1584;
   --meta-roxo-medio: #7822CE;
   --meta-roxo-claro: #B884EB;

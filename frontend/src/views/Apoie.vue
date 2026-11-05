@@ -2,15 +2,15 @@
 // Apoie o desenvolvedor (05/11): texto institucional (config/apoio.js) + três opções de apoio com pagamento pelo SumUp.
 // Cada opção abre o pagamento numa janela nova (pop-up no computador; no celular, uma aba nova do navegador).
 import { computed } from 'vue';
-import { Heart, Coffee, Wrench, Rocket, ExternalLink } from 'lucide-vue-next';
+import { Heart, Coffee, Wrench, Rocket, CreditCard } from 'lucide-vue-next';
 import { TEXTO_INSTITUCIONAL } from '../config/apoio.js';
 import AssinaturaAlt from '../components/AssinaturaAlt.vue';
 
 const paragrafos = computed(() => String(TEXTO_INSTITUCIONAL || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean));
 const OPCOES = [
-  { id: 'cafe', icone: Coffee, titulo: 'Pagar um café', valor: 'R$ 10,00', texto: 'Um cafezinho para dar aquele gás e manter o aplicativo atualizado.', botao: 'Contribuir R$ 10', url: 'https://pay.sumup.com/b2c/Q2HQ28OZ' },
-  { id: 'manutencao', icone: Wrench, titulo: 'Apoiar a manutenção', valor: 'R$ 25,00', texto: 'Ajuda a cobrir os custos e manter o projeto funcionando sem anúncios.', botao: 'Contribuir R$ 25', url: 'https://pay.sumup.com/b2c/QARIAUIK', destaque: true },
-  { id: 'impulso', icone: Rocket, titulo: 'Impulsionar o projeto', valor: 'R$ 50,00', texto: 'Um super apoio para garantir a evolução e a independência do aplicativo.', botao: 'Contribuir R$ 50', url: 'https://pay.sumup.com/b2c/Q5VMUXWE' },
+  { id: 'cafe', icone: Coffee, titulo: 'Pagar um café', valor: 'R$ 10,00', curto: 'R$ 10', rotulo: 'Um café', texto: 'Um cafezinho para dar aquele gás e manter o aplicativo atualizado.', botao: 'Contribuir R$ 10', url: 'https://pay.sumup.com/b2c/Q2HQ28OZ' },
+  { id: 'manutencao', icone: Wrench, titulo: 'Apoiar a manutenção', valor: 'R$ 25,00', curto: 'R$ 25', rotulo: 'Manutenção', texto: 'Ajuda a cobrir os custos e manter o projeto funcionando sem anúncios.', botao: 'Contribuir R$ 25', url: 'https://pay.sumup.com/b2c/QARIAUIK', destaque: true },
+  { id: 'impulso', icone: Rocket, titulo: 'Impulsionar o projeto', valor: 'R$ 50,00', curto: 'R$ 50', rotulo: 'Impulso', texto: 'Um super apoio para garantir a evolução e a independência do aplicativo.', botao: 'Contribuir R$ 50', url: 'https://pay.sumup.com/b2c/Q5VMUXWE' },
 ];
 function abrir(o, ev) {
   // pop-up centralizado no computador; se o navegador bloquear (ou no celular), o link segue numa aba nova
@@ -32,17 +32,20 @@ function abrir(o, ev) {
       <p v-for="(p, i) in paragrafos" :key="i">{{ p }}</p>
     </header>
 
-    <section class="opcoes" aria-labelledby="t-opcoes" data-opcoes-apoio>
-      <h2 id="t-opcoes">Escolha uma opção de apoio</h2>
-      <article v-for="o in OPCOES" :key="o.id" class="opcao" :class="{ destaque: o.destaque }">
-        <span class="ic" aria-hidden="true"><component :is="o.icone" :size="22" :stroke-width="1.8" /></span>
-        <div class="txt">
-          <b>{{ o.titulo }} <span class="valor">{{ o.valor }}</span></b>
-          <p>{{ o.texto }}</p>
-        </div>
-        <a class="botao" :href="o.url" target="_blank" rel="noopener noreferrer" :data-apoio="o.id" @click="abrir(o, $event)">{{ o.botao }}<ExternalLink :size="15" :stroke-width="2" /></a>
-      </article>
-      <p class="nota">O pagamento é feito no site seguro da SumUp (cartão ou Pix). O Dagda Capital não vê nem guarda os dados do pagamento.</p>
+    <!-- Cada meio de apoio é um bloco; hoje só o link de pagamento (outros meios entram como novos blocos aqui) -->
+    <section class="meio" aria-labelledby="t-link" data-opcoes-apoio>
+      <header class="meio-topo">
+        <span class="ic" aria-hidden="true"><CreditCard :size="18" :stroke-width="1.9" /></span>
+        <div><h2 id="t-link">Link de pagamento</h2><p>Cartão ou Pix, no site seguro da SumUp.</p></div>
+      </header>
+      <div class="botoes">
+        <a v-for="o in OPCOES" :key="o.id" class="botao" :class="{ destaque: o.destaque }" :href="o.url" target="_blank" rel="noopener noreferrer"
+          :data-apoio="o.id" :title="o.titulo + ': ' + o.texto" :aria-label="o.titulo + ', ' + o.valor" @click="abrir(o, $event)">
+          <component :is="o.icone" :size="20" :stroke-width="1.8" aria-hidden="true" />
+          <b>{{ o.curto }}</b>
+          <span>{{ o.rotulo }}</span>
+        </a>
+      </div>
     </section>
 
     <AssinaturaAlt />
@@ -55,18 +58,20 @@ function abrir(o, ev) {
 .intro { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 4px 8px; }
 .intro p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--cor-texto); }
 .coracao { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #5e18d8, #1597a8); color: #fff; }
-.opcoes { display: flex; flex-direction: column; gap: 10px; }
-.opcoes h2 { margin: 0 2px; font: 600 16px var(--fonte-display); }
-.opcao { display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-areas: 'ic txt' 'ic bt'; gap: 8px 14px; padding: 16px; border-radius: var(--raio-card, 16px); background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); position: relative; overflow: hidden; }
-.opcao.destaque { border-color: color-mix(in srgb, #5e18d8 45%, var(--cor-borda)); }
-.opcao.destaque::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, #5e18d8 14%, transparent), transparent 60%); }
-.opcao > * { position: relative; }
-.ic { grid-area: ic; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); }
-.txt { grid-area: txt; min-width: 0; }
-.txt b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font: 600 16px var(--fonte-display); }
-.valor { font: 600 13px var(--fonte-texto); color: var(--cor-entrada-texto, var(--cor-entrada)); }
-.txt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--cor-texto-suave); }
-.botao { grid-area: bt; justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 0 16px; border-radius: 12px; text-decoration: none; font: 600 14px var(--fonte-texto); color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); }
+.meio { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: var(--raio-card, 16px); background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); }
+.meio-topo { display: flex; align-items: center; gap: 12px; }
+.meio-topo h2 { margin: 0; font: 600 16px var(--fonte-display); }
+.meio-topo p { margin: 2px 0 0; font-size: 13px; color: var(--cor-texto-suave); }
+.ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); }
+.botoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.botao { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 84px; padding: 10px 6px; border-radius: 14px; text-decoration: none; text-align: center;
+  color: var(--cor-texto); background: color-mix(in srgb, #5e18d8 10%, var(--cor-card)); border: 1px solid color-mix(in srgb, #5e18d8 30%, var(--cor-borda)); transition: transform var(--anim-rapida, .15s), border-color var(--anim-rapida, .15s); }
+.botao svg { color: #9b6bf0; }
+.botao b { font: 700 17px var(--fonte-display); }
+.botao span { font-size: 12px; color: var(--cor-texto-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.botao.destaque { color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); border-color: transparent; }
+.botao.destaque svg, .botao.destaque span { color: rgba(255, 255, 255, .88); }
+.botao:hover { border-color: #9b6bf0; }
+.botao:active { transform: scale(.97); }
 .botao:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
-.nota { margin: 2px 4px 0; font-size: 12.5px; color: var(--cor-texto-suave); line-height: 1.45; }
 </style>

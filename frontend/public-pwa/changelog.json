@@ -1,5 +1,14 @@
 [
   {
+    "versao": "1.1.1",
+    "data": "2026-11-05",
+    "resumo": "A esfera das Metas volta a mostrar as cores com três metas ou mais, e a página Apoie ficou mais simples.",
+    "itens": [
+      "Metas: a esfera ficava preta a partir da terceira meta; agora mostra as cores de cada uma. Metas ainda sem valor guardado não mostram mais o rótulo 0% em cima das outras.",
+      "Apoie o desenvolvedor: o link de pagamento virou um bloco único com três botões lado a lado (R$ 10, R$ 25 e R$ 50), com menos texto."
+    ]
+  },
+  {
     "versao": "1.1",
     "data": "2026-11-05",
     "resumo": "Excluir funciona para qualquer transação do extrato (a transferência sai das duas contas), com confirmação no visual do app. O cartão mostra o limite disponível, a importação ficou mais simples e o Apoie ganhou as opções de pagamento.",

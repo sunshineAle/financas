@@ -82,8 +82,16 @@ const mistura = computed(() => {
 const corMedia = computed(() => {
   const n = props.partes.length;
   if (n === 1) return props.partes[0].cor;
-  const itens = props.partes.map((p, i) => `${p.cor} ${(Math.max(fracoes.value[i], 0.04) * 100).toFixed(1)}%`);
-  return `color-mix(in oklab, ${itens.join(', ')})`;
+  // color-mix só aceita DUAS cores na maioria dos navegadores: com 3+ partes, mistura em cadeia (média ponderada)
+  const pesos = props.partes.map((_, i) => Math.max(fracoes.value[i], 0.04));
+  let cor = props.partes[0].cor;
+  let acc = pesos[0];
+  for (let i = 1; i < n; i++) {
+    const pctAtual = (acc / (acc + pesos[i])) * 100;
+    cor = `color-mix(in oklab, ${cor} ${pctAtual.toFixed(1)}%, ${props.partes[i].cor})`;
+    acc += pesos[i];
+  }
+  return cor;
 });
 
 // Arcos externos: cada parte ocupa sua fatia do círculo menos um afastamento; as pontas esmaecem
@@ -131,7 +139,7 @@ const listaArcos = computed(() => {
       <div class="aro"></div>
     </div>
     <template v-if="arcos"><div v-for="(a, i) in listaArcos" :key="'a' + i" class="arco" :style="{ backgroundImage: a.grad }" aria-hidden="true"></div>
-    <span v-for="(a, i) in listaArcos" :key="'t' + i" class="pct" :style="{ left: a.x + '%', top: a.y + '%', '--sx': a.sx, '--cy': a.cy, opacity: progresso }" aria-hidden="true">
+    <span v-for="(a, i) in listaArcos" :key="'t' + i" class="pct" :style="{ left: a.x + '%', top: a.y + '%', '--sx': a.sx, '--cy': a.cy, opacity: progresso, display: a.pct > 0 || partes.length === 1 ? null : 'none' }" aria-hidden="true">
       <i :style="{ background: a.cor }"></i>{{ a.pct }}%
     </span></template>
     <div v-if="$slots.default" class="centro"><slot /></div>
