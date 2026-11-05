@@ -61,7 +61,7 @@ const modalMeta = ref(false);
 const editandoMetaId = ref(null);
 // Anotação 55: "Já guardado em" (data + valor). Anotação 56: caixinha do banco (conta + nome no extrato, apelidos com ';').
 const hojeIso = () => new Date().toLocaleDateString('sv-SE');
-const metaVazia = () => ({ nome: '', icone: '🎯', tipoInvestimento: '', meta: 0, prazo: '', jaData: hojeIso(), jaValor: 0, ehCaixinha: false, cxConta: '', cxNome: '' });
+const metaVazia = () => ({ nome: '', icone: '🎯', tipoInvestimento: '', pctCdi: '', meta: 0, prazo: '', jaData: hojeIso(), jaValor: 0, ehCaixinha: false, cxConta: '', cxNome: '' });
 const metaForm = ref(metaVazia());
 const jaOriginal = ref(null);
 const erroMeta = ref('');
@@ -233,8 +233,15 @@ function editarLancamento(id) { const it = itemPorId(id); if (it) editarAporte(i
 function apagarLancamento(id) { const it = itemPorId(id); if (it) apagarAporte(it); }
 
 async function apagarAporte(item) {
-  if (!(await confirmar({ titulo: 'Apagar lançamento?', texto: `Apagar este lançamento de ${moeda(Math.abs(item.valor))}? O valor volta para a conta de origem, se houver.`, acao: 'Apagar' }))) return;
-  const r = await api('DELETE', comCdi(`/api/reserva/aportes/${item.id}`));
+  let extrato = '';
+  if (item.transacao_id) {
+    // 1.2 (anotação 75.1): veio do extrato da conta — perguntar se a transação sai de lá também
+    const sim = await confirmar({ titulo: 'Tirar também do extrato da conta?', perigo: true, acao: 'Tirar da meta e do extrato', cancelar: 'Só da meta',
+      texto: `Este lançamento de ${moeda(Math.abs(item.valor))} veio do extrato da conta. Tirando dos dois, a transação é apagada e o saldo da conta muda. Só da meta, ela fica em "A revisar" para você vincular de novo ou apagar.`, tresVias: true });
+    if (sim === null) return;
+    extrato = sim ? '?extrato=apagar' : '?extrato=manter';
+  } else if (!(await confirmar({ titulo: 'Apagar lançamento?', texto: `Apagar este lançamento de ${moeda(Math.abs(item.valor))}? O valor volta para a conta de origem, se houver.`, acao: 'Apagar' }))) return;
+  const r = await api('DELETE', comCdi(`/api/reserva/aportes/${item.id}${extrato}`));
   if (!r.ok) {
     avisar(r.json?.erro || 'Não foi possível apagar.', { tipo: 'aviso' });
     return;
@@ -318,7 +325,7 @@ function abrirEdicaoMeta(m) {
   if (!meta) return;
   editandoMetaId.value = meta.id;
   metaForm.value = {
-    nome: meta.nome, icone: meta.icone || '🎯', tipoInvestimento: meta.tipo_investimento || '', meta: meta.valor_meta, prazo: meta.prazo || '',
+    nome: meta.nome, icone: meta.icone || '🎯', tipoInvestimento: meta.tipo_investimento || '', pctCdi: meta.pct_cdi ?? '', meta: meta.valor_meta, prazo: meta.prazo || '',
     jaData: meta.saldo_inicial_data || hojeIso(), jaValor: Number(meta.saldo_inicial_valor) || 0,
     ehCaixinha: !!meta.caixinha_conta_id, cxConta: meta.caixinha_conta_id || '', cxNome: meta.caixinha_nome || '',
   };
@@ -338,12 +345,14 @@ async function salvarMeta() {
   if (!f.nome.trim()) errosMeta.value.nome = 'Dê um nome para a meta.';
   if (!(Number(f.meta) > 0)) errosMeta.value.meta = 'Informe uma meta maior que zero.';
   if (f.ehCaixinha && !f.cxConta) errosMeta.value.cxConta = 'Escolha a conta da caixinha.';
+  const pct = String(f.pctCdi ?? '').trim() === '' ? null : Number(String(f.pctCdi).replace(',', '.'));
+  if (pct !== null && !(pct >= 1 && pct <= 150)) errosMeta.value.pctCdi = 'Use de 1% a 150% (100% = rende igual ao CDI).';
   if (Object.keys(errosMeta.value).length) return;
   const o = jaOriginal.value;
   const jaMudou = o ? o.data !== f.jaData || Number(o.valor) !== Number(f.jaValor) : Number(f.jaValor) > 0;
   const r = await api(editandoMetaId.value ? 'PUT' : 'POST', comCdi(editandoMetaId.value ? `/api/reserva/metas/${editandoMetaId.value}` : '/api/reserva/metas'),
     {
-      nome: f.nome, icone: f.icone, tipoInvestimento: f.tipoInvestimento || null, valorMeta: Number(f.meta), prazo: f.prazo || null,
+      nome: f.nome, icone: f.icone, tipoInvestimento: f.tipoInvestimento || null, valorMeta: Number(f.meta), prazo: f.prazo || null, pctCdi: f.tipoInvestimento === 'poupanca' ? null : pct,
       ...(jaMudou ? { saldoInicial: { data: f.jaData || hojeIso(), valor: Number(f.jaValor) || 0 } } : {}),
       caixinha: f.ehCaixinha ? { contaId: f.cxConta, nome: f.cxNome || f.nome } : null,
     });
@@ -578,6 +587,7 @@ onMounted(carregarConectados);
         </div>
       </CampoBase>
       <CampoSelecao v-model="metaForm.tipoInvestimento" rotulo="Tipo de investimento desta meta" :opcoes="opcoesTipoMeta" tema="meta" dica="Só liquidez rápida." dica-ao-focar />
+      <CampoTexto v-if="metaForm.tipoInvestimento !== 'poupanca'" v-model="metaForm.pctCdi" rotulo="Rende quanto do CDI? (%)" placeholder="100" tema="meta" :erro="errosMeta.pctCdi" dica="Ex.: 89 se a caixinha rende 89% do CDI. Vazio = 100%. O rendimento mostrado é bruto (antes do IR)." dica-ao-focar data-pct-cdi />
       <CampoData v-model="metaForm.prazo" rotulo="Prazo (opcional)" tema="meta" />
       <CampoBase rotulo="Já guardado em" dica="O que já estava guardado antes. Não sai de nenhuma conta." dica-ao-focar>
         <div class="duas-colunas">

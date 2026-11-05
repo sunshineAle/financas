@@ -74,6 +74,10 @@ const TABELAS = {
       'icone TEXT',
       'id_externo TEXT',
       'conexao_id TEXT',
+      // 1.2 (anotação 73.4): só conta corrente com cheque especial cadastrado vira passivo/dívida quando fica negativa
+      'cheque_especial INTEGER NOT NULL DEFAULT 0',
+      'limite_cheque REAL',
+      'taxa_cheque REAL',
     ],
     fk: { usuario_id: 'usuarios', conexao_id: 'conexoes_pluggy' },
     exporta: true,
@@ -207,6 +211,8 @@ const TABELAS = {
       // Anotação 56: meta ligada a uma caixinha do banco — conta e nome como aparece no extrato (apelidos separados por ';').
       'caixinha_conta_id TEXT',
       'caixinha_nome TEXT',
+      // 1.2 (anotação 74): quanto do CDI a caixinha rende (1–150; vazio = 100)
+      'pct_cdi REAL',
     ],
     fk: { reserva_id: 'reserva_liberdade' },
     exporta: true,
@@ -249,6 +255,8 @@ const TABELAS = {
       'taxa_juros REAL',
       'cet REAL',
       'bandeira TEXT',
+      // 1.2 (anotação 73.3): 1 = compra feita no dia do fechamento vai para a fatura seguinte
+      'fechamento_proxima INTEGER NOT NULL DEFAULT 0',
     ],
     fk: { usuario_id: 'usuarios', conta_id: 'contas', conexao_id: 'conexoes_pluggy' },
     exporta: true,
@@ -543,6 +551,17 @@ function criarEsquema(db) {
     TABELAS[nome].indices.forEach((s) => db.exec(s));
   }
   migrarOrigemSituacao(db);
+  repararReservaOrfa(db);
+}
+
+// 1.2 (anotação 75.1): Guardar/Resgatar do extrato cujo lançamento na meta foi apagado pela tela da meta ficava preso
+// ("Guardar · meta" sem meta). Volta para "A revisar" (fora dos totais, saldo mantido), de onde pode ser vinculado de novo ou apagado.
+function repararReservaOrfa(db) {
+  try {
+    db.exec(`UPDATE transacoes SET tipo_mov = 'reserva_pendente', revisao = NULL, rotulo_mov = NULL
+      WHERE tipo_mov = 'reserva_vinculada' AND excluido_em IS NULL
+        AND NOT EXISTS (SELECT 1 FROM operacoes o WHERE o.transacao_id = transacoes.id AND o.excluido_em IS NULL)`);
+  } catch { /* tabelas antigas: nada a reparar */ }
 }
 
 // Dívidas antigas (tipo + negativada + status) ganham origem e situação, uma vez, sem mexer em mais nada

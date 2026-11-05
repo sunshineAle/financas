@@ -1,6 +1,6 @@
 <script setup>
 import { confirmar } from '../services/confirmar.js';
-import { podeExcluirEmLote, excluirComAviso, ehTransferenciaMov } from '../services/excluirTransacoes.js';
+import { podeExcluirEmLote, excluirComAviso, ehTransferenciaMov, excluirVarias } from '../services/excluirTransacoes.js';
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
 import { useRouter, useRoute } from 'vue-router';
@@ -13,6 +13,7 @@ import FormularioModal from '../components/FormularioModal.vue';
 import CampoTexto from '../components/CampoTexto.vue';
 import CampoValor from '../components/CampoValor.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
+import CampoTipo from '../components/CampoTipo.vue';
 import CampoInstituicao from '../components/CampoInstituicao.vue';
 import CampoBase from '../components/CampoBase.vue';
 import CampoData from '../components/CampoData.vue';
@@ -57,7 +58,9 @@ const hojeIso = () => new Date().toLocaleDateString('sv-SE');
 const dataBR = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
 const diaMesBR = (d) => dataBR(d).slice(0, 5);
 // Anotação 55: no cadastro/edição o saldo é o "Saldo inicial" (data de início + valor), lançado fora das entradas e saídas.
-const formVazio = () => ({ nome: '', tipo: 'corrente', saldo: 0, saldoData: hojeIso(), icone: '🏦', cor: '' });
+const formVazio = () => ({ nome: '', tipo: 'corrente', saldo: 0, saldoData: hojeIso(), icone: '🏦', cor: '', cheque: 'nao', limiteCheque: '', taxaCheque: '' });
+// 1.2 (anotação 73.4): cheque especial só existe em conta corrente, e só quando a pessoa diz que tem
+const OPCOES_CHEQUE = [{ id: 'nao', rotulo: 'Não tem', tema: 'entrada' }, { id: 'sim', rotulo: 'Tem cheque especial', tema: 'saida' }];
 const formulario = ref(formVazio());
 const saldoOriginal = ref(null); // { data, valor } ao abrir a edição: só envia se mudou
 const erros = reactive({ nome: '' });
@@ -155,6 +158,7 @@ function editar(conta) {
   formulario.value = {
     nome: conta.nome, tipo: conta.tipo, icone: conta.icone || '🏦', cor: conta.cor || '',
     saldo: temInicial ? Number(conta.saldo_inicial_valor) || 0 : 0, saldoData: temInicial ? conta.saldo_inicial_data : hojeIso(),
+    cheque: conta.cheque_especial ? 'sim' : 'nao', limiteCheque: conta.limite_cheque ?? '', taxaCheque: conta.taxa_cheque ?? '',
   };
   saldoOriginal.value = { data: formulario.value.saldoData, valor: formulario.value.saldo };
   erros.nome = '';
@@ -165,6 +169,25 @@ function cancelarEdicao() {
   erro.value = '';
   modalAberto.value = false;
   formulario.value = formVazio();
+}
+// 1.2 (anotação 75.3): "Começar a partir de" — o saldo inicial marca a data em que o app passa a valer; o que veio antes
+// (extratos antigos, Guardar/Resgatar soltos) pode ser apagado de uma vez para o saldo bater com o banco.
+const apagandoAntes = ref(false);
+async function apagarAntesDoInicio() {
+  const id = editandoId.value; const dia = formulario.value.saldoData;
+  if (!id || !dia) return;
+  const r = await fetch(`/api/transacoes?contaId=${id}`, { credentials: 'include' });
+  const j = r.ok ? await r.json() : {};
+  const antes = (j.transacoes || j || []).filter((t) => String(t.data).slice(0, 10) < dia && t.tipo_mov !== 'saldo_inicial' && podeExcluirEmLote(t));
+  if (!antes.length) { avisar(`Não há lançamentos antes de ${dia.split('-').reverse().join('/')}.`, { tipo: 'ok' }); return; }
+  if (!(await confirmar({ titulo: 'Apagar o que veio antes?', acao: `Apagar ${antes.length}`,
+    texto: `${antes.length} lançamento(s) desta conta são de antes de ${dia.split('-').reverse().join('/')} (data do saldo inicial). Eles saem do extrato; transferências saem das duas contas e Guardar/Resgatar saem também da meta.` }))) return;
+  apagandoAntes.value = true;
+  try {
+    const { ok, falhas } = await excluirVarias(antes);
+    avisar(`${ok} lançamento(s) apagado(s)${falhas ? ` · ${falhas} não puderam sair` : ''}.`, { tipo: falhas ? 'aviso' : 'ok' });
+    await carregarContas(); carregarExtrato();
+  } finally { apagandoAntes.value = false; }
 }
 async function salvar() {
   erro.value = '';
@@ -184,6 +207,7 @@ async function salvar() {
         tipo: formulario.value.tipo,
         icone: formulario.value.icone,
         cor: formulario.value.cor || null,
+        ...(formulario.value.tipo === 'corrente' ? { chequeEspecial: formulario.value.cheque === 'sim', limiteCheque: formulario.value.limiteCheque === '' ? null : Number(formulario.value.limiteCheque), taxaCheque: formulario.value.taxaCheque === '' ? null : Number(String(formulario.value.taxaCheque).replace(',', '.')) } : {}),
         ...(saldoMudou() ? { saldoInicial: { data: formulario.value.saldoData || hojeIso(), valor: Number(formulario.value.saldo) || 0 } } : {}),
       }),
     });
@@ -365,6 +389,10 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
                   />
                 </template>
               </ContaResumo>
+              <div v-if="Number(contaSel.saldo) < -0.004 && !(contaSel.cheque_especial && contaSel.tipo === 'corrente')" class="aviso-negativo" role="status" data-aviso-saldo-negativo>
+                <span>O saldo desta conta ficou negativo. Confira os lançamentos ou ajuste o saldo.</span>
+                <button type="button" class="sf-botao secundario" @click="abrirAjuste">Ajustar saldo</button>
+              </div>
               <p v-if="contaSel.origem === 'conectada'" class="sinc">Conectada · última sincronização {{ haQuanto(contaSel.ultima_sincronizacao) }}</p>
             </section>
 
@@ -379,11 +407,19 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
     <FormularioModal :aberto="modalAberto" :titulo="editandoId ? 'Editar conta' : 'Nova conta'" :ajuda="ehEdicaoConectada ? '' : 'contas.saldo-inicial'" tema="entrada" :carregando="salvando" :erro="erro" :rotulo-salvar="editandoId ? 'Salvar alterações' : 'Adicionar conta'" @salvar="salvar" @fechar="cancelarEdicao">
       <CampoInstituicao v-model:nome="formulario.nome" v-model:icone="formulario.icone" v-model:cor="formulario.cor" rotulo="Instituição" :erro="erros.nome" obrigatorio tema="entrada" />
       <CampoSelecao v-model="formulario.tipo" rotulo="Tipo" :opcoes="tipos" />
+      <template v-if="formulario.tipo === 'corrente' && !ehEdicaoConectada">
+        <CampoTipo v-model="formulario.cheque" rotulo="Cheque especial" :opcoes="OPCOES_CHEQUE" :dica="formulario.cheque === 'sim' ? 'Saldo negativo vira dívida com juros (Patrimônio e Compromissos).' : 'Saldo negativo não vira dívida: o app avisa para conferir a conta.'" />
+        <div v-if="formulario.cheque === 'sim'" class="duas">
+          <CampoValor v-model="formulario.limiteCheque" rotulo="Limite (opcional)" tema="saida" />
+          <CampoTexto v-model="formulario.taxaCheque" rotulo="Juros ao mês % (opcional)" placeholder="8" type="text" />
+        </div>
+      </template>
       <template v-if="!ehEdicaoConectada">
         <div class="duas">
           <CampoData v-model="formulario.saldoData" rotulo="Saldo em" :max="hojeIso()" tema="entrada" dica="Data de início" />
           <CampoValor v-model="formulario.saldo" rotulo="Saldo inicial" tema="entrada" permite-negativo dica="Não conta como entrada do mês." dica-ao-focar />
         </div>
+        <button v-if="editandoId && saldoOriginal && saldoOriginal.valor" type="button" class="link-antes" :disabled="apagandoAntes" data-apagar-antes @click="apagarAntesDoInicio">Apagar lançamentos de antes de {{ String(formulario.saldoData || '').split('-').reverse().join('/') }}</button>
       </template>
       <template v-if="fluxo && !editandoId" #extra>
         <button type="button" class="sf-botao secundario" :disabled="salvando" @click="pularSaldo">Pular</button>
@@ -443,4 +479,8 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
 .mensagem-erro { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--cor-alerta) 14%, transparent); color: var(--cor-alerta); font-size: 14px; }
 .caixa-modal { padding: 14px; border-radius: 16px; border: 1px solid var(--cor-card-borda); background: var(--cor-card); display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .botao-secundario { min-height: 44px; padding: 0 16px; border-radius: 12px; background: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto); font: 600 14px var(--fonte-texto); cursor: pointer; }
+.aviso-negativo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--saida-ambar-medio, #d68a00) 12%, var(--cor-card)); border: 1px solid color-mix(in srgb, var(--saida-ambar-medio, #d68a00) 40%, var(--cor-borda)); font-size: 13.5px; line-height: 1.4; }
+.aviso-negativo .sf-botao { min-height: 36px; padding: 0 14px; }
+.link-antes { align-self: flex-start; border: none; background: none; padding: 2px 0; color: var(--cor-primaria); font: 600 13px var(--fonte-texto); text-decoration: underline; cursor: pointer; }
 </style>

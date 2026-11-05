@@ -44,6 +44,17 @@ router.get('/', (req, res) => {
   res.json(contas);
 });
 
+// 1.2 (anotação 73.4): "Tem cheque especial?" (só conta corrente), com limite e taxa ao mês opcionais.
+function lerCheque(corpo, tipo, atual = {}) {
+  if (tipo !== 'corrente') return { cheque_especial: 0, limite_cheque: null, taxa_cheque: null };
+  if (corpo.chequeEspecial === undefined) return {};
+  const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+  const limite = num(corpo.limiteCheque); const taxa = num(corpo.taxaCheque);
+  if (limite !== null && !(limite >= 0)) throw Object.assign(new Error('O limite do cheque especial deve ser um valor válido.'), { status: 400 });
+  if (taxa !== null && !(taxa > 0 && taxa < 100)) throw Object.assign(new Error('A taxa do cheque especial deve ficar entre 0 e 100% ao mês.'), { status: 400 });
+  return corpo.chequeEspecial ? { cheque_especial: 1, limite_cheque: limite, taxa_cheque: taxa } : { cheque_especial: 0, limite_cheque: null, taxa_cheque: null };
+}
+
 router.post('/', (req, res) => {
   const { nome, tipo, saldo, cor, icone } = req.body || {};
 
@@ -61,7 +72,7 @@ router.post('/', (req, res) => {
     dados.transacao(() => {
       conta = dados.inserir('contas', {
         usuario_id: req.usuario.id, nome: nome.trim(), tipo: tipo || 'corrente', origem: 'manual',
-        saldo: 0, cor: cor || null, icone: lerIcone(icone),
+        saldo: 0, cor: cor || null, icone: lerIcone(icone), ...lerCheque(req.body || {}, tipo || 'corrente'),
       });
       if (inicial && inicial.valor) definirSaldoInicial(req.usuario.id, conta, inicial);
     });
@@ -96,6 +107,7 @@ router.put('/:id', (req, res) => {
         saldo: saldo === undefined || inicial ? conta.saldo : Number(saldo),
         cor: cor === undefined ? conta.cor : cor,
         icone: icone === undefined ? conta.icone : lerIcone(icone),
+        ...lerCheque(req.body || {}, tipo || conta.tipo, conta),
       });
       if (inicial) definirSaldoInicial(req.usuario.id, dados.buscar('contas', conta.id), inicial);
     });

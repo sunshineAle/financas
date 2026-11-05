@@ -1,8 +1,8 @@
 // Excluir transações (uma ou várias) — extrato da conta e Transações (05/11).
 // Tudo o que foi lançado no app (à mão ou importado) pode ser excluído: transferência (sai das DUAS contas), estorno
 // (a despesa original volta a contar), saldo inicial, ajuste de saldo e transações ignoradas. O servidor
-// (DELETE /api/transacoes/:id) desfaz o par inteiro. Ficam de fora só os Guardar/Resgatar e aportes/resgates de
-// investimento, que mexem na meta/no ativo e são apagados por lá.
+// (DELETE /api/transacoes/:id) desfaz o par inteiro. 1.2 (anotação 75.1): Guardar/Resgatar e aportes/resgates vindos do
+// extrato também podem sair daqui — o servidor tira o lançamento da meta/do investimento junto.
 import { confirmar } from './confirmar.js';
 
 const pedir = (url, opcoes = {}) => fetch(url, { credentials: 'include', ...opcoes });
@@ -13,7 +13,6 @@ export const ehEstornoMov = (t) => /^estorn/.test(mov(t));
 
 export function podeExcluirEmLote(t) {
   if (!t) return false;
-  if (ehReservaMov(t)) return false;
   if (t.cartao) return t.cartao_origem === 'manual';
   return t.origem === 'manual';
 }
@@ -21,6 +20,8 @@ export function podeExcluirEmLote(t) {
 // Texto da confirmação conforme o tipo
 export function textoExclusao(t) {
   const nome = `"${t.descricao_base || t.descricao}"`;
+  if (mov(t) === 'reserva_pendente') return { titulo: 'Excluir transação?', texto: `${nome} estava em "A revisar" (Guardar ou Resgatar sem meta). Sai do extrato e o saldo da conta volta ao que era.` };
+  if (ehReservaMov(t)) return { titulo: 'Excluir Guardar/Resgatar?', texto: `${nome} sai do extrato e o valor também sai da meta ou do investimento. O saldo da conta volta ao que era.` };
   if (ehTransferenciaMov(t)) return { titulo: 'Excluir transferência?', texto: `${nome} sai das duas contas, a de origem e a de destino, e os saldos voltam ao que eram.` };
   if (ehEstornoMov(t)) return { titulo: 'Excluir estorno?', texto: `${nome} sai e a despesa original volta a contar nos totais.` };
   if (mov(t) === 'saldo_inicial') return { titulo: 'Excluir saldo inicial?', texto: 'O saldo da conta deixa de ter esse ponto de partida. Você pode lançar outro em Ajustar saldo.' };

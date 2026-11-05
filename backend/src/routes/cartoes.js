@@ -54,7 +54,7 @@ function lerDadosCartao(corpo, usuarioId) {
     contaId = conta.id;
   }
 
-  return { dados: { nome, diaFechamento, diaVencimento, limite, contaId, icone: lerIcone(corpo.icone), cor: lerCor(corpo.cor), ...credito.dados } };
+  return { dados: { nome, diaFechamento, diaVencimento, limite, contaId, icone: lerIcone(corpo.icone), cor: lerCor(corpo.cor), fechamentoProxima: corpo.fechamentoNaProxima === undefined ? undefined : (corpo.fechamentoNaProxima ? 1 : 0), ...credito.dados } };
 }
 
 // --- Tipo de crédito, juros e bandeira (anotações 53 e 58) ---------------------
@@ -147,7 +147,8 @@ function lancamentosDoCartao(cartao) {
       l.data_compra,
       cartao.dia_fechamento,
       cartao.dia_vencimento,
-      l.parcela_numero
+      l.parcela_numero,
+      cartao.fechamento_proxima
     ),
     tipoMov: l.tipo_mov || null, // anotação 61: crédito (estorno_vinculado, estorno_avulso, pagamento, cashback) ou compra estornada
   }));
@@ -155,7 +156,7 @@ function lancamentosDoCartao(cartao) {
 
 // Fatura em que uma compra feita hoje cairia.
 function chaveFaturaAberta(cartao) {
-  return faturas.faturaDaParcela(hoje(), cartao.dia_fechamento, cartao.dia_vencimento, 1);
+  return faturas.faturaDaParcela(hoje(), cartao.dia_fechamento, cartao.dia_vencimento, 1, cartao.fechamento_proxima);
 }
 
 function statusDaFatura(chave, chaveAberta) {
@@ -230,6 +231,7 @@ function resumoDoCartao(cartao) {
     contaIcone: cartao.conta_icone || null,
     limite: cartao.limite,
     diaFechamento: cartao.dia_fechamento,
+    fechamentoNaProxima: !!cartao.fechamento_proxima,
     diaVencimento: cartao.dia_vencimento,
     origem: cartao.origem,
     ...camposCredito(cartao),
@@ -261,7 +263,7 @@ router.post('/', (req, res) => {
   const novo = dados.inserir('cartoes', {
     usuario_id: req.usuario.id, conta_id: d.contaId, nome: d.nome, limite: d.limite, dia_fechamento: d.diaFechamento,
     dia_vencimento: d.diaVencimento, origem: 'manual', icone: d.icone, cor: d.cor,
-    tipo_credito: d.tipoCredito, taxa_juros: d.taxaJuros, cet: d.cet, bandeira: d.bandeira,
+    tipo_credito: d.tipoCredito, taxa_juros: d.taxaJuros, cet: d.cet, bandeira: d.bandeira, fechamento_proxima: d.fechamentoProxima || 0,
   });
 
   req.params.id = novo.id;
@@ -282,6 +284,7 @@ router.put('/:id', (req, res) => {
   dados.atualizar('cartoes', cartao.id, {
     nome: d.nome, conta_id: d.contaId, limite: d.limite, dia_fechamento: d.diaFechamento, dia_vencimento: d.diaVencimento, icone: d.icone, cor: d.cor,
     tipo_credito: d.tipoCredito, taxa_juros: d.taxaJuros, cet: d.cet, bandeira: d.bandeira,
+    ...(d.fechamentoProxima === undefined ? {} : { fechamento_proxima: d.fechamentoProxima }),
   });
 
   res.json(resumoDoCartao(buscarCartao(req, res)));
@@ -349,10 +352,13 @@ router.post('/:id/faturas/:chave/pagar', (req, res) => {
   const total = faturas.arredondar(itens.reduce((s, i) => s + i.valor, 0));
   if (total <= 0) return res.status(400).json({ erro: 'Esta fatura não tem valor a pagar.' });
 
-  const conta = db
+  // 1.2 (anotação 75.2): "Paga fora do período / sem conta de origem" — marca a fatura como paga sem mexer em saldo nenhum
+  // (fatura antiga cujo pagamento não está nos extratos importados).
+  const semConta = !!req.body?.semConta;
+  const conta = semConta ? null : db
     .prepare('SELECT * FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL')
     .get(String(req.body?.contaId), req.usuario.id);
-  if (!conta) return res.status(400).json({ erro: 'Escolha a conta de onde saiu o dinheiro.' });
+  if (!semConta && !conta) return res.status(400).json({ erro: 'Escolha a conta de onde saiu o dinheiro.' });
 
   const dia = req.body?.data || hoje();
   if (!faturas.dataValida(dia)) return res.status(400).json({ erro: 'Data inválida.' });
@@ -379,13 +385,17 @@ router.post('/:id/faturas/:chave/pagar', (req, res) => {
     }
   }
 
+  // 1.2 (anotação 73.2): parcelamento cobrado na PRÓPRIA fatura (Fatura Flex e similares) — a fatura fica quitada e
+  // não nasce Dívida, senão o restante contaria duas vezes (na dívida e nas parcelas que chegam no cartão).
+  const parcelasNoCartao = tipoDif === 'parcelada' && !!req.body?.parcelasNoCartao;
+
   dados.transacao(() => {
-    const t = dados.inserir('transacoes', {
+    const t = semConta ? null : dados.inserir('transacoes', {
       conta_id: conta.id, usuario_id: req.usuario.id, descricao: `Fatura ${cartao.nome} ${chave}`, valor: -valorPago, data: dia,
       origem: 'manual', subcategoria: 'Fatura de cartão',
     });
     let dividaId = null;
-    if (tipoDif === 'parcelada') {
+    if (tipoDif === 'parcelada' && !parcelasNoCartao) {
       // o restante vira dívida (aba Crediário/parcelados em Dívidas) com as parcelas para as próximas faturas
       const [a, m] = chave.split('-').map(Number);
       const prox = `${m === 12 ? a + 1 : a}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
@@ -398,10 +408,10 @@ router.post('/:id/faturas/:chave/pagar', (req, res) => {
       dividaId = divida.id;
     }
     dados.inserir('faturas_pagas', {
-      cartao_id: cartao.id, fatura: chave, conta_id: conta.id, transacao_id: t.id, valor: valorPago, data: dia,
+      cartao_id: cartao.id, fatura: chave, conta_id: conta ? conta.id : null, transacao_id: t ? t.id : null, valor: valorPago, data: dia,
       desconto: tipoDif === 'desconto' ? diferenca : 0, parcelado: tipoDif === 'parcelada' ? diferenca : 0, divida_id: dividaId,
     });
-    if (conta.origem === 'manual') dados.somar('contas', conta.id, 'saldo', -valorPago);
+    if (conta && conta.origem === 'manual') dados.somar('contas', conta.id, 'saldo', -valorPago);
   });
 
   res.status(201).json(montarFatura(chave, cartao, chaveFaturaAberta(cartao), itens));
@@ -479,8 +489,8 @@ router.get('/:id/previa', (req, res) => {
   if (lida.erro) return res.status(400).json({ erro: lida.erro });
   const c = lida.dados;
 
-  const primeira = faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, 1);
-  const ultima = faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, c.parcelas);
+  const primeira = faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, 1, cartao.fechamento_proxima);
+  const ultima = faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, c.parcelas, cartao.fechamento_proxima);
   res.json({
     parcelas: c.parcelas,
     valorParcela: c.valores[0],
@@ -519,7 +529,7 @@ router.post('/:id/lancamentos', (req, res) => {
     parcelas: c.parcelas,
     valorTotal: c.valor,
     valorParcela: c.valores[0],
-    primeiraFatura: faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, 1),
+    primeiraFatura: faturas.faturaDaParcela(c.dataCompra, cartao.dia_fechamento, cartao.dia_vencimento, 1, cartao.fechamento_proxima),
   });
 });
 

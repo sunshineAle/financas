@@ -5,12 +5,13 @@ import { ref } from 'vue';
 
 export const pedidoConfirmacao = ref(null); // { titulo, texto, acao, cancelar, perigo, detalhes, resolver }
 
-export function confirmar({ titulo = 'Tem certeza?', texto = '', acao = 'Excluir', cancelar = 'Cancelar', perigo = true, detalhes = [] } = {}) {
+export function confirmar({ titulo = 'Tem certeza?', texto = '', acao = 'Excluir', cancelar = 'Cancelar', perigo = true, detalhes = [], tresVias = false } = {}) {
   if (pedidoConfirmacao.value) pedidoConfirmacao.value.resolver(false);
-  return new Promise((resolver) => { pedidoConfirmacao.value = { titulo, texto, acao, cancelar, perigo, detalhes, resolver }; });
+  return new Promise((resolver) => { pedidoConfirmacao.value = { titulo, texto, acao, cancelar, perigo, detalhes, tresVias, resolver }; });
 }
+// `tresVias`: devolve true (botão principal), false (botão secundário) ou null (fechou sem escolher).
 export function responderConfirmacao(sim) {
   const p = pedidoConfirmacao.value;
   pedidoConfirmacao.value = null;
-  if (p) p.resolver(!!sim);
+  if (p) p.resolver(p.tresVias ? (sim === null ? null : !!sim) : !!sim);
 }

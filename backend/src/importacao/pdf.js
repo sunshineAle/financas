@@ -24,7 +24,14 @@ function referencia(linhas) {
   let total = null;
   const mt = texto.match(/(?:total\s+(?:da|desta)\s+fatura|valor\s+total(?:\s+da\s+fatura)?|total\s+a\s+pagar)[^\d\n−-]{0,30}([-−]?\s*(?:R\$\s*)?[-−]?\d{1,3}(?:\.\d{3})*,\d{2})/i);
   if (mt) { const v = parseValor(mt[1].replace(/R\$\s*/, '').replace('−', '-').replace(/\s+/g, '')); if (v !== null) total = v; }
-  return { vencimento: venc, ano: ano ? +ano : null, periodo, total };
+  // 1.2 (anotação 75.3): saldo final do extrato de CONTA ("Saldo total", "Saldo final", "Saldo disponível", "Saldo em 05/11/2026")
+  let saldo = null; let saldoData = null;
+  const ms = [...texto.matchAll(/saldo\s+(?:total|final|dispon[ií]vel|atual|em\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?))[^\d\n−-]{0,25}([-−]?\s*(?:R\$\s*)?[-−]?\d{1,3}(?:\.\d{3})*,\d{2})/gi)].pop();
+  if (ms) {
+    const v = parseValor(ms[2].replace(/R\$\s*/, '').replace('−', '-').replace(/\s+/g, ''));
+    if (v !== null) { saldo = v; saldoData = ms[1] ? parseData(ms[1].length <= 5 && ano ? `${ms[1]}/${ano}` : ms[1]) : null; }
+  }
+  return { vencimento: venc, ano: ano ? +ano : null, periodo, total, saldo, saldoData };
 }
 
 function valorDoToken(tok) {
@@ -87,7 +94,7 @@ function parsePdf(linhasTexto) {
   if (!saida.length) throw new Error('Não reconheci lançamentos neste PDF (esperava linhas com data, descrição e valor). Tente OFX, CSV ou planilha, ou escolha outro PDF.');
   return {
     linhas: saida, ignoradas,
-    meta: { formato: 'pdf', vencimento: ref.vencimento, totalFatura: ref.total, inicio: ref.periodo ? ref.periodo.inicio : null, fim: ref.periodo ? ref.periodo.fim : null, sinalNormalizado: algumExplicito && saida.every((s) => s.sinalExplicito) },
+    meta: { formato: 'pdf', vencimento: ref.vencimento, totalFatura: ref.total, inicio: ref.periodo ? ref.periodo.inicio : null, fim: ref.periodo ? ref.periodo.fim : null, sinalNormalizado: algumExplicito && saida.every((s) => s.sinalExplicito), ...(ref.saldo !== null ? { saldo: ref.saldo, saldoData: ref.saldoData } : {}) },
   };
 }
 

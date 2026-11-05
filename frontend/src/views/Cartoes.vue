@@ -240,7 +240,7 @@ const editandoId = ref(null);
 const erro = ref('');
 const erros = ref({});
 const salvando = ref(false);
-const formVazio = () => ({ nome: '', contaId: '', limite: 0, diaFechamento: '', diaVencimento: '', icone: '💳', cor: '', tipoCredito: 'cartao', taxaJuros: '', cet: '', bandeira: '' });
+const formVazio = () => ({ nome: '', contaId: '', limite: 0, diaFechamento: '', diaVencimento: '', icone: '💳', cor: '', tipoCredito: 'cartao', taxaJuros: '', cet: '', bandeira: '', fechProx: 'esta' });
 const formulario = ref(formVazio());
 const saldoInicial = ref(saldoInicialVazio());
 const inicioAberto = ref(false);
@@ -250,7 +250,7 @@ function abrirNovo() { editandoId.value = null; erro.value = ''; erros.value = {
 function editar(c) {
   editandoId.value = c.id; erro.value = ''; erros.value = {};
   tipoTocado = true; bandeiraTocada = true;
-  formulario.value = { nome: c.nome, contaId: c.contaId ?? '', limite: c.limite ?? 0, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento, icone: c.icone || '💳', cor: c.cor || '', tipoCredito: c.tipoCredito || 'cartao', taxaJuros: c.taxaJuros ?? '', cet: c.cet ?? '', bandeira: c.bandeira || '' };
+  formulario.value = { nome: c.nome, contaId: c.contaId ?? '', limite: c.limite ?? 0, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento, icone: c.icone || '💳', cor: c.cor || '', tipoCredito: c.tipoCredito || 'cartao', taxaJuros: c.taxaJuros ?? '', cet: c.cet ?? '', bandeira: c.bandeira || '', fechProx: c.fechamentoNaProxima ? 'proxima' : 'esta' };
   lojaTemBandeira.value = null;
   modalAberto.value = true;
 }
@@ -369,7 +369,7 @@ async function salvar() {
       method: editandoId.value ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nome: f.nome, contaId: f.contaId === '' ? null : f.contaId, limite: Number(f.limite) > 0 ? Number(f.limite) : null,
-        diaFechamento: crediario && !diaOk(f.diaFechamento) ? null : Number(f.diaFechamento), diaVencimento: Number(f.diaVencimento), icone: f.icone, cor: f.cor || null,
+        diaFechamento: crediario && !diaOk(f.diaFechamento) ? null : Number(f.diaFechamento), diaVencimento: Number(f.diaVencimento), icone: f.icone, cor: f.cor || null, fechamentoNaProxima: f.fechProx === 'proxima',
         tipoCredito: f.tipoCredito, taxaJuros: num(f.taxaJuros), cet: num(f.cet), bandeira: crediario ? null : f.bandeira || null,
       }),
     });
@@ -579,6 +579,7 @@ onMounted(() => { if (props.fluxo || route.query.novo === '1') abrirNovo(); carr
           <CampoTexto v-if="tipoForm !== 'crediario'" v-model="formulario.diaFechamento" rotulo="Dia de fechamento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaFechamento" obrigatorio tema="saida" dica="Define em qual fatura cai cada compra." dica-ao-focar />
           <CampoTexto v-model="formulario.diaVencimento" rotulo="Dia de vencimento" type="number" min="1" max="31" inputmode="numeric" :erro="erros.diaVencimento" obrigatorio tema="saida" />
         </div>
+        <CampoTipo v-if="tipoForm !== 'crediario'" v-model="formulario.fechProx" rotulo="Compra no dia do fechamento vai para" :opcoes="[{ id: 'esta', rotulo: 'Esta fatura', tema: 'saida' }, { id: 'proxima', rotulo: 'A próxima', tema: 'saida' }]" dica="Veja na sua fatura: alguns bancos já põem a compra do dia do fechamento na fatura seguinte." data-fech-proxima />
         <CampoValor v-model="formulario.limite" :rotulo="tipoForm === 'crediario' ? 'Limite da loja (opcional)' : 'Limite (opcional)'" tipo="saida" />
 
         <CampoTipo v-if="tipoForm === 'loja'" v-model="temBandeiraLoja" rotulo="Tem bandeira?" :opcoes="[{ id: 'sim', rotulo: 'Sim', tema: 'saida' }, { id: 'nao', rotulo: 'Não', tema: 'saida' }]" data-tem-bandeira />

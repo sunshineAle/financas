@@ -47,10 +47,13 @@ function bloco(chave, rotulo, itens, rota) {
 function calcularPatrimonio(usuarioId) {
   // --- Contas ---
   const contas = db
-    .prepare('SELECT id, nome, tipo, saldo, icone, cor FROM contas WHERE usuario_id = ? AND excluido_em IS NULL ORDER BY criado_em ASC, rowid ASC')
+    .prepare('SELECT id, nome, tipo, saldo, icone, cor, cheque_especial FROM contas WHERE usuario_id = ? AND excluido_em IS NULL ORDER BY criado_em ASC, rowid ASC')
     .all(usuarioId);
-  const contasPositivas = contas.filter((c) => c2(c.saldo) >= 0).map((c) => ({ id: c.id, nome: c.nome, valor: r2(c2(c.saldo)), icone: c.icone || null, cor: c.cor || null, tipo: c.tipo }));
-  const chequeEspecial = contas.filter((c) => c2(c.saldo) < 0).map((c) => ({ id: c.id, nome: c.nome, valor: r2(-c2(c.saldo)), icone: c.icone || null, cor: c.cor || null, detalhe: 'Saldo negativo' }));
+  // 1.2 (anotação 73.4): saldo negativo só vira "Cheque especial" (passivo) em conta corrente com cheque especial cadastrado.
+  // Sem ele, a conta fica em Contas com o valor negativo (provável lançamento faltando) e o app avisa na própria conta.
+  const ehCheque = (c) => c2(c.saldo) < 0 && c.cheque_especial === 1 && (c.tipo || 'corrente') === 'corrente';
+  const contasPositivas = contas.filter((c) => !ehCheque(c)).map((c) => ({ id: c.id, nome: c.nome, valor: r2(c2(c.saldo)), icone: c.icone || null, cor: c.cor || null, tipo: c.tipo, ...(c2(c.saldo) < 0 ? { detalhe: 'Saldo negativo' } : {}) }));
+  const chequeEspecial = contas.filter(ehCheque).map((c) => ({ id: c.id, nome: c.nome, valor: r2(-c2(c.saldo)), icone: c.icone || null, cor: c.cor || null, detalhe: 'Saldo negativo' }));
 
   // --- Reserva, metas e carteira: cada lançamento (historico_aportes) cai em um bloco só ---
   const reserva = db.prepare('SELECT id, valor_atual FROM reserva_liberdade WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId);

@@ -53,16 +53,17 @@ function dataValida(texto) {
 
 // Mês de vencimento da fatura em que uma compra feita em `dataCompra` cai
 // (1ª parcela, ou compra à vista).
-function mesDeVencimentoDaCompra(dataCompra, diaFechamento, diaVencimento) {
+// 1.2 (anotação 73.3): `fechamentoNaProxima` = a compra feita NO DIA do fechamento vai para a fatura seguinte (alguns bancos).
+function mesDeVencimentoDaCompra(dataCompra, diaFechamento, diaVencimento, fechamentoNaProxima = false) {
   const [ano, mes, dia] = dataCompra.split('-').map(Number);
   const fechamentoNoMes = Math.min(diaFechamento, ultimoDiaDoMes(ano, mes));
-  const mesFecha = dia <= fechamentoNoMes ? { ano, mes } : somarMeses({ ano, mes }, 1);
+  const mesFecha = (fechamentoNaProxima ? dia < fechamentoNoMes : dia <= fechamentoNoMes) ? { ano, mes } : somarMeses({ ano, mes }, 1);
   return diaVencimento > diaFechamento ? mesFecha : somarMeses(mesFecha, 1);
 }
 
 // Chave "AAAA-MM" da fatura de uma parcela (numeroParcela começa em 1).
-function faturaDaParcela(dataCompra, diaFechamento, diaVencimento, numeroParcela = 1) {
-  const primeira = mesDeVencimentoDaCompra(dataCompra, diaFechamento, diaVencimento);
+function faturaDaParcela(dataCompra, diaFechamento, diaVencimento, numeroParcela = 1, fechamentoNaProxima = false) {
+  const primeira = mesDeVencimentoDaCompra(dataCompra, diaFechamento, diaVencimento, !!fechamentoNaProxima);
   return chaveDoMes(somarMeses(primeira, numeroParcela - 1));
 }
 

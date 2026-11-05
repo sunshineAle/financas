@@ -10,7 +10,7 @@ const p = computed(() => pedidoConfirmacao.value);
 </script>
 
 <template>
-  <Modal :aberto="!!p" :titulo="p ? p.titulo : ''" :largura="420" :camada="1300" @fechar="responderConfirmacao(false)">
+  <Modal :aberto="!!p" :titulo="p ? p.titulo : ''" :largura="420" :camada="1300" @fechar="responderConfirmacao(null)">
     <div v-if="p" class="conf" data-confirmacao>
       <span class="ic" :class="{ perigo: p.perigo }" aria-hidden="true"><component :is="p.perigo ? Trash2 : CircleHelp" :size="22" :stroke-width="2" /></span>
       <div class="txt">

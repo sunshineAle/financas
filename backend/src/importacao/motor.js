@@ -58,7 +58,7 @@ function periodoDeLinhas(linhas, meta) {
 }
 
 function faturaAlvo(cartao, linhas, meta, escolhida) {
-  const f = (d, n = 1) => faturas.faturaDaParcela(d, cartao.dia_fechamento, cartao.dia_vencimento, n);
+  const f = (d, n = 1) => faturas.faturaDaParcela(d, cartao.dia_fechamento, cartao.dia_vencimento, n, cartao.fechamento_proxima);
   const cont = {};
   linhas.filter((l) => l.valor < 0 && !(l.parcelaAtual > 1)).forEach((l) => { const c = f(l.data); cont[c] = (cont[c] || 0) + 1; });
   let detectada = Object.keys(cont).sort((a, b) => cont[b] - cont[a] || (a < b ? 1 : -1))[0] || null;

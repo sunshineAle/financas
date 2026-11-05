@@ -32,7 +32,8 @@ function parcelasCartao(usuarioId, { categoriaId = null } = {}) {
   // Anotação 61: pagamento adiantado (abate a fatura) não é gasto; cashback é ENTRADA (ver entradasCartao)
   return linhas.filter((l) => !CREDITO_FORA_DOS_GASTOS.has(l.tipo_mov)).map(comData);
 }
-const CREDITO_FORA_DOS_GASTOS = new Set(['pagamento', 'cashback']);
+// 1.2 (anotação 73.3): 'saldo_anterior' (o que sobrou da fatura passada) soma na fatura mas não é gasto novo
+const CREDITO_FORA_DOS_GASTOS = new Set(['pagamento', 'cashback', 'saldo_anterior']);
 function comData(l) {
   const [a, m, d] = l.data_compra.split('-').map(Number);
   const total = a * 12 + (m - 1) + (l.parcela_numero - 1);

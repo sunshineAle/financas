@@ -302,7 +302,7 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
   const liquidoSemPagamentos = dentro.reduce((s, l) => s - l.valor, 0);
   const ehAdiantado = (l) => ehPagamento(l) && l.valor > 0 && (integ.pareceAdiantado(l.descricao)
     || (!!vencAnterior && T.diasEntre(vencAnterior, l.data) > 5 && l.valor <= liquidoSemPagamentos + 0.005));
-  const chaveDe = (l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero);
+  const chaveDe = (l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero, cartao.fechamento_proxima);
   const dataParcela = (l) => T.somarMeses(l.data_compra, l.parcela_numero - 1);
   const compras = dentro.filter((l) => l.valor < 0);
   const parcelaDe = (l) => {
@@ -471,6 +471,11 @@ function classificarFatura(usuarioId, cartao, linhas, periodo, fatura, opcoes = 
       return r;
     }
     if (l.valor > 0) return classificarCredito(l, r);
+    // 1.2 (anotação 73.3): "SALDO ANTERIOR" soma na fatura, mas não é gasto novo (o gasto já contou no mês da compra)
+    if (/\bsaldo anterior\b|\bsaldo (?:remanescente|devedor) (?:da )?fatura\b/.test(integ.normalizar(l.descricao))) {
+      r.ajusteFatura = 'saldo_anterior'; r.observacao = 'Saldo anterior: soma nesta fatura, mas não conta como gasto novo.';
+      return r;
+    }
     const c = categorizarTransacao(l.descricao, categorias, { usuarioId, valor: l.valor, contaId: null });
     if (c) { r.categoriaId = c; r.categoriaNome = nomeCat[c]; r.categoriaAuto = true; }
     return r;

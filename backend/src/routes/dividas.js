@@ -166,10 +166,11 @@ function jurosMaisCaros(usuarioId, ref = {}) {
   const taxaCheque = taxaRef(ref.cheque, TAXA_CHEQUE_PADRAO);
   const taxaRotativo = taxaRef(ref.rotativo, TAXA_ROTATIVO_PADRAO);
   const caros = [];
-  db.prepare("SELECT id, nome, saldo FROM contas WHERE usuario_id = ? AND excluido_em IS NULL AND saldo < 0 AND COALESCE(tipo, 'corrente') = 'corrente'")
+  db.prepare("SELECT id, nome, saldo, taxa_cheque FROM contas WHERE usuario_id = ? AND excluido_em IS NULL AND saldo < 0 AND COALESCE(tipo, 'corrente') = 'corrente' AND cheque_especial = 1")
     .all(usuarioId).forEach((c) => {
+      const propria = Number(c.taxa_cheque) > 0 ? r2(Number(c.taxa_cheque)) : null;
       caros.push({ id: `cheque:${c.id}`, tipo: 'cheque', rotulo: 'Cheque especial', nome: `Cheque especial · ${c.nome}`, contaId: c.id,
-        saldo: r2(-c.saldo), taxa: taxaCheque, taxaEstimada: true, frase: FRASE_CARO.cheque });
+        saldo: r2(-c.saldo), taxa: propria || taxaCheque, taxaEstimada: !propria, frase: FRASE_CARO.cheque });
     });
   const vencidas = rotasCartoes.faturasVencidas(usuarioId);
   vencidas.forEach((f) => {

@@ -1,20 +1,27 @@
 [
   {
+    "versao": "1.2",
+    "data": "2026-11-05",
+    "resumo": "Guardar/Resgatar soltos no extrato agora podem ser apagados, o cheque especial só aparece em conta que tem, cada meta pode render o seu % do CDI e a fatura entende melhor parcelamento, saldo anterior e siglas do banco.",
+    "itens": [
+      "Metas: ao apagar um lançamento que veio do extrato, o app pergunta se ele sai também do extrato da conta. No extrato, Guardar e Resgatar podem ser excluídos (o valor sai da meta junto). Lançamentos que tinham ficado presos voltam para \"A revisar\".",
+      "Contas: nova opção \"Tem cheque especial?\" na conta corrente, com limite e juros. Sem ela, saldo negativo não vira dívida: a conta mostra um aviso para conferir os lançamentos ou ajustar o saldo.",
+      "Metas: campo \"Rende quanto do CDI?\" (ex.: 89%). Poupança segue a regra da poupança. O rendimento mostrado é bruto, antes do IR.",
+      "Fatura: siglas como \"PG ENT PR EF\" e \"VL FAT EF\" passam a fechar a fatura anterior (não viram estorno). Na conferência da importação há a opção \"Pagamento/fechamento da fatura anterior\".",
+      "Fatura parcelada: o app pergunta se o banco cobra as parcelas na própria fatura. Se sim, a fatura fica quitada e não nasce dívida (antes contava duas vezes).",
+      "Importar fatura: quando o total do banco é maior que a soma das linhas, o app oferece lançar a diferença como saldo anterior (não é gasto novo) ou encargos.",
+      "Cartão: escolha se a compra feita no dia do fechamento vai para esta fatura ou para a próxima.",
+      "Registrar pagamento: opção \"Paga fora do período / sem conta de origem\", que não mexe em saldo. Aviso para faturas de mais de 2 meses atrás.",
+      "Importar extrato: o app compara o saldo do banco com o do app na mesma data e oferece Ajustar saldo. Na conta, dá para apagar de uma vez os lançamentos de antes do saldo inicial."
+    ]
+  },
+  {
     "versao": "1.1.3",
     "data": "2026-11-05",
     "resumo": "A aba Investimentos ficou mais limpa (saiu o aviso da corretora) e o histórico de atualizações mostra só a versão atual e a anterior.",
     "itens": [
       "Investimentos: saiu o card \"Cadastre sua corretora como conta\". A explicação continua no Manual.",
       "Sobre o app: o histórico de atualizações mostra só a versão atual e a anterior."
-    ]
-  },
-  {
-    "versao": "1.1.2",
-    "data": "2026-11-05",
-    "resumo": "O aviso de versão nova aparece sozinho, e o limite do cartão passa a contar a fatura que venceu e ainda não foi paga.",
-    "itens": [
-      "Ao abrir o app com uma versão nova disponível, aparecia o aviso de atualização e, junto, a janela \"Novidades desta versão\". Agora só o aviso aparece; as Novidades ficam para depois da atualização (e não repetem se você já leu o resumo no aviso).",
-      "Cartões: a fatura que venceu há pouco e não tem pagamento registrado continua ocupando o limite, como no banco. Se você já pagou, use \"Registrar pagamento\" na fatura e o limite volta."
     ]
   }
 ]

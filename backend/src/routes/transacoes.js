@@ -331,7 +331,7 @@ router.get('/', (req, res) => {
   }
   const limiteMes = chaveHoje();
   const noTotal = doCartao.filter((t) => mes || t.data.slice(0, 7) <= limiteMes);
-  const saidasCartao = noTotal.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback').reduce((acc, t) => acc - t.valor, 0);
+  const saidasCartao = noTotal.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback' && t.tipo_mov !== 'saldo_anterior').reduce((acc, t) => acc - t.valor, 0);
   const entradasCartao = noTotal.filter((t) => t.tipo_mov === 'cashback').reduce((acc, t) => acc + t.valor, 0);
   soma.entradas += entradasCartao;
   const saidasTotais = arredondar(soma.saidas + saidasCartao);
@@ -350,7 +350,7 @@ router.get('/', (req, res) => {
       saidasCartao: arredondar(saidasCartao),
       resultado: arredondar(soma.entradas - saidasTotais),
       quantidade: soma.quantidade,
-      cartao: arredondar(doCartao.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback').reduce((acc, t) => acc - t.valor, 0)),
+      cartao: arredondar(doCartao.filter((t) => t.tipo_mov !== 'pagamento' && t.tipo_mov !== 'cashback' && t.tipo_mov !== 'saldo_anterior').reduce((acc, t) => acc - t.valor, 0)),
       entradasCartao: arredondar(entradasCartao),
       quantidadeCartao: doCartao.length,
     },
@@ -465,6 +465,11 @@ router.delete('/:id', (req, res) => {
         if (lanc.ehTransferencia(t.tipo_mov) || lanc.ehLinhaDeEstorno(t.tipo_mov)) return; // o par foi desfeito
         atual = db.prepare('SELECT * FROM transacoes WHERE id = ?').get(t.id);
       }
+      // 1.2 (anotação 75.1): Guardar/Resgatar/aporte vindo do extrato — o valor sai também da meta/investimento.
+      require('../utils/caixinhas').desvincularTransacao(atual, { manterTransacao: false });
+      db.prepare('SELECT id FROM operacoes WHERE transacao_id = ? AND aporte_id IS NULL AND excluido_em IS NULL').all(atual.id)
+        .forEach((o) => dados.excluir('operacoes', o.id));
+      atual = db.prepare('SELECT * FROM transacoes WHERE id = ?').get(atual.id);
       const conta = db.prepare('SELECT * FROM contas WHERE id = ? AND excluido_em IS NULL').get(atual.conta_id);
       // Ignorada pelo usuário (1) já saiu do saldo e dos totais. As "fora dos totais" (2) mantêm o saldo.
       if (conta && conta.origem === 'manual' && atual.ignorada !== 1) dados.somar('contas', conta.id, 'saldo', -atual.valor);

@@ -110,16 +110,25 @@ function infoPrazo(meta, atingido, reservaId, hojeStr) {
   return { status, falta, meses_restantes: meses, necessario_mes: necessario, ritmo_mes: ritmo };
 }
 
-// Rendimento da meta: SIMULADO pelo CDI (100%) sobre o que foi guardado/resgatado nela + rendimentos registrados à mão.
+// Rendimento da meta: SIMULADO pelo % do CDI da meta (ou regra da poupança) sobre o que foi guardado/resgatado nela + rendimentos registrados à mão.
 // Sem a taxa do CDI (cdi = null) o simulado é 0 e `rendimento_origem` fica null.
+// 1.2 (anotação 74): regra de rendimento da meta. Poupança: 0,5% ao mês (regra com Selic acima de 8,5%, sem a TR), em dias úteis.
+// Demais: % do CDI da meta (padrão 100). Tesouro Selic segue o CDI (diferença pequena para a Selic). Valor sempre BRUTO.
+const POUPANCA_DIARIA_PCT = (Math.pow(1.005, 1 / 21) - 1) * 100;
+function regraRendimento(meta, cdi) {
+  if (meta && meta.tipo_investimento === 'poupanca') return { cdiDiario: POUPANCA_DIARIA_PCT, pct: 100, texto: 'pela regra da poupança (0,5% ao mês)' };
+  const pct = Number(meta && meta.pct_cdi) > 0 ? Number(meta.pct_cdi) : 100;
+  return { cdiDiario: cdi, pct, texto: `pelo CDI (${String(pct).replace('.', ',')}%)` };
+}
 function rendimentoDaMeta(meta, atingido, reservaId, cdi, hojeStr) {
   const registrado = arredondar(
     db.prepare("SELECT COALESCE(SUM(total), 0) AS t FROM operacoes WHERE meta_id = ? AND tipo = 'rendimento' AND excluido_em IS NULL").get(meta.id).t
   );
   let simulado = 0;
-  if (cdi) {
+  if (cdi || (meta && meta.tipo_investimento === 'poupanca')) {
     const movs = db.prepare('SELECT data, valor FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND excluido_em IS NULL').all(reservaId, meta.id);
-    simulado = rendimentoCdi(movs, cdi, hojeStr).rendimento;
+    const r = regraRendimento(meta, cdi);
+    simulado = rendimentoCdi(movs, r.cdiDiario, hojeStr, r.pct).rendimento;
   }
   const rendimento = arredondar(simulado + registrado);
   return {
@@ -133,7 +142,8 @@ function rendimentoDaMeta(meta, atingido, reservaId, cdi, hojeStr) {
 
 function montarResposta(reserva, usuarioId, cdi = null) {
   const historico = db
-    .prepare('SELECT * FROM historico_aportes WHERE reserva_id = ? AND excluido_em IS NULL ORDER BY data DESC, criado_em DESC, rowid DESC')
+    .prepare(`SELECT h.*, (SELECT o.transacao_id FROM operacoes o WHERE o.aporte_id = h.id AND o.transacao_id IS NOT NULL AND o.excluido_em IS NULL LIMIT 1) AS transacao_id
+      FROM historico_aportes h WHERE h.reserva_id = ? AND h.excluido_em IS NULL ORDER BY h.data DESC, h.criado_em DESC, h.rowid DESC`)
     .all(reserva.id);
   const porTipo = db
     .prepare(
@@ -294,7 +304,17 @@ function lerMeta(corpo, atual) {
       caixinha = { conta: String(corpo.caixinha.contaId), nome: nomeCx || null };
     }
   }
-  return { dados: { valor, nome, icone, tipo, prazo, inicial, caixinha } };
+  // 1.2 (anotação 74): "Rende quanto do CDI?" — 1 a 150 (%); vazio volta ao padrão (100%).
+  let pctCdi = atual ? (atual.pct_cdi ?? null) : null;
+  if (corpo.pctCdi !== undefined) {
+    if (corpo.pctCdi === null || corpo.pctCdi === '') pctCdi = null;
+    else {
+      const n = Number(String(corpo.pctCdi).replace(',', '.'));
+      if (!(n >= 1 && n <= 150)) return { erro: 'O percentual do CDI deve ficar entre 1% e 150%.' };
+      pctCdi = Math.round(n * 100) / 100;
+    }
+  }
+  return { dados: { valor, nome, icone, tipo, prazo, inicial, caixinha, pctCdi } };
 }
 
 function sincronizarMetaPrincipal(reserva) {
@@ -313,7 +333,7 @@ router.post('/metas', (req, res) => {
   }
   dados.transacao(() => {
     const m = dados.inserir('metas_reserva', {
-      reserva_id: reserva.id, nome: d.nome, icone: d.icone || '🎯', tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo,
+      reserva_id: reserva.id, nome: d.nome, icone: d.icone || '🎯', tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo, pct_cdi: d.pctCdi,
       caixinha_conta_id: d.caixinha ? d.caixinha.conta : null, caixinha_nome: d.caixinha ? d.caixinha.nome : null,
     });
     if (d.inicial && d.inicial.valor) definirSaldoInicialMeta(reserva, m, d.inicial);
@@ -338,7 +358,7 @@ router.put('/metas/:id', (req, res) => {
   }
   dados.transacao(() => {
     dados.atualizar('metas_reserva', atual.id, {
-      nome: d.nome, icone: d.icone, tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo,
+      nome: d.nome, icone: d.icone, tipo_investimento: d.tipo, valor_meta: d.valor, prazo: d.prazo, pct_cdi: d.pctCdi,
       ...(d.caixinha ? { caixinha_conta_id: d.caixinha.conta, caixinha_nome: d.caixinha.nome } : {}),
     });
     const si = saldoInicialDaMeta(reserva.id, atual.id);
@@ -491,11 +511,25 @@ router.delete('/aportes/:id', (req, res) => {
     return res.status(400).json({ erro: 'Não dá para apagar: a reserva ficaria negativa (há resgates que dependem deste lançamento).' });
   }
 
+  // 1.2 (anotação 75.1): lançamento que veio de uma transação do extrato. ?extrato=apagar tira a transação da conta;
+  // senão ela volta para "A revisar" (fora dos totais, saldo mantido) e pode ser vinculada de novo ou apagada.
+  const vinc = db.prepare('SELECT transacao_id FROM operacoes WHERE aporte_id = ? AND transacao_id IS NOT NULL AND excluido_em IS NULL').get(antigo.id);
+  const tx = vinc ? db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(vinc.transacao_id, req.usuario.id) : null;
   dados.transacao(() => {
     ajustarConta(antigo.conta_id, antigo.valor);
     dados.atualizar('reserva_liberdade', reserva.id, { valor_atual: novoValorAtual });
     carteira.removerOperacoesDoAporte(antigo.id);
     dados.excluir('historico_aportes', antigo.id);
+    if (tx) {
+      db.prepare("SELECT id FROM transacoes WHERE vinculo = ? AND origem = 'derivada' AND excluido_em IS NULL").all(tx.id).forEach((d) => dados.excluir('transacoes', d.id));
+      if (req.query.extrato === 'apagar') {
+        const conta = dados.buscar('contas', tx.conta_id);
+        if (conta && conta.origem === 'manual' && tx.ignorada !== 1) dados.somar('contas', conta.id, 'saldo', -tx.valor);
+        dados.excluir('transacoes', tx.id);
+      } else {
+        dados.atualizar('transacoes', tx.id, { ignorada: 2, tipo_mov: 'reserva_pendente', rotulo_mov: null, revisao: null });
+      }
+    }
   });
 
   const atualizada = dados.buscar('reserva_liberdade', reserva.id);
@@ -511,9 +545,11 @@ router.get('/metas/:id/extrato', (req, res) => {
   const cdi = lerCdi(req);
   const hojeStr = carteira.hojeStr();
   const linhas = db
-    .prepare('SELECT id, data, valor, operacao, ativo, tipo, descricao, quantidade, preco_unitario FROM historico_aportes WHERE reserva_id = ? AND meta_id = ? AND excluido_em IS NULL')
+    .prepare(`SELECT h.id, h.data, h.valor, h.operacao, h.ativo, h.tipo, h.descricao, h.quantidade, h.preco_unitario,
+        (SELECT o.transacao_id FROM operacoes o WHERE o.aporte_id = h.id AND o.transacao_id IS NOT NULL AND o.excluido_em IS NULL LIMIT 1) AS transacao_id
+      FROM historico_aportes h WHERE h.reserva_id = ? AND h.meta_id = ? AND h.excluido_em IS NULL`)
     .all(reserva.id, meta.id)
-    .map((l) => ({
+    .map((l) => ({ transacaoId: l.transacao_id || null,
       id: l.id, data: String(l.data).slice(0, 10), tipo: l.operacao === 'saldo_inicial' ? 'saldo_inicial' : l.valor < 0 ? 'resgatar' : 'guardar', valor: l.valor,
       ativo: l.ativo || TIPOS_INVESTIMENTO[l.tipo] || l.tipo, descricao: l.descricao || null, simulado: false,
     }));
@@ -524,7 +560,7 @@ router.get('/metas/:id/extrato', (req, res) => {
   linhas.forEach((l) => { if (l.tipo === 'saldo_inicial') { l.ativo = null; l.descricao = 'Já estava guardado (não saiu de nenhuma conta)'; } });
   const rend = rendimentoDaMeta(meta, atingido, reserva.id, cdi, hojeStr);
   if (rend.rendimento_simulado > 0) {
-    linhas.push({ id: null, data: hojeStr, tipo: 'rendimento', valor: rend.rendimento_simulado, ativo: null, descricao: 'Rendimento estimado pelo CDI (100%)', simulado: true });
+    linhas.push({ id: null, data: hojeStr, tipo: 'rendimento', valor: rend.rendimento_simulado, ativo: null, descricao: `Rendimento estimado ${regraRendimento(meta, cdi).texto}`, simulado: true });
   }
   linhas.sort((a, b) => b.data.localeCompare(a.data) || (a.simulado ? -1 : 1));
   res.json({
@@ -535,7 +571,7 @@ router.get('/metas/:id/extrato', (req, res) => {
     prazo_info: infoPrazo(meta, atingido, reserva.id, hojeStr),
     pct: meta.valor_meta ? Math.min(100, Math.round((rend.valor_acumulado / meta.valor_meta) * 100)) : 0,
     cdi_diario: cdi,
-    nota: 'Rendimentos simulados com dados públicos do Bacen',
+    nota: `Rendimento simulado ${regraRendimento(meta, cdi).texto}, com dados públicos do Bacen. Valor bruto: o IR (de 22,5% a 15%, conforme o prazo) e o IOF dos primeiros 30 dias saem no resgate.`,
     linhas,
   });
 });

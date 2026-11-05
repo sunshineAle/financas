@@ -32,11 +32,11 @@ function pareceFaturaDeCartao(descricao) { return REGEX_PAG_FATURA.test(String(d
 
 // Crédito na fatura que é o PAGAMENTO da fatura anterior (não é compra nem estorno). "Pagamento" sozinho também vale
 // (antes exigia um espaço depois da palavra e "PAGAMENTO" no fim da descrição escapava).
-const REGEX_PAG_RECEBIDO = /\b(pagamentos?(?: (?:recebido|efetuado|em conta|on[- ]?line))?|pgto\.?(?: (?:recebido|efetuado|fatura))?|pag(?:amento)?\.? (?:de |da )?fatura|obrigado pelo pagamento|credito de pagamento|pagto|d[eé]bito autom[aá]tico|pag(?:amento)? boleto)\b/i;
+const REGEX_PAG_RECEBIDO = /\b(pagamentos?(?: (?:recebido|efetuado|em conta|on[- ]?line))?|pgto\.?(?: (?:recebido|efetuado|fatura))?|pag(?:amento)?\.? (?:de |da )?fatura|obrigado pelo pagamento|credito de pagamento|pagto|d[eé]bito autom[aá]tico|pag(?:amento)? boleto|pg ent(?: pr)?(?: ef)?|vl\.? fat(?: ef)?|entrada (?:do |de )?parcelamento(?: (?:da |de )?fatura)?|valor financiado)\b/i;
 function pareceCreditoDePagamento(descricao) { return REGEX_PAG_RECEBIDO.test(String(descricao || '')); }
 // Pagamento da fatura com descrição inequívoca: vale mesmo quando o arquivo traz o pagamento com o MESMO sinal das
 // compras (alguns bancos exportam tudo positivo). Sem isso, o pagamento entrava como "compra" e a fatura dobrava.
-const REGEX_PAG_FORTE = /\b(pagamento (?:recebido|efetuado|on[- ]?line|da fatura|de fatura|fatura)|pgto\.? (?:recebido|efetuado|fatura)|pagto (?:recebido|efetuado|fatura|debito automatico)|obrigado pelo pagamento|credito de pagamento|pagamento debito automatico|d[eé]bito autom[aá]tico fatura)\b/i;
+const REGEX_PAG_FORTE = /\b(pagamento (?:recebido|efetuado|on[- ]?line|da fatura|de fatura|fatura)|pgto\.? (?:recebido|efetuado|fatura)|pagto (?:recebido|efetuado|fatura|debito automatico)|obrigado pelo pagamento|credito de pagamento|pagamento debito automatico|d[eé]bito autom[aá]tico fatura|pg ent(?: pr)?(?: ef)?|vl\.? fat(?: ef)?|entrada (?:do |de )?parcelamento(?: (?:da |de )?fatura)?|valor financiado)\b/i;
 function pareceTextoDePagamentoDaFatura(descricao) { return REGEX_PAG_FORTE.test(texto.normalizar(descricao)); }
 
 // Anotação 61: CRÉDITO na fatura do cartão pelo texto (vale em OFX, CSV, planilha e PDF, qualquer que seja o sinal).
@@ -46,7 +46,8 @@ function pareceTextoDePagamentoDaFatura(descricao) { return REGEX_PAG_FORTE.test
 // Cobranças da própria fatura (IOF, juros, encargos, multa, anuidade, tarifa, seguro) nunca são crédito pelo texto.
 const RE_COBRANCA = /\b(iof|juros|encargos?|multa|mora|anuidade|tarifa|seguro|rotativo|parcelamento de fatura)\b/;
 const RE_CRED_ESTORNO = /\b(estorn\w*|devolu[cç](?:ao|oes)|devolvid[oa]|cancelament\w*|cancelad[ao]|reembolso|chargeback|contestac\w*)\b/;
-const RE_CRED_PAGAMENTO = /\b(pagamentos?|pgto|pagto|pag fatura|obrigado pelo pagamento)\b/;
+// 1.2 (anotação 73.1): siglas de banco que fecham a fatura anterior (entrada e valor financiado do parcelamento: "PG ENT PR EF", "VL FAT EF")
+const RE_CRED_PAGAMENTO = /\b(pagamentos?|pgto|pagto|pag fatura|obrigado pelo pagamento|pg ent(?: pr)?(?: ef)?|vl\.? fat(?: ef)?|entrada (?:do |de )?parcelamento(?: (?:da |de )?fatura)?|valor financiado)\b/;
 const RE_CRED_CASHBACK = /\b(cash ?back|ajuste (?:a |de )?credito|credito (?:de |em |na |por |promocional|avulso|ajuste|cashback)|bonificac\w*|^credito\b)/;
 const RE_ADIANTADO = /\b(adiantad[oa]|antecipad[oa]|antecipacao|parcial)\b/;
 function tipoDeCredito(descricao) {

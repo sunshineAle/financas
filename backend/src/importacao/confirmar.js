@@ -28,7 +28,7 @@ function validarLinha(l) {
 
 // Em que data_compra uma parcela `n` cai na fatura `alvo` do cartão.
 function dataCompraNaFatura(cartao, alvo, dataLinha, n) {
-  const f = (d) => faturas.faturaDaParcela(d, cartao.dia_fechamento, cartao.dia_vencimento, n);
+  const f = (d) => faturas.faturaDaParcela(d, cartao.dia_fechamento, cartao.dia_vencimento, n, cartao.fechamento_proxima);
   if (!alvo) return { data: dataLinha, ajustada: false };
   if (f(dataLinha) === alvo) return { data: dataLinha, ajustada: false };
   const recuada = T.somarMeses(dataLinha, -(n - 1));
@@ -103,7 +103,7 @@ function confirmar(usuarioId, corpo) {
 // Total de uma fatura do cartão como o app mostra (soma de todas as parcelas e créditos que caem nela).
 function totalDaFatura(cartao, chave) {
   const itens = db.prepare('SELECT data_compra, parcela_numero, valor FROM lancamentos_cartao WHERE cartao_id = ? AND excluido_em IS NULL').all(cartao.id);
-  return arred(itens.filter((l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero) === chave).reduce((t, l) => t + l.valor, 0));
+  return arred(itens.filter((l) => faturas.faturaDaParcela(l.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, l.parcela_numero, cartao.fechamento_proxima) === chave).reduce((t, l) => t + l.valor, 0));
 }
 
 // Exclusão suave de uma transação importada, devolvendo saldo da conta e gasto da categoria.
@@ -290,6 +290,14 @@ function gravarConta(ctx, conta, linhas, corpo) {
       registrar(importacao.id, 'contas', conta.id, formato, 'atualizado', { delta });
       resultado.saldoAjustado = delta;
     }
+  } else if (corpo.saldoExtrato && Number.isFinite(Number(corpo.saldoExtrato.valor)) && conta.origem === 'manual') {
+    // 1.2 (anotação 75.3): confere o saldo do app com o do banco NA MESMA DATA e avisa a diferença
+    const dia = String(corpo.saldoExtrato.data || '').slice(0, 10);
+    const atual = db.prepare('SELECT saldo FROM contas WHERE id = ?').get(conta.id).saldo;
+    const depois = dia ? db.prepare("SELECT COALESCE(SUM(valor), 0) AS s FROM transacoes WHERE conta_id = ? AND excluido_em IS NULL AND ignorada <> 1 AND substr(data, 1, 10) > ?").get(conta.id, dia).s : 0;
+    const noApp = arred(atual - depois);
+    const banco = arred(Number(corpo.saldoExtrato.valor));
+    if (Math.abs(noApp - banco) > 0.009) resultado.conferenciaSaldo = { data: dia || null, banco, app: noApp, diferenca: arred(banco - noApp), contaId: conta.id };
   }
 }
 
@@ -307,7 +315,7 @@ function gravarFatura(ctx, cartao, linhas) {
     if (l.acao === 'atualizar') {
       const e = l.existenteId ? db.prepare('SELECT * FROM lancamentos_cartao WHERE id = ? AND usuario_id = ? AND cartao_id = ? AND excluido_em IS NULL').get(String(l.existenteId), usuarioId, cartao.id) : null;
       if (!e) { resultado.ignoradas++; resultado.avisos.push(`"${l.descricao}": a parcela a atualizar não está mais disponível.`); continue; }
-      const paga = db.prepare('SELECT 1 FROM faturas_pagas WHERE cartao_id = ? AND excluido_em IS NULL AND fatura = ?').get(cartao.id, faturas.faturaDaParcela(e.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, e.parcela_numero));
+      const paga = db.prepare('SELECT 1 FROM faturas_pagas WHERE cartao_id = ? AND excluido_em IS NULL AND fatura = ?').get(cartao.id, faturas.faturaDaParcela(e.data_compra, cartao.dia_fechamento, cartao.dia_vencimento, e.parcela_numero, cartao.fechamento_proxima));
       if (paga) { resultado.ignoradas++; resultado.avisos.push(`"${l.descricao}": a fatura dessa parcela já está paga; valor mantido.`); continue; }
       dados.atualizar('lancamentos_cartao', e.id, { valor: Math.abs(valor) });
       registrar(importacao.id, 'lancamentos_cartao', e.id, formato, 'atualizado', { valor: e.valor });
@@ -339,7 +347,7 @@ function gravarFatura(ctx, cartao, linhas) {
         valor: ehCredito ? -Math.abs(valor) : Math.abs(valor), data_compra: dataCompra, parcela_numero: k, total_parcelas: p ? p.total : 1,
         categoria_id: categoriaId, id_externo: k === n ? idExterno : null,
         // crédito: pagamento adiantado / cashback; estorno sem a compra original = avulso (A revisar) até ser ligado abaixo
-        tipo_mov: tipoCredito === 'pagamento' ? 'pagamento' : tipoCredito === 'cashback' ? 'cashback' : tipoCredito === 'estorno' ? 'estorno_avulso' : null,
+        tipo_mov: tipoCredito === 'pagamento' ? 'pagamento' : tipoCredito === 'cashback' ? 'cashback' : tipoCredito === 'estorno' ? 'estorno_avulso' : !ehCredito && l.ajusteFatura === 'saldo_anterior' ? 'saldo_anterior' : null,
       });
       registrar(importacao.id, 'lancamentos_cartao', rec.id, formato, 'inserido', null);
       if (k === n) primeira = rec;

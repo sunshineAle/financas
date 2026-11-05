@@ -214,7 +214,7 @@ function alternar(l) {
   else l.acao = l.status === 'divergente' ? 'atualizar' : l.transferencia ? 'transferencia' : 'importar';
 }
 function escolherDiverg(l, acao) { l.acao = acao; }
-function abrirEdicao(l) { editando.value = { ref: l, descricao: l.descricao, valor: Math.abs(l.valor), saida: l.valor < 0, data: l.data, categoriaId: l.categoriaId || '', credito: l.status === 'pagamento_adiantado' || l.status === 'pagamento_recebido' ? 'pagamento' : l.status === 'cashback' ? 'cashback' : 'estorno' }; }
+function abrirEdicao(l) { editando.value = { ref: l, descricao: l.descricao, valor: Math.abs(l.valor), saida: l.valor < 0, data: l.data, categoriaId: l.categoriaId || '', credito: l.status === 'pagamento_recebido' ? 'anterior' : l.status === 'pagamento_adiantado' ? 'pagamento' : l.status === 'cashback' ? 'cashback' : 'estorno' }; }
 function salvarEdicao() {
   const e = editando.value; const l = e.ref;
   l.descricao = e.descricao.trim() || l.descricao;
@@ -223,8 +223,14 @@ function salvarEdicao() {
   l.categoriaId = e.saida || (tipo.value === 'fatura' && e.credito === 'estorno') ? e.categoriaId || null : null;
   // Anotação 61: na fatura, ao virar crédito escolhe o tipo (estorno / pagamento adiantado / cashback)
   if (tipo.value === 'fatura') {
-    if (e.saida) { if (['estorno', 'cashback', 'pagamento_adiantado'].includes(l.status)) { l.status = 'nova'; l.anula = null; l.credito = null; l.observacao = 'Marcada como compra.'; } }
+    if (e.saida) { if (['estorno', 'cashback', 'pagamento_adiantado', 'pagamento_recebido'].includes(l.status)) { l.status = 'nova'; l.anula = null; l.credito = null; l.observacao = 'Marcada como compra.'; } }
     else {
+      // 1.2 (anotação 73.1): "Pagamento/fechamento da fatura anterior" — fica fora desta fatura (não é estorno nem entrada)
+      if (e.credito === 'anterior') {
+        if (l.status !== 'pagamento_recebido') { l.status = 'pagamento_recebido'; l.anula = null; l.credito = { tipo: 'pagamento' }; l.revisar = false; l.acao = 'descartar'; l.observacao = 'Pagamento/fechamento da fatura anterior: não é compra nem entrada, fica de fora.'; }
+        l.categoriaAuto = false; l.confianca = 'alta'; editando.value = null; return;
+      }
+      if (l.status === 'pagamento_recebido' && l.acao === 'descartar') l.acao = 'importar';
       const st = e.credito === 'pagamento' ? 'pagamento_adiantado' : e.credito === 'cashback' ? 'cashback' : 'estorno';
       if (st !== l.status) { l.status = st; l.anula = null; l.credito = { tipo: e.credito }; l.revisar = st === 'estorno'; l.observacao = st === 'estorno' ? 'Estorno sem compra ligada: reduz o gasto da categoria e fica em A revisar.' : st === 'cashback' ? 'Cashback: abate a fatura e entra como entrada em Cashback.' : 'Pagamento adiantado: abate a fatura, não é entrada nem gasto.'; }
       if (l.acao === 'descartar' && l.status !== 'duplicada') l.acao = 'importar';
@@ -234,6 +240,40 @@ function salvarEdicao() {
   editando.value = null;
 }
 const categorias = ref([]);
+// 1.2 (anotação 73.3): o arquivo diz um total maior que a soma das linhas → falta saldo anterior ou encargos
+const ajusteSomado = ref(0);
+const faltaFatura = computed(() => {
+  const f = analise.value && analise.value.fatura;
+  if (!f || f.totalDeclarado === null || f.totalDeclarado === undefined) return 0;
+  return Math.round((f.totalDeclarado - f.totalArquivo - ajusteSomado.value) * 100) / 100;
+});
+// 1.2 (anotação 75.3): acerta o saldo pela diferença conferida com o banco (lançada como "Ajuste de saldo", fora das entradas/saídas)
+const saldoConferidoOk = ref(false);
+async function ajustarSaldoConferido() {
+  const c = resultado.value && resultado.value.conferenciaSaldo; if (!c) return;
+  try {
+    const lista = await api('GET', '/api/contas');
+    const conta = (lista || []).find((x) => x.id === c.contaId); if (!conta) return;
+    const r = await fetch(`/api/contas/${c.contaId}/ajustar-saldo`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ saldo: Math.round((Number(conta.saldo) + c.diferenca) * 100) / 100 }) });
+    if (r.ok) { saldoConferidoOk.value = true; avisar(`Saldo acertado: ajuste de ${moeda(c.diferenca)} (fora das entradas e saídas).`, { tipo: 'ok' }); }
+    else avisar('Não foi possível ajustar o saldo.', { tipo: 'aviso' });
+  } catch { avisar('Não foi possível ajustar o saldo.', { tipo: 'aviso' }); }
+}
+function verConta(id) { router.push({ path: '/contas', query: { conta: id } }); }
+function lancarAjusteFatura(qual) {
+  const v = faltaFatura.value; if (!(v > 0)) return;
+  const datas = linhas.value.filter((l) => !l.foraPeriodo && l.data).map((l) => l.data).sort();
+  const idx = linhas.value.reduce((m, l) => Math.max(m, Number(l.idx) || 0), 0) + 1;
+  const juros = categorias.value.find((c) => /juros|tarifa/i.test(c.nome || ''));
+  const saldoAnt = qual === 'saldo_anterior';
+  linhas.value.push({
+    idx, data: datas[datas.length - 1] || new Date().toISOString().slice(0, 10), descricao: saldoAnt ? 'Saldo anterior da fatura' : 'Encargos (juros, multa, IOF)',
+    valor: -v, status: 'nova', acao: 'importar', confianca: 'alta', ajusteFatura: saldoAnt ? 'saldo_anterior' : null,
+    categoriaId: !saldoAnt && juros ? juros.id : null, categoriaNome: !saldoAnt && juros ? juros.nome : undefined,
+    observacao: saldoAnt ? 'Saldo anterior: soma nesta fatura, mas não conta como gasto novo.' : 'Encargos da fatura: contam como saída (Juros e tarifas).',
+  });
+  ajusteSomado.value = Math.round((ajusteSomado.value + v) * 100) / 100;
+}
 onMounted(async () => { try { categorias.value = await api('GET', '/api/categorias'); } catch { /* sem categorias */ } });
 
 async function confirmar() {
@@ -287,7 +327,7 @@ async function desfazer(id) {
   try { const r = await api('DELETE', `/api/importacao/${id}`); avisar(r && r.removidos ? `Importação desfeita: ${r.removidos} ${r.removidos === 1 ? 'lançamento saiu' : 'lançamentos saíram'} do extrato.` : 'Importação desfeita.', { tipo: 'ok' }); avisarMudanca(); historico.value = await api('GET', '/api/importacao/historico'); if (resultado.value && resultado.value.importacaoId === id) resultado.value = null; }
   catch (e) { erro.value = e.message; }
 }
-function novaImportacao() { etapa.value = contextual.value ? 2 : 1; corpoArq.value = null; nomeArq.value = ''; analise.value = null; resultado.value = null; filtro.value = 'todas'; periodoModo.value = 'arquivo'; sugestao.value = null; }
+function novaImportacao() { ajusteSomado.value = 0; saldoConferidoOk.value = false; etapa.value = contextual.value ? 2 : 1; corpoArq.value = null; nomeArq.value = ''; analise.value = null; resultado.value = null; filtro.value = 'todas'; periodoModo.value = 'arquivo'; sugestao.value = null; }
 function irParaReserva() { router.push('/objetivos'); }
 const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
 // 05/11: na primeira conferência, o tour guiado explica a tela (destino, resumo e as linhas)
@@ -389,6 +429,10 @@ watch(() => etapa.value === 3 && !!analise.value, (sim) => {
       </div>
       <p v-if="analise.leituraGenerica" class="faixa alerta"><TriangleAlert :size="18" /><span>Leitura genérica de PDF: confira as linhas marcadas e os valores antes de confirmar.</span></p>
       <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalDeclarado !== null && analise.fatura.totalDeclarado !== undefined && Math.abs(analise.fatura.totalDeclarado - analise.fatura.totalArquivo) > 0.009" class="faixa alerta" data-total-diferente><TriangleAlert :size="18" /><span>O arquivo diz que a fatura é {{ moeda(analise.fatura.totalDeclarado) }}, mas as linhas somam {{ moeda(analise.fatura.totalArquivo) }}. Confira os créditos e os sinais.</span></p>
+      <div v-if="tipo === 'fatura' && faltaFatura > 0.009" class="faixa falta-fatura" data-falta-fatura>
+        <span>Faltam <b>{{ moeda(faltaFatura) }}</b> para bater com o banco. É saldo anterior ou encargos?</span>
+        <span class="bt-falta"><button type="button" class="sf-botao secundario" @click="lancarAjusteFatura('saldo_anterior')">Saldo anterior</button><button type="button" class="sf-botao secundario" @click="lancarAjusteFatura('encargos')">Encargos</button></span>
+      </div>
 
       <details class="ajustar-imp" data-ajustar-importacao>
         <summary><SlidersHorizontal :size="16" :stroke-width="2" /> Ajustar período e leitura<ChevronDown :size="16" :stroke-width="2" class="seta-aj" /></summary>
@@ -485,6 +529,10 @@ watch(() => etapa.value === 3 && !!analise.value, (sim) => {
           <li v-if="resultado.saldoAjustado"><Link2 :size="14" /> Saldo da conta acertado ({{ moeda(resultado.saldoAjustado) }})</li>
           <li v-if="resultado.perfilSalvo">Layout "{{ resultado.perfilSalvo }}" lembrado</li>
         </ul>
+        <div v-if="resultado.conferenciaSaldo && !saldoConferidoOk" class="faixa alerta falta-fatura" data-conferencia-saldo>
+          <span>No banco, o saldo em {{ resultado.conferenciaSaldo.data ? dataBR(resultado.conferenciaSaldo.data) : 'fim do extrato' }} é <b>{{ moeda(resultado.conferenciaSaldo.banco) }}</b>; no app, <b>{{ moeda(resultado.conferenciaSaldo.app) }}</b>. Pode faltar ou sobrar lançamento de antes do extrato.</span>
+          <span class="bt-falta"><button type="button" class="sf-botao secundario" @click="verConta(resultado.conferenciaSaldo.contaId)">Ver a conta</button><button type="button" class="sf-botao secundario" @click="ajustarSaldoConferido">Ajustar saldo</button></span>
+        </div>
         <p v-for="a in resultado.avisos" :key="a" class="faixa alerta"><TriangleAlert :size="16" /><span>{{ a }}</span></p>
         <div v-if="resultado.reservasPendentes.length" class="faixa ok"><span>{{ resultado.reservasPendentes.length }} lançamento(s) de reserva (Caixinha, Porquinho, Resgate CDB) em A revisar. Vincule a uma meta em Objetivos para atualizar a meta; se recusar, ficam fora do orçamento.</span><button type="button" class="b-sec peq" @click="irParaReserva">Abrir Objetivos</button></div>
         <div class="linha-botoes">
@@ -502,7 +550,7 @@ watch(() => etapa.value === 3 && !!analise.value, (sim) => {
         <label class="campo"><span>Valor (R$)</span><input v-model.number="editando.valor" type="number" step="0.01" min="0" /></label>
         <label class="marca"><input v-model="editando.saida" type="checkbox" /> {{ tipo === 'fatura' ? 'É uma compra (despesa)' : 'É uma saída (despesa)' }}</label>
         <label v-if="tipo === 'fatura' && !editando.saida" class="campo" data-tipo-credito-previa><span>Que crédito é?</span>
-          <select v-model="editando.credito"><option value="estorno">Estorno de uma compra</option><option value="pagamento">Pagamento adiantado da fatura</option><option value="cashback">Cashback ou outro crédito</option></select></label>
+          <select v-model="editando.credito"><option value="estorno">Estorno de uma compra</option><option value="anterior">Pagamento/fechamento da fatura anterior</option><option value="pagamento">Pagamento adiantado da fatura</option><option value="cashback">Cashback ou outro crédito</option></select></label>
         <label v-if="editando.saida || (tipo === 'fatura' && editando.credito === 'estorno')" class="campo"><span>Categoria</span>
           <select v-model="editando.categoriaId"><option value="">Sem categoria</option><option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nome }}</option></select></label>
       </div>
@@ -623,4 +671,7 @@ select, input[type='text'], input[type='number'], input[type='date'], input[type
 .amostra { border-collapse: collapse; font-size: 12.5px; }
 .amostra td, .amostra th { border: 1px solid var(--cor-borda); padding: 4px 8px; white-space: nowrap; color: var(--cor-texto-suave); }
 .form { display: flex; flex-direction: column; }
+.falta-fatura { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--saida-ambar-medio, #d68a00) 12%, var(--cor-card)); border: 1px solid color-mix(in srgb, var(--saida-ambar-medio, #d68a00) 40%, var(--cor-borda)); font-size: 13.5px; }
+.bt-falta { display: inline-flex; gap: 6px; }
+.bt-falta .sf-botao { min-height: 34px; padding: 0 12px; }
 </style>
