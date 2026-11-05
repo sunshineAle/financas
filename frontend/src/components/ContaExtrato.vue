@@ -1,8 +1,13 @@
 <script setup>
 // Extrato da conta agrupado por data (visão anual: por mês). Cada linha é a LinhaTransacao (anotação 53),
-// a mesma de Transações: ícone com selo do banco, meio de pagamento, categoria, valor com sinal e menu ⋮.
-import { computed } from 'vue';
+// a mesma de Transações: ícone com selo do banco, meio de pagamento, categoria, valor com sinal.
+// 05/11: tocar NÃO faz nada (não leva para Transações); ARRASTAR para a esquerda mostra Editar e Excluir;
+// SEGURAR começa a seleção para apagar várias de uma vez (barra embaixo com Todas · Excluir).
+import { computed, toRef, onBeforeUnmount } from 'vue';
 import LinhaTransacao from './LinhaTransacao.vue';
+import BarraSelecao from './BarraSelecao.vue';
+import { useSelecao } from '../services/selecao.js';
+import { podeExcluirEmLote } from '../services/excluirTransacoes.js';
 import { infoTransacao } from '../utils/infoTransacao.js';
 
 const props = defineProps({
@@ -11,7 +16,9 @@ const props = defineProps({
   porMes: { type: Boolean, default: false },
   categorias: { type: Array, default: () => [] }, // categorias de saída (icone/cor)
 });
-const emit = defineEmits(['abrir']);
+const emit = defineEmits(['editar', 'excluir', 'mudou']);
+const sel = useSelecao(toRef(props, 'transacoes'), () => emit('mudou'));
+onBeforeUnmount(() => sel.sair());
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const MES_LONGO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -52,9 +59,11 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
         <h3>{{ g.rotulo }}</h3>
         <span class="numero-tabular total">{{ sinal(g.total) }} {{ moeda.format(Math.abs(g.total)) }}</span>
       </header>
-      <!-- seção 6: sem menu ⋮ — o toque abre a transação (lá ficam Editar, Excluir, Estornar, Ignorar e Criar regra) -->
-      <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" rotulo-abrir="abrir em Transações" @abrir="emit('abrir', t)" />
+      <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" :clicavel="sel.ativa.value" arrastavel selecionavel
+        :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirEmLote(t) || !!t.tipo_mov"
+        @editar="emit('editar', t)" @excluir="emit('excluir', t)" @segurar="sel.segurar" @alternar="sel.alternar" />
     </section>
+    <BarraSelecao v-if="sel.ativa.value" :quantidade="sel.quantidade.value" :total="sel.total.value" :ocupado="sel.ocupado.value" @todas="sel.todas" @excluir="sel.excluir" @sair="sel.sair" />
   </div>
 </template>
 

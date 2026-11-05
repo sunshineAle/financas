@@ -439,6 +439,18 @@ function desfazer(usuarioId, importacaoId) {
         if (conta) { dados.somar('contas', conta.id, 'saldo', -antes.delta); revertidos++; }
       }
     }
+    // 05/11 (feedback "desfiz a importação e o extrato continuou"): conferência final — tudo o que esta importação
+    // INSERIU e ainda estiver ativo sai agora (transações e compras de cartão), para nada ficar para trás.
+    const sobras = db.prepare("SELECT tabela, registro_id FROM importacao_itens WHERE importacao_id = ? AND acao = 'inserido' AND excluido_em IS NULL").all(imp.id);
+    for (const it of sobras) {
+      if (it.tabela === 'transacoes') {
+        const t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND excluido_em IS NULL').get(it.registro_id);
+        if (t) { removerTransacao(t); removidos++; }
+      } else if (it.tabela === 'lancamentos_cartao') {
+        const l = dados.buscar('lancamentos_cartao', it.registro_id);
+        if (l) removidos += removerCompraCartao(l);
+      }
+    }
     dados.atualizar('importacoes', imp.id, { desfeita_em: dados.agora() });
   });
   return { ok: true, removidos, revertidos };

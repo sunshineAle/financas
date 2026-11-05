@@ -15,7 +15,7 @@
 // e o menu ⋮ sai da linha (a descrição ganha largura). Estornar/Ignorar/Criar regra ficam no detalhe (toque na linha).
 //   <LinhaTransacao :t="t" :info="info" arrastavel @abrir="…" @editar="…" @excluir="…" />
 import { computed, useSlots, ref } from 'vue';
-import { Repeat, CircleAlert, Link2Off, Pencil, Trash2 } from 'lucide-vue-next';
+import { Repeat, CircleAlert, Link2Off, Pencil, Trash2, Check } from 'lucide-vue-next';
 import IconeCategoria from './IconeCategoria.vue';
 import IconeBanco from './IconeBanco.vue';
 import IconeBandeira from './IconeBandeira.vue';
@@ -33,8 +33,11 @@ const props = defineProps({
   rotuloAbrir: { type: String, default: 'Ver detalhes' },
   arrastavel: { type: Boolean, default: false },
   podeExcluir: { type: Boolean, default: true },
+  // 05/11: SEGURAR (~0,5 s) começa a seleção para apagar várias de uma vez; com `modoSelecao`, tocar marca/desmarca.
+  selecionavel: { type: Boolean, default: false },
+  modoSelecao: { type: Boolean, default: false },
 });
-const emit = defineEmits(['abrir', 'menu', 'editar', 'excluir']);
+const emit = defineEmits(['abrir', 'menu', 'editar', 'excluir', 'segurar', 'alternar']);
 const slots = useSlots();
 
 const moeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -132,11 +135,22 @@ const aberta = ref(false);
 const arrastando = ref(false);
 let g = null;
 let engolir = false;
+let timerLongo = null;
+let inicioLongo = null;
+let segurou = false;
+function cancelarLongo() { if (timerLongo) { clearTimeout(timerLongo); timerLongo = null; } }
 function aoApertar(e) {
-  if (!props.arrastavel || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (props.selecionavel && !props.modoSelecao) {
+    cancelarLongo();
+    inicioLongo = { x: e.clientX, y: e.clientY };
+    timerLongo = setTimeout(() => { timerLongo = null; if (g && g.ativo) return; segurou = true; try { navigator.vibrate?.(15); } catch { /* ok */ } g = null; emit('segurar', props.t); }, 480);
+  }
+  if (!props.arrastavel || props.modoSelecao) return;
   g = { x: e.clientX, y: e.clientY, id: e.pointerId, base: aberta.value ? -LARG_ACOES : 0, ativo: false };
 }
 function aoMover(e) {
+  if (timerLongo && inicioLongo && (Math.abs(e.clientX - inicioLongo.x) > 8 || Math.abs(e.clientY - inicioLongo.y) > 8)) cancelarLongo();
   if (!g || e.pointerId !== g.id) return;
   const ddx = e.clientX - g.x, ddy = e.clientY - g.y;
   if (!g.ativo) {
@@ -147,6 +161,7 @@ function aoMover(e) {
   dx.value = Math.max(-LARG_ACOES - 24, Math.min(0, g.base + ddx));
 }
 function aoSoltar() {
+  cancelarLongo();
   if (!g) return;
   const foi = g.ativo;
   g = null; arrastando.value = false;
@@ -174,6 +189,8 @@ const rotuloLinha = computed(() => [
 ].filter(Boolean).join(', '));
 
 function abrir() {
+  if (segurou) { segurou = false; return; }
+  if (props.modoSelecao) { emit('alternar', props.t); return; }
   if (engolir) return;
   if (aberta.value) { fecharAcoes(); return; }
   if (props.clicavel) emit('abrir', props.t);
@@ -195,8 +212,10 @@ function abrir() {
     @click="abrir" @keydown.enter.self="abrir" @keydown.space.self.prevent="abrir"
     @keydown.delete.self="arrastavel && podeExcluir && emit('excluir', t)"
     @pointerdown="aoApertar" @pointermove="aoMover" @pointerup="aoSoltar" @pointercancel="aoSoltar"
+    @contextmenu="selecionavel && $event.preventDefault()"
   >
     <span class="ic" aria-hidden="true">
+      <span v-if="modoSelecao" class="marca-sel" :class="{ on: selecionada }"><Check v-if="selecionada" :size="16" :stroke-width="3" /></span>
       <IconeCategoria class="circulo" :valor="iconeValor" :tipo="ehSaida ? 'saida' : 'entrada'" :cor="neutra ? 'var(--cor-texto-suave)' : (info.cor || '')" :tamanho="40" />
       <span v-if="temSelo" class="selo" :class="{ iniciais: !temLogo }" :style="!temLogo ? { '--cor-selo': corOrigem } : null" role="img" :aria-label="rotuloSelo" :title="rotuloSelo">
         <IconeBanco v-if="temLogo" :icone="origemIcone" :nome="origemNome" :tamanho="18" :padrao="t.cartao ? '💳' : '🏦'" />
@@ -262,6 +281,9 @@ function abrir() {
 .linha-tx.clicavel { cursor: pointer; }
 .linha-tx.clicavel:hover, .linha-tx:focus-visible { background: var(--cor-realce); outline: none; }
 .linha-tx:focus-visible { box-shadow: inset 0 0 0 2px var(--cor-primaria); }
+.marca-sel { position: absolute; inset: 0; z-index: 2; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--cor-card) 55%, transparent); border: 2px solid var(--cor-borda); color: #fff; }
+.marca-sel.on { background: var(--cor-interface, #3446C4); border-color: var(--cor-interface, #3446C4); }
+.linha-tx { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .linha-tx.selecionada { background: var(--cor-interface-selecao, var(--cor-realce)); }
 
 /* Ícone em círculo + selo do banco/cartão no canto inferior direito */

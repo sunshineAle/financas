@@ -1,4 +1,5 @@
 <script setup>
+import { podeExcluirEmLote, excluirVarias } from '../services/excluirTransacoes.js';
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
 import { useRouter, useRoute } from 'vue-router';
@@ -282,7 +283,17 @@ const periodoCurto = computed(() => (anoInteiro.value ? 'no ano' : ehAtual.value
 
 function importar() { router.push({ path: '/importar', query: { tipo: 'conta', id: contaSel.value.id } }); }
 function transferir() { abrirLancamento({ tipo: 'transferencia', contaId: contaSel.value ? contaSel.value.id : '' }); }
-function abrirTransacao(t) { router.push({ name: 'transacoes', query: { conta: t.conta_id } }); }
+// 05/11: no extrato da conta o toque não leva a Transações. Arrastar → Editar abre o detalhe da transação (fechar volta
+// para cá) e Excluir apaga aqui mesmo; transferências e estornos são desfeitos pelo detalhe (mexem em duas pontas).
+function editarTransacao(t) { router.push({ name: 'transacoes', query: { editar: t.id } }); }
+async function excluirTransacao(t) {
+  if (!podeExcluirEmLote(t)) { editarTransacao(t); return; }
+  if (!confirm(`Apagar "${t.descricao_base || t.descricao}"?`)) return;
+  const r = await excluirVarias([t]);
+  if (r.ok) avisar('Transação apagada.', { tipo: 'ok' }); else avisar('Não foi possível apagar.', { tipo: 'aviso' });
+  await aposExcluir();
+}
+async function aposExcluir() { await carregarContas(); carregarExtrato(); }
 async function carregarCategorias() {
   try { const r = await fetch('/api/categorias', { credentials: 'include' }); if (r.ok) categorias.value = await r.json(); } catch { /* sem ícones personalizados */ }
 }
@@ -355,7 +366,7 @@ watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); 
             </section>
 
             <CardPadrao v-if="!pilha && contaSel" class="area-extrato" titulo="Extrato" :subtitulo="rotuloMes">
-              <ContaExtrato :transacoes="transacoesConta" :carregando="carregandoTx" :por-mes="anoInteiro" :categorias="categorias" @abrir="abrirTransacao" />
+              <ContaExtrato :transacoes="transacoesConta" :carregando="carregandoTx" :por-mes="anoInteiro" :categorias="categorias" @editar="editarTransacao" @excluir="excluirTransacao" @mudou="aposExcluir" />
             </CardPadrao>
           </div>
         </div>

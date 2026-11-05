@@ -1,4 +1,6 @@
 <script setup>
+import { lancamentoSalvo } from '../services/lancamento.js';
+const avisarMudanca = () => { lancamentoSalvo.value++; }; // as telas abertas (Transações, Contas) recarregam
 // Importar extrato ou fatura. Central em 2 etapas (tipo -> conta/cartão) ou contextual (?tipo=&id= vindo do menu do card).
 // Fluxo: arquivo -> pré-visualização obrigatória (corrigir/descartar linhas) -> confirmar -> histórico com desfazer.
 import { ref, computed, watch, onMounted } from 'vue';
@@ -281,7 +283,7 @@ function sugerirRegraCaixinha() {
 const trechoCaixinha = (d) => String(d || '').replace(/\b(aplica[cç][aã]o|aplic|resgate|dep[oó]sito|guardar|guardado|pix|ted)\b/gi, ' ').replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || String(d || '').slice(0, 40);
 
 async function desfazer(id) {
-  try { await api('DELETE', `/api/importacao/${id}`); avisar('Importação desfeita.', { tipo: 'ok' }); historico.value = await api('GET', '/api/importacao/historico'); if (resultado.value && resultado.value.importacaoId === id) resultado.value = null; }
+  try { const r = await api('DELETE', `/api/importacao/${id}`); avisar(r && r.removidos ? `Importação desfeita: ${r.removidos} ${r.removidos === 1 ? 'lançamento saiu' : 'lançamentos saíram'} do extrato.` : 'Importação desfeita.', { tipo: 'ok' }); avisarMudanca(); historico.value = await api('GET', '/api/importacao/historico'); if (resultado.value && resultado.value.importacaoId === id) resultado.value = null; }
   catch (e) { erro.value = e.message; }
 }
 function novaImportacao() { etapa.value = contextual.value ? 2 : 1; corpoArq.value = null; nomeArq.value = ''; analise.value = null; resultado.value = null; filtro.value = 'todas'; periodoModo.value = 'arquivo'; sugestao.value = null; }

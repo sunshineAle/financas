@@ -1,4 +1,6 @@
 <script setup>
+import { useSelecao } from '../services/selecao.js';
+import BarraSelecao from '../components/BarraSelecao.vue';
 import CampoIconeItem from '../components/CampoIconeItem.vue';
 import ReservasAuto from '../components/ReservasAuto.vue';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
@@ -429,7 +431,17 @@ onMounted(async () => {
     abrirLancamento({ tipo: novo, contaId: route.query.conta ? String(route.query.conta) : '', categoriaId: route.query.cat ? String(route.query.cat) : '', categoriaReceita: route.query.catReceita ? String(route.query.catReceita) : '', limitar: '' });
     router.replace({ path: '/transacoes' });
   }
+  // 05/11: "Editar" arrastando no extrato da conta abre o detalhe aqui; fechar volta para o extrato.
+  if (route.query.editar) {
+    const alvo = transacoes.value.find((t) => String(t.id) === String(route.query.editar));
+    if (alvo) { voltarAoFechar = true; abrirEdicao(alvo); }
+  }
 });
+let voltarAoFechar = false;
+// 05/11 (feedback): segurar uma transação começa a seleção para apagar várias de uma vez.
+const sel = useSelecao(transacoes, async () => { await Promise.all([carregar(), carregarApoio()]); });
+watch(() => route.fullPath, () => sel.sair());
+watch(() => editando.value, (v) => { if (!v && voltarAoFechar) { voltarAoFechar = false; router.back(); } });
 onUnmounted(() => window.removeEventListener('click', fecharFiltro));
 watch(lancamentoSalvo, async () => { await Promise.all([carregar(), carregarApoio()]); });
 
@@ -713,7 +725,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         <!-- 1. Últimas transações (3) + Ver todas — logo abaixo do card de valores (30/10, 03h04) -->
         <CardPadrao class="bloco-tx" titulo="Últimas transações" data-bloco-ultimas>
           <div v-if="ultimas.length" class="cartao-lista-sem">
-            <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+            <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel selecionavel :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" @segurar="sel.segurar" @alternar="sel.alternar" />
           </div>
           <p v-else class="nota-vazia">Nenhuma transação {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
           <button type="button" class="ver-todas" data-ver-todas @click="irModo({ ver: 'extrato' })">Ver todas<ChevronRight :size="16" :stroke-width="2" /></button>
@@ -796,7 +808,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <button v-for="sb in catSubs" :key="sb" type="button" :class="['chip-s', { on: subFiltro === sb }]" @click="subFiltro = subFiltro === sb ? '' : sb">{{ sb }}</button>
         </div>
         <CardPadrao class="cartao-lista" sem-padding>
-          <LinhaTransacao v-for="t in catLista" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+          <LinhaTransacao v-for="t in catLista" :key="t.id" :t="t" :info="infoDe(t)" arrastavel selecionavel :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" @segurar="sel.segurar" @alternar="sel.alternar" />
           <p v-if="!catLista.length" class="nota-vazia pad">Nenhuma transação nesta categoria {{ anoInteiro ? 'neste ano' : 'neste mês' }}.</p>
         </CardPadrao>
       </template>
@@ -815,7 +827,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
               <span v-if="g.total !== 0" class="total-grupo numero-tabular" :class="g.total < 0 ? 'neg' : 'pos'">{{ g.total < 0 ? '−' : '+' }} {{ moeda(Math.abs(g.total)) }}</span>
             </header>
             <CardPadrao class="cartao-lista" sem-padding>
-              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" arrastavel :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" />
+              <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" arrastavel selecionavel :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" @segurar="sel.segurar" @alternar="sel.alternar" />
             </CardPadrao>
           </section>
         </template>
@@ -860,6 +872,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
     </div>
 
     <!-- Detalhes / edição -->
+    <BarraSelecao v-if="sel.ativa.value" :quantidade="sel.quantidade.value" :total="sel.total.value" :ocupado="sel.ocupado.value" @todas="sel.todas" @excluir="sel.excluir" @sair="sel.sair" />
     <FormularioModal :aberto="!!editando" titulo="Detalhes da transação" ajuda="transacoes.editar" :tema="edicaoEhSaida ? 'saida' : 'entrada'" :erro="erroEdicao" rotulo-cancelar="Fechar" @salvar="salvarEdicao" @fechar="editando = null">
       <template v-if="editando">
         <p class="origem-tx">
