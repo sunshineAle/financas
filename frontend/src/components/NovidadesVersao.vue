@@ -6,10 +6,12 @@ import { useRouter } from 'vue-router';
 import { Sparkles } from 'lucide-vue-next';
 import Modal from './Modal.vue';
 import { novidadesNaoVistas, marcarNovidadesVistas, rotuloVersao, ehTeste } from '../services/novidades.js';
+import { precisaOQueMudou } from '../services/tour.js';
 
 const router = useRouter();
 const n = ref(null);
-onMounted(async () => { setTimeout(async () => { n.value = await novidadesNaoVistas(); }, 1200); });
+// 1.0: quem vem da 0.N vê o tour "O que mudou na 1.0" no lugar deste aviso (uma janela só).
+onMounted(async () => { setTimeout(async () => { const v = await novidadesNaoVistas(); if (v && precisaOQueMudou()) { return; } n.value = v; }, 1200); });
 function fechar() { if (n.value) marcarNovidadesVistas(n.value.versao); n.value = null; }
 function detalhes() { fechar(); router.push('/mais/sobre?novidades=1'); }
 </script>

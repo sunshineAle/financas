@@ -401,7 +401,7 @@ async function remover(c) {
 }
 
 watch(modalAberto, (v) => { if (props.fluxo && !v) emit('fluxo-fim', salvouNoFluxo); });
-onMounted(() => { if (props.fluxo) abrirNovo(); carregarCartoes(); });
+onMounted(() => { if (props.fluxo || route.query.novo === '1') abrirNovo(); carregarCartoes(); });
 </script>
 
 <template>

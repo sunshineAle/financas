@@ -2,71 +2,63 @@
 // Manual / Tutorial: passo a passo curto de cada parte do sistema. Seções recolhíveis (uma aberta por vez).
 import { ref, onMounted, nextTick, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Landmark, CreditCard, FileText, ReceiptText, Target, Tags, CloudUpload, ArrowLeftRight, ChevronDown, Rocket, CalendarClock } from 'lucide-vue-next';
+import { Landmark, CreditCard, FileText, Target, CloudUpload, ArrowLeftRight, ChevronDown, Rocket, CalendarClock, Scale, PlayCircle } from 'lucide-vue-next';
+import { NOMES_TOUR, reverTour, toursLigados, ligarTours } from '../services/tour.js';
+const dicas = ref(toursLigados());
+const mudarDicas = () => { dicas.value = !dicas.value; ligarTours(dicas.value); };
+const LISTA_TOURS = Object.keys(NOMES_TOUR).filter((k) => k !== 'o-que-mudou');
 
+// Versão 1.0: nomes novos (Patrimônio, Compromissos, Categorias dentro de Transações) e "Rever tour" de cada página.
 const SECOES = [
   { id: 'comeco', icone: Rocket, titulo: 'Primeiros passos', passos: [
-    'Cadastre suas contas em Contas (toque no "+" no fim do carrossel).',
-    'Lance suas entradas e saídas pelo botão central "+" ou em Transações.',
-    'Confira o Início: o "Saldo do mês" e o gráfico mostram para onde o dinheiro está indo.',
-    'Troque o mês deslizando para o lado ou tocando nas abas do mês no topo.',
+    'No Início, o card "Primeiros passos" leva a cada etapa: conta, cartão, importar um extrato, início do mês e backup.',
+    'Lance entradas, saídas e transferências pelo "+" do rodapé (no computador, "+ Adicionar" no menu).',
+    'O "Saldo do mês" mostra o que entrou menos o que saiu; escolha outro mês no filtro de meses (um mês futuro mostra a previsão).',
+    'Tocar de novo no item aceso do rodapé volta para a página principal dele.',
   ] },
-  { id: 'contas', icone: Landmark, titulo: 'Contas', passos: [
-    'Cada conta tem saldo próprio. Deslize o carrossel para ver as outras.',
-    'Toque na conta para ver o extrato; use as ações do card para transferir, ajustar saldo ou editar.',
-    'Segure um card por meio segundo para reordenar as contas.',
+  { id: 'patrimonio', icone: Scale, titulo: 'Patrimônio e Contas', passos: [
+    'Patrimônio líquido = o que você tem (contas, metas, investimentos) − o que deve hoje (faturas abertas, dívidas, cheque especial).',
+    'As abas Ativos | Passivos alternam os lados; no computador eles ficam lado a lado.',
+    'Toque num bloco para abrir o detalhe; "Acessar …" leva à página. Parcelas futuras ficam em Compromissos.',
+    'Em Contas, deslize o carrossel; segure um card para reordenar. No extrato, arraste uma transação para editar ou excluir e segure para selecionar várias.',
   ] },
-  { id: 'transacoes', icone: ArrowLeftRight, titulo: 'Transações', passos: [
-    'Escolha Entrada ou Saída, informe valor, data, conta e categoria.',
-    'Use os filtros da lista para achar um lançamento; toque nele para editar ou excluir.',
-    'A categoria define onde o gasto aparece no orçamento e nos relatórios.',
+  { id: 'transacoes', icone: ArrowLeftRight, titulo: 'Transações e categorias', passos: [
+    'Últimas transações, o gráfico por categoria e as categorias com o limite ficam na mesma página.',
+    '"Ver todas" abre o extrato completo: as barras escolhem o mês, a lupa busca por nome, categoria ou valor.',
+    'Arraste uma transação para a esquerda para editar ou excluir; segure para selecionar várias e apagar de uma vez.',
+    'Toque numa categoria para ver o mês a mês, definir o limite e filtrar por subcategoria.',
   ] },
-  { id: 'cartoes', icone: CreditCard, titulo: 'Cartões', passos: [
-    'Cadastre o cartão com limite, dia de fechamento e dia de vencimento.',
-    'Lance as compras no cartão: parceladas, elas entram nas faturas dos meses seguintes.',
-    'Cada cartão tem a cor própria, que você escolhe na edição.',
+  { id: 'compromissos', icone: CreditCard, titulo: 'Compromissos: cartões e dívidas', passos: [
+    'O topo mostra o total a pagar: faturas abertas + parcelas de dívidas do mês.',
+    'Crédito: cartões, cartão de loja e crediário. Toque num para ver a fatura, registrar o pagamento ou lançar uma compra.',
+    'Dívidas: empréstimos, financiamentos e acordos, com o plano de quitação (bola de neve ou avalanche).',
+    'Futuros: as parcelas dos próximos meses, fora do total de hoje.',
+    'Cheque especial não é cadastrado como crédito: aparece em Contas quando a conta fica negativa.',
   ] },
   { id: 'faturas', icone: FileText, titulo: 'Faturas', passos: [
-    'Abra o cartão e toque em "Ver fatura" para ver compras, valor, fechamento e vencimento.',
-    'Navegue pelos meses para ver faturas passadas e futuras.',
+    'Cada compra conta na data da compra e cai na fatura do mês dela; pagamento da fatura não é gasto.',
     'Para quitar, use "Registrar pagamento" e escolha de qual conta o dinheiro sai.',
-  ] },
-  { id: 'dividas', icone: ReceiptText, titulo: 'Dívidas', passos: [
-    'Aqui ficam as faturas a pagar, empréstimos, acordos e as compras parceladas de todos os cartões.',
-    'Cadastre cada dívida com valor, parcelas e vencimento.',
-    'Use as estratégias de quitação (bola de neve ou avalanche) para decidir qual pagar primeiro.',
-    'Toque em um mês da "Evolução do total devido" para ver quanto foi pago e quanto falta.',
-  ] },
-  { id: 'categorias', icone: Tags, titulo: 'Categorias e orçamento', passos: [
-    'Em Categorias, defina um limite mensal para cada despesa. Entradas não têm limite.',
-    'A barra do topo mostra quanto do orçamento já foi usado e quanto ainda pode gastar.',
-    'Crie, renomeie ou mude a cor e o ícone pelo menu de cada categoria.',
+    'Estorno anula a compra; pagamento adiantado abate a fatura; cashback vira entrada.',
   ] },
   { id: 'custos-fixos', icone: CalendarClock, titulo: 'Custo de vida e avisos', passos: [
-    'Em Mais > Custo de vida, aba Fixos, cadastre o que tem valor igual todo mês (aluguel, internet, assinaturas) com valor e dia.',
-    'Na aba Essenciais, adicione as categorias que você paga todo mês com valor que muda (luz, água, mercado). O app estima pela média dos últimos 6 meses.',
-    'Custo de vida = fixos + essenciais. A projeção do mês seguinte soma também as parcelas de cartão, dívidas e acordos.',
-    'Pause um item para tirá-lo do cálculo sem apagar.',
-    'O sino do topo avisa de fatura, parcela ou acordo vencendo e de orçamento no limite. Em Perfil você pode ligar os avisos no aparelho (1 por dia).',
+    'Em Custo de vida, Fixos são os valores iguais todo mês; Essenciais usam a média dos últimos 6 meses.',
+    'Uma recorrência pode ter prazo (ex.: 5 meses) ou não; ela entra no custo de vida e na previsão.',
+    'Os avisos ficam na sua foto, no topo.',
   ] },
   { id: 'metas', icone: Target, titulo: 'Metas e Reserva de Liberdade', passos: [
-    'Em Objetivos, crie metas com valor-alvo e acompanhe o percentual de cada uma.',
-    'A Reserva de Liberdade é a sua meta de segurança financeira: alimente-a com regularidade.',
-    'Na aba Investimentos você acompanha o que já está investido.',
+    'A Reserva de Liberdade é a sua meta de segurança financeira; "Quanto guardar" diz o tamanho ideal.',
+    'Guardar e Resgatar movem dinheiro para a meta sem contar como gasto; só o rendimento é entrada.',
+    'Ligue a meta à caixinha do banco e o app reconhece no extrato importado.',
   ] },
   { id: 'corretoras', icone: Landmark, titulo: 'Investimentos e corretoras', passos: [
-    'Cadastre a sua corretora como uma conta: em Contas, toque no "+" e escolha o tipo "Corretora (investimentos)".',
-    'Mande o dinheiro do banco para a corretora com "Transferir" na aba Investimentos. É uma transferência entre contas suas: não conta como gasto.',
-    'Ao registrar uma compra (Guardar), ela sai da conta da corretora. Toque em um ativo para ver as compras (data, cotas, preço, total) e os proventos.',
-    'Sem corretora cadastrada? Na hora de guardar, escolha "Conciliar com uma transferência do extrato" e indique a saída que aparece no extrato do banco.',
-    'Metas aceitam só investimentos de liquidez rápida (CDB/RDB com liquidez diária, Tesouro Selic, LCI/LCA, poupança, fundos DI). Ações, FIIs, ETFs e cripto ficam só em Investimentos.',
-    'Quando o extrato trouxer "Aplicação Caixinha", "Meu Porquinho" ou "Resgate CDB", o app pergunta se você quer vincular a uma meta. Se não vincular, o valor fica fora do orçamento.',
+    'Cadastre a corretora como conta (tipo "Corretora"). Banco → corretora é transferência; a compra sai da corretora.',
+    'Toque num ativo para ver compras (data, cotas, preço, total), proventos e o preço médio.',
+    'Metas aceitam só investimentos de resgate rápido; ações, FIIs, ETFs e cripto ficam em Investimentos.',
   ] },
-  { id: 'backup', icone: CloudUpload, titulo: 'Backup', passos: [
-    'Seus dados ficam neste aparelho. Faça backup com frequência para não perdê-los se o navegador limpar o cache.',
-    'Baixe o arquivo de backup ou salve-o direto na pasta da sua nuvem (Drive, OneDrive etc.).',
-    'Para recuperar, escolha o arquivo em Backup e confirme a senha de acesso.',
-    'Em Perfil você vê quando foi o último backup.',
+  { id: 'backup', icone: CloudUpload, titulo: 'Backup e restauração', passos: [
+    'Seus dados ficam neste aparelho. Faça backup com frequência (Dados e backup).',
+    'Guarde o arquivo .sfin no aparelho ou envie ao Google Drive, OneDrive ou Dropbox.',
+    'Para restaurar, na tela de entrada toque em "Restaurar backup" e escolha o arquivo ou a nuvem; depois use a senha da época ou a chave de recuperação.',
   ] },
 ];
 // "Ver no manual" (balões de ajuda, anotação 64) chega com ?secao=<id>: abre e rola até essa seção.
@@ -82,6 +74,13 @@ const alternar = (id) => { aberta.value = aberta.value === id ? '' : id; };
   <div class="pagina">
     <h1 class="titulo-pagina">Manual</h1>
     <p class="intro">Um guia rápido, em passos curtos. Toque em um assunto para abrir.</p>
+    <section class="secao tours" data-rever-tour>
+      <div class="cab estatico"><span class="quadro"><PlayCircle :size="20" :stroke-width="1.8" /></span><b>Rever tour</b></div>
+      <div class="lista-tours">
+        <button v-for="k in LISTA_TOURS" :key="k" type="button" class="chip-tour" @click="reverTour(k)">{{ NOMES_TOUR[k] }}</button>
+      </div>
+      <label class="dicas"><input type="checkbox" :checked="dicas" @change="mudarDicas" /> Mostrar a dica de cada página na primeira visita</label>
+    </section>
     <section v-for="s in SECOES" :id="'manual-' + s.id" :key="s.id" class="secao" :class="{ aberta: aberta === s.id }">
       <button type="button" class="cab" :aria-expanded="aberta === s.id" @click="alternar(s.id)">
         <span class="quadro"><component :is="s.icone" :size="20" :stroke-width="1.8" /></span>
@@ -103,6 +102,12 @@ const alternar = (id) => { aberta.value = aberta.value === id ? '' : id; };
 .cab { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 6px 10px; background: none; border: none; border-radius: 12px; color: var(--cor-texto); font-family: var(--fonte-texto); font-size: 15px; text-align: left; cursor: pointer; }
 .cab b { flex: 1; font-weight: 600; }
 .quadro { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--cor-entrada-fundo); color: var(--cor-primaria); flex-shrink: 0; }
+.cab.estatico { cursor: default; }
+.lista-tours { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 8px 64px; }
+.chip-tour { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: var(--cor-card); color: var(--cor-texto); font: 500 13px var(--fonte-texto); cursor: pointer; }
+.chip-tour:hover { border-color: var(--cor-primaria); }
+.dicas { display: flex; align-items: center; gap: 8px; padding: 4px 10px 10px 64px; font-size: 13px; color: var(--cor-texto-suave); }
+@media (max-width: 480px) { .lista-tours, .dicas { padding-left: 10px; } }
 .seta { color: var(--cor-texto-suave); transition: transform 0.2s; }
 .aberta .seta { transform: rotate(180deg); }
 .passos { margin: 4px 10px 10px 64px; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--cor-texto); }

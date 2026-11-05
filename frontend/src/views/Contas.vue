@@ -300,7 +300,7 @@ async function carregarCategorias() {
 const rotuloMes = computed(() => rotuloPeriodo.value);
 
 watch(modalAberto, (v) => { if (props.fluxo && !v) emit('fluxo-fim', salvouNoFluxo); });
-onMounted(async () => { if (props.fluxo) abrirNova(); carregarCategorias(); await carregarContas(); carregarExtrato(); });
+onMounted(async () => { if (props.fluxo || route.query.novo === '1') abrirNova(); carregarCategorias(); await carregarContas(); carregarExtrato(); });
 watch(lancamentoSalvo, async () => { await carregarContas(); carregarExtrato(); }); // lançou pela janela: números da conta atualizam sem sair daqui
 </script>
 

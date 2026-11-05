@@ -1,0 +1,139 @@
+{
+ "geral": {
+  "passos": [
+   0,
+   3,
+   5.75
+  ],
+  "total": 8.75
+ },
+ "inicio": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 9
+ },
+ "patrimonio": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 8.75
+ },
+ "transacoes": {
+  "passos": [
+   0,
+   3.38,
+   6.38
+  ],
+  "total": 9.13
+ },
+ "transacoes-cat": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 8
+ },
+ "revisar": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 8.75
+ },
+ "compromissos": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 9
+ },
+ "contas": {
+  "passos": [
+   0,
+   2,
+   5
+  ],
+  "total": 8.38
+ },
+ "objetivos": {
+  "passos": [
+   0,
+   3,
+   6
+  ],
+  "total": 8
+ },
+ "cartoes": {
+  "passos": [
+   0,
+   2,
+   5
+  ],
+  "total": 8
+ },
+ "dividas": {
+  "passos": [
+   0,
+   3,
+   5
+  ],
+  "total": 7.75
+ },
+ "importar": {
+  "passos": [
+   0,
+   3,
+   5.75
+  ],
+  "total": 8.75
+ },
+ "relatorios": {
+  "passos": [
+   0,
+   3,
+   5
+  ],
+  "total": 7
+ },
+ "regras": {
+  "passos": [
+   0,
+   3,
+   6.38
+  ],
+  "total": 9.38
+ },
+ "custos-fixos": {
+  "passos": [
+   0,
+   3,
+   5
+  ],
+  "total": 7
+ },
+ "backup": {
+  "passos": [
+   0,
+   2,
+   5
+  ],
+  "total": 7
+ },
+ "o-que-mudou": {
+  "passos": [
+   0,
+   3,
+   6,
+   9
+  ],
+  "total": 12
+ }
+}

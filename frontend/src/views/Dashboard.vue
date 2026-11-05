@@ -20,6 +20,7 @@ import { acaoRapidaSalva } from '../services/acoesRapidas.js';
 import LinhaTransacao from '../components/LinhaTransacao.vue';
 import { infoTransacao } from '../utils/infoTransacao.js';
 import PatrimonioDetalhe from '../components/PatrimonioDetalhe.vue';
+import PrimeirosPassos from '../components/PrimeirosPassos.vue';
 import { moedaTotal } from '../services/privacidade.js';
 import { periodo, anoInteiro, rotuloPeriodo, intervaloTxt } from '../services/mes.js';
 import { corReceita, PALETA_RECEITA } from '../utils/coresReceita.js';
@@ -232,6 +233,8 @@ onMounted(async () => {
         <template #corpo>
       <div v-deslizar-mes class="corpo-mes">
       <div class="grade">
+        <!-- Conta nova (1.0): Primeiros passos no topo, no lugar da janela "Vamos começar?" -->
+        <PrimeirosPassos class="largo" />
         <!-- 0. Seus saldos (decisão final da seção 1, 29/10 21h59): meia-lua com Contas, Guardado, Faturas e Dívidas -->
         <SeusSaldos :saldos="dados.saldos" @patrimonio="router.push('/patrimonio')" />
 
@@ -427,6 +430,7 @@ onMounted(async () => {
 @media (min-width: 900px) { .grade { column-count: 2; } }
 .grade > * { break-inside: avoid; margin-bottom: 12px; display: flex; flex-direction: column; }
 .grade > .coluna { gap: 12px; }
+.grade > [data-primeiros-passos] { column-span: all; }
 .coluna { min-width: 0; }
 
 /* Cartões: molde da página Objetivos */
