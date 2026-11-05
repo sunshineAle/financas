@@ -21,6 +21,11 @@ export const rotuloVersao = (n) => (n ? `Versão ${n.versao}${n.data ? ' · ' + 
 const CHAVE_VISTA = 'sf:novidades-vista';
 export async function novidadesNaoVistas() {
   const lista = await carregarNovidades({ fresca: true });
+  // 05/11: só a versão que está RODANDO. Se a rede já traz uma mais nova, há atualização pendente: o aviso
+  // "Nova versão disponível" cuida dela e as Novidades esperam (antes os dois apareciam juntos).
+  const propria = typeof __SF_VERSAO_APP__ !== 'undefined' ? __SF_VERSAO_APP__ : null;
+  if (propria && lista[0] && lista[0].versao !== propria) return null;
+  if (typeof document !== 'undefined' && document.getElementById('sf-aviso-versao')) return null;
   const n = lista[0];
   if (!n) return null;
   let vista = null; let pediu = false;

@@ -1,7 +1,7 @@
 <script setup>
 // "Novidades desta versão" (anotação 42): uma vez, na primeira abertura depois de atualizar, com o mesmo resumo do aviso
 // de versão e "Ver detalhes" (Sobre o app). Garante que a pessoa saiba o que mudou mesmo se o aviso antigo não mostrou.
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { Sparkles } from 'lucide-vue-next';
 import Modal from './Modal.vue';
@@ -11,6 +11,9 @@ import { precisaOQueMudou } from '../services/tour.js';
 const router = useRouter();
 const n = ref(null);
 // 1.0: quem vem da 0.N vê o tour "O que mudou na 1.0" no lugar deste aviso (uma janela só).
+const esconder = () => { n.value = null; }; // aviso de versão nova na tela: as Novidades esperam, sem marcar como vistas
+onMounted(() => window.addEventListener('sf:aviso-versao', esconder));
+onBeforeUnmount(() => window.removeEventListener('sf:aviso-versao', esconder));
 onMounted(async () => { setTimeout(async () => { const v = await novidadesNaoVistas(); if (v && precisaOQueMudou()) { return; } n.value = v; }, 1200); });
 function fechar() { if (n.value) marcarNovidadesVistas(n.value.versao); n.value = null; }
 function detalhes() { fechar(); router.push('/mais/sobre?novidades=1'); }

@@ -67,6 +67,8 @@ function mostrarAviso(worker) {
   caixa.append(titulo, versaoTxt, resumo, texto, detalhes, botao, depois);
   fundo.appendChild(caixa);
   document.body.appendChild(fundo);
+  // um aviso só: se as "Novidades desta versão" estiverem abertas, saem (voltam depois de atualizar)
+  try { window.dispatchEvent(new CustomEvent('sf:aviso-versao')); } catch { /* ignora */ }
 }
 aviso.mostrar = mostrarAviso;
 const guardar = (w) => { aviso.worker = w; mostrarAviso(w); };

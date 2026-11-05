@@ -1,5 +1,14 @@
 [
   {
+    "versao": "1.1.2",
+    "data": "2026-11-05",
+    "resumo": "O aviso de versão nova aparece sozinho, e o limite do cartão passa a contar a fatura que venceu e ainda não foi paga.",
+    "itens": [
+      "Ao abrir o app com uma versão nova disponível, aparecia o aviso de atualização e, junto, a janela \"Novidades desta versão\". Agora só o aviso aparece; as Novidades ficam para depois da atualização (e não repetem se você já leu o resumo no aviso).",
+      "Cartões: a fatura que venceu há pouco e não tem pagamento registrado continua ocupando o limite, como no banco. Se você já pagou, use \"Registrar pagamento\" na fatura e o limite volta."
+    ]
+  },
+  {
     "versao": "1.1.1",
     "data": "2026-11-05",
     "resumo": "A esfera das Metas volta a mostrar as cores com três metas ou mais, e a página Apoie ficou mais simples.",

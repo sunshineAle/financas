@@ -209,11 +209,14 @@ function resumoDoCartao(cartao) {
   // fora e o "usado" aparecia zerado logo depois do fechamento. Faturas vencidas sem pagamento registrado continuam fora
   // (histórico importado sem os pagamentos não pode inflar o limite; o rotativo aparece em Dívidas).
   const hojeIso = hoje();
+  const limiteHistorico = (() => { const t = new Date(hojeIso + 'T12:00:00'); t.setDate(t.getDate() - 40); return t.toISOString().slice(0, 10); })();
   const ocupaLimite = (chave) => {
     if (pagas.has(chave)) return false;
     if (chave >= aberta) return true;
     const d = faturas.datasDaFatura(chave, cartao.dia_fechamento, cartao.dia_vencimento);
-    return !!d.vence && d.vence >= hojeIso;
+    // 05/11 (2ª): a fatura que venceu há pouco (até 40 dias) e não tem pagamento registrado também ocupa — o banco só
+    // libera o limite quando ela é paga. Mais antigas que isso contam como histórico (importado sem os pagamentos).
+    return !!d.vence && d.vence >= limiteHistorico;
   };
   const usado = faturas.arredondar(itens.filter((i) => ocupaLimite(i.fatura)).reduce((s, i) => s + i.valor, 0));
 

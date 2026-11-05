@@ -1,4 +1,7 @@
 import { defineConfig } from 'vite';
+import { readFileSync as lerArq } from 'node:fs';
+// versão que ESTE build entrega (topo do changelog): as Novidades só aparecem para ela, nunca para uma versão ainda não instalada
+const VERSAO_APP = (() => { try { return JSON.parse(lerArq(new URL('./public-pwa/changelog.json', import.meta.url), 'utf8'))[0].versao; } catch { return null; } })();
 import vue from '@vitejs/plugin-vue';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'node:path';
@@ -13,7 +16,7 @@ export default defineConfig({
   root: 'demo',
   base: './',
   plugins: [vue(), viteSingleFile()],
-  define: { '__dirname': '"/"', 'process.env.APP_TIMEZONE': 'undefined', 'process.env.DATA_DIR': 'undefined', 'process.env.DESTINO': 'undefined', 'process.env.HOST': 'undefined', 'process.env.PORT': 'undefined', 'process.env.COOKIE_SECURE': 'undefined', 'process.env.JWT_SECRET': 'undefined', 'import.meta.env.VITE_DEMO': 'true' },
+  define: { '__SF_VERSAO_APP__': JSON.stringify(VERSAO_APP), '__dirname': '"/"', 'process.env.APP_TIMEZONE': 'undefined', 'process.env.DATA_DIR': 'undefined', 'process.env.DESTINO': 'undefined', 'process.env.HOST': 'undefined', 'process.env.PORT': 'undefined', 'process.env.COOKIE_SECURE': 'undefined', 'process.env.JWT_SECRET': 'undefined', 'import.meta.env.VITE_DEMO': 'true' },
   resolve: {
     alias: [
       { find: /^express$/, replacement: d('shims/express.cjs') },
