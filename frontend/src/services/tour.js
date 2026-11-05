@@ -130,6 +130,7 @@ export function temJanelaAberta() {
 
 // Quem já usava antes da 1.0: viu alguma versão 0.N → mostra "O que mudou" uma vez (no lugar do tour geral).
 export function precisaOQueMudou() {
+  if (ehContaNova()) return false; // conta criada agora: ela vê o tour geral, não "O que mudou"
   try { const v = localStorage.getItem('sf:novidades-vista'); return !!v && /^0\./.test(v) && !jaVisto('o-que-mudou'); } catch { return false; }
 }
 // Conta nova (cadastro feito nesta instalação): o tour geral vem antes do tour do Início.

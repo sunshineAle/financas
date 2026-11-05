@@ -1,5 +1,20 @@
 [
   {
+    "versao": "1.0",
+    "data": "2026-11-05",
+    "resumo": "A versão final: navegação nova com Patrimônio e Compromissos, um tour animado em cada página e jeitos mais rápidos de cuidar das transações. Antes de atualizar, faça um backup.",
+    "itens": [
+      "Rodapé novo: Início · Patrimônio · Transações · Compromissos · Mais. Tocar de novo no item aceso volta à página principal.",
+      "Patrimônio: o que você tem (contas, metas e investimentos) e o que deve hoje, com as abas Ativos | Passivos. Os blocos abrem para baixo e têm o atalho \"Acessar …\".",
+      "Compromissos: total a pagar no mês, cartões e crediários, dívidas e as parcelas dos próximos meses num só lugar.",
+      "Transações: últimas transações, gráfico e categorias em blocos; busca pela lupa; segure uma transação para selecionar várias e apagar de uma vez.",
+      "Extrato da conta: arraste para editar ou excluir e segure para selecionar; tocar não muda mais de página.",
+      "Início: \"Seus saldos\" com o contorno colorido mostrando o peso de cada saldo.",
+      "Tour animado na primeira visita a cada página (rever no Manual) e, para quem está começando, o card \"Primeiros passos\".",
+      "Correções: a restauração pelo arquivo do aparelho volta a funcionar no celular, e desfazer uma importação tira todas as linhas dela do extrato."
+    ]
+  },
+  {
     "versao": "0.13",
     "data": "2026-10-30",
     "resumo": "No celular, as janelas agora fecham arrastando para baixo, sem precisar tocar no X.",
