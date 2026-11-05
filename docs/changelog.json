@@ -1,5 +1,14 @@
 [
   {
+    "versao": "1.2.1",
+    "data": "2026-11-05",
+    "resumo": "\"A revisar\" virou uma página própria, com cada lançamento mais simples: a meta e o valor lado a lado e os botões logo abaixo.",
+    "itens": [
+      "A revisar: página própria (menu lateral, card do Início ou a faixa \"N lançamentos para revisar\" em Transações e em Metas).",
+      "Cada lançamento mostra só a linha da transação, a escolha da meta e o rendimento lado a lado, e os botões Vincular / Não vincular (no resgate: Vincular · De fora · Entrada). Saíram os textos longos."
+    ]
+  },
+  {
     "versao": "1.2",
     "data": "2026-11-05",
     "resumo": "Guardar/Resgatar soltos no extrato agora podem ser apagados, o cheque especial só aparece em conta que tem, cada meta pode render o seu % do CDI e a fatura entende melhor parcelamento, saldo anterior e siglas do banco.",
@@ -13,15 +22,6 @@
       "Cartão: escolha se a compra feita no dia do fechamento vai para esta fatura ou para a próxima.",
       "Registrar pagamento: opção \"Paga fora do período / sem conta de origem\", que não mexe em saldo. Aviso para faturas de mais de 2 meses atrás.",
       "Importar extrato: o app compara o saldo do banco com o do app na mesma data e oferece Ajustar saldo. Na conta, dá para apagar de uma vez os lançamentos de antes do saldo inicial."
-    ]
-  },
-  {
-    "versao": "1.1.3",
-    "data": "2026-11-05",
-    "resumo": "A aba Investimentos ficou mais limpa (saiu o aviso da corretora) e o histórico de atualizações mostra só a versão atual e a anterior.",
-    "itens": [
-      "Investimentos: saiu o card \"Cadastre sua corretora como conta\". A explicação continua no Manual.",
-      "Sobre o app: o histórico de atualizações mostra só a versão atual e a anterior."
     ]
   }
 ]

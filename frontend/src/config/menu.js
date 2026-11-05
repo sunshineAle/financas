@@ -45,7 +45,7 @@ export const ACOES_LANCAR = [
 ];
 
 // Rotas que "pertencem" a um grupo mesmo não sendo itens dele (ex.: o extrato abre sobre Cartões).
-const EXTRAS = { contas: 'patrimonio', objetivos: 'patrimonio', cartoes: 'compromissos', dividas: 'compromissos', 'cartao-extrato': 'compromissos', orcamento: 'transacoes', mais: 'mais', regras: 'mais', manual: 'mais' };
+const EXTRAS = { contas: 'patrimonio', objetivos: 'patrimonio', cartoes: 'compromissos', dividas: 'compromissos', 'cartao-extrato': 'compromissos', orcamento: 'transacoes', revisar: 'transacoes', mais: 'mais', regras: 'mais', manual: 'mais' };
 
 export function grupoDaRota(rota) {
   if (rota.name && EXTRAS[rota.name]) return EXTRAS[rota.name];
@@ -86,7 +86,7 @@ export const MENU_LATERAL = [
   { rota: '/compromissos', rotulo: 'Compromissos', dica: 'Cartões, crediários e dívidas', icone: CreditCard },
   { rota: '/orcamento', rotulo: 'Categorias', icone: Tags },
   { rota: '/relatorios', rotulo: 'Relatórios', icone: ChartColumn },
-  { rota: '/transacoes?revisar=1', rotulo: 'A revisar', icone: ListChecks, revisar: true },
+  { rota: '/revisar', rotulo: 'A revisar', icone: ListChecks, revisar: true },
 ];
 
 // Para onde a seta "Voltar" do topo leva (null = sem seta; no lugar dela fica o logo "D").

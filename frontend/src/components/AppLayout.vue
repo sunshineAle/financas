@@ -23,8 +23,8 @@ const usuario = ref(null);
 
 const chaveTela = computed(() => (route.name === 'transacoes' ? `t${remontagemTransacoes.value}` : 'p'));
 function itemAtivo(item) {
-  if (item.revisar) return route.path === '/transacoes' && !!route.query.revisar;
-  if (item.rota === '/transacoes') return route.path === '/transacoes' && !route.query.revisar;
+  if (item.revisar) return route.path === '/revisar';
+  if (item.rota === '/transacoes') return route.path === '/transacoes';
   if (item.rota === '/orcamento') return route.path === '/orcamento';
   // 1.0: as páginas que "moram" num grupo (Contas/Objetivos em Patrimônio, Cartões/Dívidas em Compromissos) acendem o item do grupo
   const grupo = grupoDaRota(route);

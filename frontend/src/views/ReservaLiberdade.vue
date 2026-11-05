@@ -27,7 +27,7 @@ import MetaExtrato from '../components/MetaExtrato.vue';
 import AtivoDetalhe from '../components/AtivoDetalhe.vue';
 import OperacaoModal from '../components/OperacaoModal.vue';
 import TransferirCorretoraModal from '../components/TransferirCorretoraModal.vue';
-import ReservasAuto from '../components/ReservasAuto.vue';
+import AvisoRevisar from '../components/AvisoRevisar.vue';
 import PosicaoInicialModal from '../components/PosicaoInicialModal.vue';
 import { Plus, PiggyBank, ArrowUpFromLine, ArrowLeftRight, Flag } from 'lucide-vue-next';
 import { resolverChave, CATALOGO, ESCOLHAS } from '../utils/icones.js';
@@ -455,7 +455,7 @@ onMounted(carregarConectados);
 
     <!-- ===== ABA METAS ===== -->
     <template v-else-if="aba === 'metas'">
-      <ReservasAuto :metas="metas" :versao="versao" @decidido="aposGravar" />
+      <AvisoRevisar :versao="versao" />
       <!-- Homologação 1.0, seção 10: o ORBE fica no topo, no lugar do card "Total guardado"; o valor vai junto dele -->
       <!-- Orbe sozinho no topo (visual); as abas e o saldo ficam num bloco único logo abaixo -->
       <section class="palco-obj" aria-label="Metas">

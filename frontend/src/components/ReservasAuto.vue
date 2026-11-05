@@ -13,7 +13,7 @@ import { api, comCdi } from '../services/investimentos.js';
 import { avisar } from '../services/avisos.js';
 
 const props = defineProps({ metas: { type: Array, default: null }, versao: { type: Number, default: 0 } });
-const emit = defineEmits(['decidido']);
+const emit = defineEmits(['decidido', 'quantidade']);
 const pendentes = ref([]);
 const guardado = ref({});
 const metasProprias = ref([]);
@@ -39,6 +39,7 @@ function preencher() {
 async function carregar() {
   const r = await api('GET', '/api/reserva/auto/pendentes');
   pendentes.value = r.ok ? r.json.pendentes : [];
+  emit('quantidade', pendentes.value.length);
   guardado.value = (r.ok && r.json.guardado) || {};
   if (!props.metas && pendentes.value.length && !metasProprias.value.length) {
     const m = await api('GET', comCdi('/api/reserva'));
@@ -70,56 +71,50 @@ async function decidir(p, acao) {
 </script>
 
 <template>
-  <CardPadrao v-if="pendentes.length" tema="meta" class="auto tema-meta" titulo="A revisar: guardar e resgatar" subtitulo="Movimentos do extrato que parecem dinheiro guardado, não gasto nem entrada." data-reservas-auto>
+  <!-- 1.2 (05/11): página própria /revisar; cada item enxuto — linha, meta + valor lado a lado, botões -->
+  <CardPadrao v-if="pendentes.length" tema="meta" class="auto tema-meta" titulo="Guardar e resgatar" data-reservas-auto>
     <ul class="lista">
-      <li v-for="p in pendentes" :key="p.transacao.id">
+      <li v-for="p in pendentes" :key="p.transacao.id" class="item">
         <LinhaTransacao class="linha-revisar" :t="{ ...p.transacao, a_revisar: true }" :info="{ nome: p.deteccao.rotulo, neutra: true, tipoNeutro: 'reserva' }" :clicavel="false" />
-        <div class="corpo">
-          <p v-if="p.deteccao.sentido === 'resgatar'" class="explica">Isto parece um resgate da sua {{ p.deteccao.ativo }}. É dinheiro que você já tinha guardado, então não conta como entrada.</p>
-          <p class="pergunta">{{ p.deteccao.sentido === 'guardar' ? 'Guardar' : 'Resgatar' }} {{ p.deteccao.ativo }} {{ p.deteccao.sentido === 'guardar' ? 'em' : 'de' }} qual meta?</p>
-          <div class="acoes">
+        <div class="campos" :class="{ dois: p.deteccao.sentido === 'resgatar' }">
+          <label class="campo">
+            <span>{{ p.deteccao.sentido === 'guardar' ? 'Guardar em' : 'Resgatar de' }}</span>
             <select v-model="escolha[p.transacao.id]" class="sf-entrada" :aria-label="'Meta para ' + p.transacao.descricao" @change="trocouMeta(p)">
               <option v-for="o in opcoesDe(p)" :key="o.id" :value="o.id">{{ o.rotulo }}</option>
             </select>
-            <label v-if="p.deteccao.caixinha && p.trecho" class="regra"><input v-model="regra[p.transacao.id]" type="checkbox" /> Sempre que vier “{{ p.trecho }}”, usar esta meta</label>
-            <label v-if="p.deteccao.sentido === 'resgatar'" class="rend">
-              <span>Quanto disso foi rendimento?</span>
-              <input v-model.number="rend[p.transacao.id]" type="number" min="0" step="0.01" class="sf-entrada" inputmode="decimal" />
-              <small>{{ guardado[escolha[p.transacao.id]] ? 'Calculado pelo que você guardou nesta meta.' : 'Sem histórico na meta: informe ou deixe 0.' }} O rendimento entra como Rendimentos, em linha separada.</small>
-            </label>
-            <div class="par-botoes">
-              <button type="button" class="sf-botao primario" :disabled="ocupado || !escolha[p.transacao.id]" @click="decidir(p, 'vincular')">Vincular</button>
-              <button v-if="p.deteccao.sentido === 'guardar'" type="button" class="sf-botao secundario" :disabled="ocupado" @click="decidir(p, 'recusar')">Não vincular</button>
-              <button v-else type="button" class="sf-botao secundario" :disabled="ocupado" title="FGTS, PIS/PASEP, previdência, consórcio, investimento antigo" @click="decidir(p, 'externo')">É dinheiro de fora do app</button>
-            </div>
-            <button v-if="p.deteccao.sentido === 'resgatar'" type="button" class="link" :disabled="ocupado" @click="decidir(p, 'comum')">Deixar como entrada comum</button>
-          </div>
+          </label>
+          <label v-if="p.deteccao.sentido === 'resgatar'" class="campo valor" title="O rendimento entra como Rendimentos, em linha separada">
+            <span>Rendimento</span>
+            <input v-model.number="rend[p.transacao.id]" type="number" min="0" step="0.01" class="sf-entrada" inputmode="decimal" placeholder="0,00" />
+          </label>
+        </div>
+        <label v-if="p.deteccao.caixinha && p.trecho" class="regra"><input v-model="regra[p.transacao.id]" type="checkbox" /> Sempre usar esta meta</label>
+        <div class="botoes" :class="{ tres: p.deteccao.sentido === 'resgatar' }">
+          <button type="button" class="sf-botao primario" :disabled="ocupado || !escolha[p.transacao.id]" @click="decidir(p, 'vincular')">Vincular</button>
+          <button v-if="p.deteccao.sentido === 'guardar'" type="button" class="sf-botao secundario" :disabled="ocupado" title="Fica separado do orçamento (não conta como gasto)" @click="decidir(p, 'recusar')">Não vincular</button>
+          <template v-else>
+            <button type="button" class="sf-botao secundario" :disabled="ocupado" title="FGTS, PIS/PASEP, previdência, consórcio: entra em Resgates e saques" @click="decidir(p, 'externo')">De fora</button>
+            <button type="button" class="sf-botao secundario" :disabled="ocupado" title="Conta como entrada comum" @click="decidir(p, 'comum')">Entrada</button>
+          </template>
         </div>
       </li>
     </ul>
     <p v-if="erro" class="sf-erro" role="alert">{{ erro }}</p>
-    <p class="nota">Guardar sem vincular fica separado do orçamento (não conta como gasto). Dinheiro de fora do app entra na categoria “Resgates e saques”.</p>
   </CardPadrao>
 </template>
 
 <style scoped>
-.lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.lista li { display: flex; flex-direction: column; gap: 2px; }
+.lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.item { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--cor-borda); }
+.item:first-child { border-top: none; padding-top: 2px; }
 .linha-revisar { margin: 0 -6px; }
-.corpo { flex: 1; min-width: 0; padding-left: 54px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
-.corpo small, .nota { color: var(--cor-texto-suave); font-size: 12px; }
-@media (max-width: 480px) { .corpo { padding-left: 0; } }
-.nota { margin: 10px 0 0; }
-.pergunta { margin: 6px 0 4px; font-size: 13px; }
-.acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.acoes select { flex: 1 1 140px; min-width: 0; min-height: 44px; }
-.acoes .sf-botao { min-height: 44px; width: 100%; padding: 0 10px; }
-.par-botoes { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.explica { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--cor-texto); }
-.rend { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-.rend input { min-height: 44px; }
-.rend small { font-size: 11.5px; color: var(--cor-texto-suave); }
-.regra { flex: 1 1 100%; display: flex; gap: 8px; align-items: center; font-size: 13px; min-height: 36px; }
+.campos { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.campos.dois { grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr); }
+.campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--cor-texto-suave); }
+.campo select, .campo input { min-height: 44px; width: 100%; min-width: 0; }
+.regra { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--cor-texto-suave); }
 .regra input { width: 18px; height: 18px; accent-color: var(--cor-meta); }
-.link { background: none; border: none; padding: 6px 2px; color: var(--cor-texto-suave); font: 600 13px var(--fonte-texto); text-decoration: underline; cursor: pointer; }
+.botoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.botoes.tres { grid-template-columns: 1.2fr 1fr 1fr; }
+.botoes .sf-botao { min-height: 42px; width: 100%; padding: 0 8px; }
 </style>

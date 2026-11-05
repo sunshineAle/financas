@@ -41,7 +41,7 @@ const ROTEIRO = {
     { sel: '[data-detalhe-categoria]', rolar: true },
     { sel: '.chips-sub, [data-detalhe-categoria] .chip', rolar: true },
   ] },
-  revisar: { rota: '/transacoes?revisar=1', passos: [{ sel: '.topo-valor' }, { sel: '.linha-tx', rolar: true }, { sel: '.linha-tx', gesto: 'tocar', rolar: true }] },
+  revisar: { rota: '/revisar', passos: [{ sel: '[data-reservas-auto], [data-revisar-vazio]' }, { sel: '.campos, [data-revisar-vazio]' }, { sel: '.botoes, [data-revisar-vazio]' }] },
   compromissos: { rota: '/compromissos', passos: [
     { sel: '.topo-valor' },
     { sel: '[data-bloco-credito]', rolar: true },

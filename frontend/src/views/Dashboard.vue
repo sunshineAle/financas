@@ -239,7 +239,7 @@ onMounted(async () => {
         <SeusSaldos :saldos="dados.saldos" @patrimonio="router.push('/patrimonio')" />
 
         <!-- 1. Revise suas transações (homologação 1.0, seção 7): só quando há itens em A revisar -->
-        <button v-if="qtdRevisar > 0" type="button" class="cartao revisar" data-revise-transacoes @click="ir('/transacoes?revisar=1')">
+        <button v-if="qtdRevisar > 0" type="button" class="cartao revisar" data-revise-transacoes @click="ir('/revisar')">
           <span class="icone-cat aviso" aria-hidden="true"><ListChecks :size="20" :stroke-width="2" /></span>
           <span class="textos"><span class="descricao">Revise suas transações</span><span class="secundario">{{ qtdRevisar }} {{ qtdRevisar === 1 ? 'item precisa' : 'itens precisam' }} da sua confirmação</span></span>
           <span class="contador-revisar numero-tabular">{{ qtdRevisar > 99 ? '99+' : qtdRevisar }}</span>

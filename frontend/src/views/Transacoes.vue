@@ -4,7 +4,7 @@ import { confirmar as confirmarApp } from '../services/confirmar.js';
 import { useSelecao } from '../services/selecao.js';
 import BarraSelecao from '../components/BarraSelecao.vue';
 import CampoIconeItem from '../components/CampoIconeItem.vue';
-import ReservasAuto from '../components/ReservasAuto.vue';
+import AvisoRevisar from '../components/AvisoRevisar.vue';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
@@ -673,7 +673,6 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 
 <template>
   <div class="pagina">
-    <ReservasAuto @decidido="carregar" />
     <CabecalhoPagina titulo="Transações" cor="var(--entrada-cobalto-medio)" :sem-mes="modo === 'extrato'">
     <template #corpo>
     <div v-deslizar-mes class="area-mes" :class="'modo-' + modo">
@@ -698,6 +697,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           </BarraAcoes>
         </template>
       </TopoValor>
+      <AvisoRevisar v-if="modo === 'blocos'" class="aviso-topo" />
 
       <!-- Extrato: barras que escolhem o mês + filtro -->
       <CardPadrao v-if="modo === 'extrato'" class="painel-extrato" data-extrato>
@@ -1140,4 +1140,5 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
   .modo-blocos { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .modo-blocos > :not([data-bloco-ultimas]):not([data-bloco-grafico]) { grid-column: 1 / -1; }
 }
+.aviso-topo { margin-top: 12px; }
 </style>

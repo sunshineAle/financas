@@ -37,8 +37,8 @@ export const TOURS = {
     { icone: Filter, titulo: 'Subcategorias', texto: 'Filtre as transações pela subcategoria.' },
   ] },
   revisar: { titulo: 'Como usar o A revisar', passos: [
-    { icone: CircleHelp, titulo: 'O que é', texto: 'O que o app não soube classificar sozinho.' },
-    { icone: CheckCheck, titulo: 'Decida', texto: 'Resgate, estorno, duplicidade ou sem categoria.' },
+    { icone: CircleHelp, titulo: 'O que é', texto: 'Guardar e resgatar do extrato que o app não soube ligar a uma meta.' },
+    { icone: CheckCheck, titulo: 'Decida', texto: 'Escolha a meta (e o rendimento, no resgate) e toque em Vincular.' },
     { icone: WandSparkles, titulo: 'Vire regra', texto: 'Da próxima vez o app faz sozinho.' },
   ] },
   compromissos: { titulo: 'Como usar Compromissos', passos: [
@@ -122,6 +122,7 @@ export function reverTour(chave) { tourAberto.value = chave; }
 // Rota → tour
 export function chaveDaRota(r) {
   if (!r || !r.name) return null;
+  if (r.name === 'revisar') return 'revisar';
   if (r.name === 'transacoes') return r.query.revisar ? 'revisar' : r.query.cat ? 'transacoes-cat' : 'transacoes';
   if (r.name === 'mais-secao') return r.params.secao === 'dados-backup' ? 'backup' : null;
   const MAPA = { dashboard: 'inicio', patrimonio: 'patrimonio', compromissos: 'compromissos', contas: 'contas', objetivos: 'objetivos', cartoes: 'cartoes', dividas: 'dividas', importar: 'importar', relatorios: 'relatorios', regras: 'regras', 'custos-fixos': 'custos-fixos' };
