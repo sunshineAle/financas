@@ -2,9 +2,10 @@
   {
     "versao": "1.1.3",
     "data": "2026-11-05",
-    "resumo": "A aba Investimentos ficou mais limpa: saiu o aviso grande para cadastrar a corretora como conta.",
+    "resumo": "A aba Investimentos ficou mais limpa (saiu o aviso da corretora) e o histórico de atualizações mostra só a versão atual e a anterior.",
     "itens": [
-      "Investimentos: saiu o card \"Cadastre sua corretora como conta\". A explicação continua no Manual."
+      "Investimentos: saiu o card \"Cadastre sua corretora como conta\". A explicação continua no Manual.",
+      "Sobre o app: o histórico de atualizações mostra só a versão atual e a anterior."
     ]
   },
   {
@@ -14,159 +15,6 @@
     "itens": [
       "Ao abrir o app com uma versão nova disponível, aparecia o aviso de atualização e, junto, a janela \"Novidades desta versão\". Agora só o aviso aparece; as Novidades ficam para depois da atualização (e não repetem se você já leu o resumo no aviso).",
       "Cartões: a fatura que venceu há pouco e não tem pagamento registrado continua ocupando o limite, como no banco. Se você já pagou, use \"Registrar pagamento\" na fatura e o limite volta."
-    ]
-  },
-  {
-    "versao": "1.1.1",
-    "data": "2026-11-05",
-    "resumo": "A esfera das Metas volta a mostrar as cores com três metas ou mais, e a página Apoie ficou mais simples.",
-    "itens": [
-      "Metas: a esfera ficava preta a partir da terceira meta; agora mostra as cores de cada uma. Metas ainda sem valor guardado não mostram mais o rótulo 0% em cima das outras.",
-      "Apoie o desenvolvedor: o link de pagamento virou um bloco único com três botões lado a lado (R$ 10, R$ 25 e R$ 50), com menos texto."
-    ]
-  },
-  {
-    "versao": "1.1",
-    "data": "2026-11-05",
-    "resumo": "Excluir funciona para qualquer transação do extrato (a transferência sai das duas contas), com confirmação no visual do app. O cartão mostra o limite disponível, a importação ficou mais simples e o Apoie ganhou as opções de pagamento.",
-    "itens": [
-      "Extrato da conta e Transações: Excluir agora apaga transferências (nas duas contas), estornos, saldo inicial, ajustes e transações ignoradas, sempre com uma confirmação explicando o que acontece.",
-      "Todas as confirmações de excluir, remover e arquivar usam a janela do app, no lugar da janela do navegador.",
-      "Seleção para apagar várias: a barra ganhou contorno e destaque na cor do excluir.",
-      "Cartões: o card mostra o limite disponível, a barra de uso e o limite total (a fatura continua no card logo abaixo). O limite usado passa a contar também a fatura que já fechou e ainda não venceu.",
-      "Importar: a conferência ficou mais limpa — destino e resumo em destaque, período e detalhes da leitura em \"Ajustar\", e um tour guiado na primeira vez.",
-      "Apoie o desenvolvedor: três opções de apoio (R$ 10, R$ 25 e R$ 50), com o pagamento numa janela nova.",
-      "Só um aviso de atualização: quem atualiza pelo aviso não vê as novidades repetidas ao entrar.",
-      "Assinatura \"um projeto Alt Design Creative\" na entrada, no Mais, no Sobre e no Apoie."
-    ]
-  },
-  {
-    "versao": "1.0",
-    "data": "2026-11-05",
-    "resumo": "A versão final: navegação nova com Patrimônio e Compromissos, um tour animado em cada página e jeitos mais rápidos de cuidar das transações. Antes de atualizar, faça um backup.",
-    "itens": [
-      "Rodapé novo: Início · Patrimônio · Transações · Compromissos · Mais. Tocar de novo no item aceso volta à página principal.",
-      "Patrimônio: o que você tem (contas, metas e investimentos) e o que deve hoje, com as abas Ativos | Passivos. Os blocos abrem para baixo e têm o atalho \"Acessar …\".",
-      "Compromissos: total a pagar no mês, cartões e crediários, dívidas e as parcelas dos próximos meses num só lugar.",
-      "Transações: últimas transações, gráfico e categorias em blocos; busca pela lupa; segure uma transação para selecionar várias e apagar de uma vez.",
-      "Extrato da conta: arraste para editar ou excluir e segure para selecionar; tocar não muda mais de página.",
-      "Início: \"Seus saldos\" com o contorno colorido mostrando o peso de cada saldo.",
-      "Tour animado na primeira visita a cada página (rever no Manual) e, para quem está começando, o card \"Primeiros passos\".",
-      "Correções: a restauração pelo arquivo do aparelho volta a funcionar no celular, e desfazer uma importação tira todas as linhas dela do extrato."
-    ]
-  },
-  {
-    "versao": "0.13",
-    "data": "2026-10-30",
-    "resumo": "No celular, as janelas agora fecham arrastando para baixo, sem precisar tocar no X.",
-    "itens": [
-      "Formulários, detalhes e janelas de escolha (categoria, \"Pagou com\" etc.): arraste para baixo para fechar. Um arraste curto volta a janela para o lugar.",
-      "Se o conteúdo da janela estiver rolado, o gesto rola primeiro; no topo, ele fecha."
-    ]
-  },
-  {
-    "versao": "0.12",
-    "data": "2026-10-30",
-    "resumo": "Transações em blocos: gastos por categoria, suas categorias com o limite e as últimas transações. \"Ver todas\" abre o extrato completo, e tocar numa categoria mostra o mês a mês, o limite e as subcategorias.",
-    "itens": [
-      "Transações: gráfico de gastos ou entradas por categoria (rosca ou barras), o bloco Categorias com o gasto e o limite de cada uma (as maiores em destaque) e o aviso das transações sem categoria.",
-      "Últimas transações do mês e o botão \"Ver todas\": no extrato completo, toque ou arraste nas barras do topo para escolher o mês.",
-      "Toque numa categoria para ver o gasto mês a mês, definir ou mudar o limite, filtrar pelas subcategorias e ver as transações dela.",
-      "No computador: botão \"+ Adicionar\" no menu lateral, com Transação, Criar recorrência e Regra de transação.",
-      "Painel da foto: atalhos dois a dois, painel mais estreito e Animações com as três opções. No celular, a foto mostra o seu nome e os avisos, com o botão para abrir o menu completo.",
-      "Arrastar uma transação para a esquerda mostra Editar e Excluir em botões mais discretos, que não encostam na linha de baixo."
-    ]
-  },
-  {
-    "versao": "0.11",
-    "data": "2026-10-30",
-    "resumo": "Cards do topo mais discretos: o fundo é igual ao dos outros cards, a cor da página aparece só numa faixa fina e o valor ficou um pouco menor.",
-    "itens": [
-      "Transações, Cartões, Dívidas, Categorias, Custo de vida e os detalhes de conta e investimento com o card de topo discreto.",
-      "Janela Patrimônio: card do topo com Ativos, Passivos e a barra da proporção.",
-      "Metas e Investimentos: o bloco do saldo ganhou o mesmo acento discreto."
-    ]
-  },
-  {
-    "versao": "0.10",
-    "data": "2026-10-29",
-    "resumo": "Início mais claro: \"Seus saldos\" mostra contas, guardado, faturas e dívidas formando o Patrimônio, e o mês futuro mostra o previsto. Formulários mais curtos, \"+\" com recorrência e regra, regras para metas e investimentos, e painel do perfil mais prático.",
-    "itens": [
-      "Início: embaixo do orbe aparece o Patrimônio; abaixo do filtro de meses, o bloco \"Seus saldos\" (Contas, Guardado, Faturas e Dívidas). Escolha um mês futuro para ver o \"Previsto\" no próprio Saldo do mês.",
-      "\"Revise suas transações\" aparece no Início quando há algo para você confirmar.",
-      "Relatórios: gráfico de linha no topo (entradas, saídas e resultado). Toque ou arraste nele para escolher o mês. E um novo \"Resumo financeiro\" explica cada número.",
-      "Botão \"+\": Transação (Entrada, Saída, Transferência), Criar recorrência (com ou sem prazo, entra no Custo de vida) e Regra de transação.",
-      "Lançar ficou mais curto: data e parcelas ao lado do valor, \"Pagou com\" num lugar só (conta, cartão, cartão de loja ou crediário), categoria e subcategoria mais rápidas.",
-      "Arraste uma transação para a esquerda para Editar ou Excluir. Estornar, Ignorar e Criar regra ficam no detalhe.",
-      "Regras em blocos (despesa, entrada, metas e investimentos). Agora uma regra também pode Guardar ou Resgatar numa meta, ou registrar aporte e resgate de investimento.",
-      "Metas e Investimentos com o orbe no topo. Patrimônio com contas detalhadas, e voltar de uma conta ou meta leva ao mesmo lugar.",
-      "Cartão de loja com bandeira é aceito em qualquer lugar; sem bandeira, só na loja. \"Crediário\" ficou com nome curto.",
-      "No computador, a foto do perfil abre um painel ao lado dela, com atalhos, início do mês, tema e animações ali mesmo. Importar foi para Dados e backup."
-    ]
-  },
-  {
-    "versao": "0.9",
-    "data": "2026-10-29",
-    "resumo": "Comece com o saldo certo: saldo inicial em contas, metas, investimentos e cartões. Patrimônio com Ativos e Passivos no Início, tipos de crédito, transações com o banco e o meio de pagamento, e telas mais limpas.",
-    "itens": [
-      "Saldo inicial: informe o saldo de hoje das contas, o que já tem guardado nas metas, a posição dos investimentos e a fatura já em aberto dos cartões. Isso não conta como entrada nem saída.",
-      "Ajustar saldo: no menu da conta, informe o saldo real e o app corrige a diferença.",
-      "Metas ligadas à caixinha do banco: na importação, o app reconhece a caixinha pelo nome e lança Guardar ou Resgatar sozinho.",
-      "Toque no Patrimônio do Início para ver Ativos e Passivos, com cheque especial e compras parceladas futuras à parte.",
-      "Cartões agora têm tipo (cartão de crédito, cartão de loja ou crediário), bandeira e juros. Na quitação, o app destaca primeiro os juros mais caros.",
-      "Cada transação mostra o banco ou cartão de onde saiu e o meio de pagamento (Pix, crédito, débito, boleto).",
-      "Na importação da fatura, estornos, pagamentos adiantados e cashback agora entram como crédito, e o total confere com o do banco.",
-      "No celular, o topo ficou igual em todas as páginas. No computador, o menu lateral abre ao passar o mouse e a foto abre o painel do perfil.",
-      "Telas mais limpas: as explicações foram para o pequeno \"?\" ao lado do título de cada seção.",
-      "O mês agora muda pelo filtro (não mais deslizando o dedo); embaixo do mês aparece só o ano.",
-      "Início do mês financeiro fica em Minhas finanças e vai junto no backup.",
-      "Ao sair do app, a tela fica coberta para não mostrar valores na lista de apps abertos."
-    ]
-  },
-  {
-    "versao": "0.8",
-    "data": "2026-10-29",
-    "resumo": "Escolha quando o seu mês começa (por exemplo, no dia do salário) e veja quanto vai ter nas contas nos próximos meses. Novo Custo de vida, com os gastos essenciais, e o Quanto guardar para a Reserva de Liberdade.",
-    "itens": [
-      "Início do mês financeiro em Configurações: dia 1, um dia fixo ou o 5º dia útil. O salário e as compras até o próximo pagamento ficam no mesmo mês.",
-      "Cada compra conta numa data só: a da compra. Pagar a fatura não conta como gasto de novo.",
-      "Novo no Início: Dinheiro nas contas, com a previsão do saldo para os próximos meses. Se o saldo for ficar negativo, o app avisa e leva ao plano de quitação.",
-      "Custos fixos virou Custo de vida, com duas abas: Fixos (valor igual todo mês) e Essenciais (luz, água, mercado…), que o app estima pela média dos últimos 6 meses e marca como Pago ou Pendente.",
-      "O plano da Reserva virou Quanto guardar: a meta usa o seu custo de vida e avisa quando ele muda.",
-      "Filtro de meses mais baixo. Toque no mês para trocar o ano.",
-      "Regras de categorização: arraste para pausar ou excluir e toque para editar. Ao categorizar uma transação, o app sugere criar a regra.",
-      "Chave de recuperação: agora dá para ver a chave atual (com a sua senha) e gerar uma nova com segurança.",
-      "Importar de novo uma fatura depois de desfazer volta a funcionar, e o total importado confere com o do banco.",
-      "Ao sair do app, a tela fica desfocada para não mostrar valores na lista de apps abertos.",
-      "O aviso de nova versão mostra o resumo do que mudou."
-    ]
-  },
-  {
-    "versao": "0.7",
-    "data": "2026-10-25",
-    "resumo": "Topo mais limpo: sua foto agora junta perfil e notificações. Telas com mais espaço, ícones novos para as categorias e um jeito de enviar sugestões direto do app.",
-    "itens": [
-      "No celular, a foto do perfil fica no canto direito e mostra quantos avisos novos você tem. Tocando nela, aparecem os avisos e os atalhos para Perfil e Configurações.",
-      "O olho de esconder valores fica ao lado do valor principal de cada tela.",
-      "As telas usam melhor a largura do celular, com menos espaço sobrando nas bordas e no topo.",
-      "No computador, o nome da página fica ao lado do seletor de meses.",
-      "Cada categoria de despesa ganhou um ícone próprio (Casa, Alimentação, Transporte, Saúde…). Os ícones de cada gasto (Uber, mercado, combustível) passam a aparecer na própria transação.",
-      "Resgates da Caixinha, do Porquinho ou de CDB não contam mais como entrada: o app pergunta se é dinheiro que você já tinha guardado. Só o rendimento conta como entrada.",
-      "Em Sobre o app, toque na versão para ver o que mudou em cada atualização.",
-      "Novo: Enviar feedback, em Sobre o app, para contar um erro, uma dúvida ou uma ideia."
-    ]
-  },
-  {
-    "versao": "0.6",
-    "data": "2026-10-24",
-    "resumo": "Código de recuperação para nunca perder o acesso, entrada mais rápida com PIN e biometria e backup mais simples.",
-    "itens": [
-      "No cadastro, o app gera um código de recuperação. Ele substitui a senha se você esquecê-la e abre os seus backups.",
-      "Entrada rápida: o teclado do PIN já aparece e a biometria é chamada sozinha.",
-      "Backup e restauração com os mesmos dois botões: Deste aparelho ou Conectar nuvem.",
-      "Novo: Apagar dados e redefinir o app, em Dados e backup.",
-      "Formulários de Guardar, Rendimento e Resgatar mais simples, com preço médio e lucro ou prejuízo calculados.",
-      "Corrigido o erro \"Rota não existe\" ao guardar um investimento."
     ]
   }
 ]
