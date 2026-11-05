@@ -3,14 +3,13 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ListChecks, ChevronRight } from 'lucide-vue-next';
-import { api } from '../services/investimentos.js';
+import { contarRevisar } from '../services/revisar.js';
 
 const props = defineProps({ versao: { type: Number, default: 0 } });
 const router = useRouter();
 const qtd = ref(0);
 async function contar() {
-  const r = await api('GET', '/api/reserva/auto/pendentes');
-  qtd.value = r.ok && r.json && Array.isArray(r.json.pendentes) ? r.json.pendentes.length : 0;
+  qtd.value = await contarRevisar();
 }
 onMounted(contar);
 watch(() => props.versao, contar);

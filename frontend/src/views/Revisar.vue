@@ -6,9 +6,12 @@ import { useRouter } from 'vue-router';
 import { CheckCheck } from 'lucide-vue-next';
 import CabecalhoPagina from '../components/CabecalhoPagina.vue';
 import ReservasAuto from '../components/ReservasAuto.vue';
+import RevisarCategorias from '../components/RevisarCategorias.vue';
 
 const router = useRouter();
-const qtd = ref(null);
+const qtd = ref(null);   // guardar/resgatar
+const qtdCat = ref(null); // sem categoria (1.2.2)
+const versaoCat = ref(0); // decidir um guardar/resgatar pode trazer um lançamento para "Sem categoria"
 </script>
 
 <template>
@@ -16,8 +19,9 @@ const qtd = ref(null);
     <CabecalhoPagina titulo="A revisar" sem-mes>
       <template #corpo>
         <div class="conteudo-revisar">
-          <ReservasAuto @quantidade="(n) => (qtd = n)" />
-          <div v-if="qtd === 0" class="vazio" data-revisar-vazio>
+          <ReservasAuto @quantidade="(n) => (qtd = n)" @decidido="versaoCat++" />
+          <RevisarCategorias :key="versaoCat" @quantidade="(n) => (qtdCat = n)" />
+          <div v-if="qtd === 0 && qtdCat === 0" class="vazio" data-revisar-vazio>
             <span class="ic" aria-hidden="true"><CheckCheck :size="26" :stroke-width="1.8" /></span>
             <b>Tudo revisado</b>
             <span>Quando o extrato trouxer algo que o app não sabe classificar, aparece aqui.</span>

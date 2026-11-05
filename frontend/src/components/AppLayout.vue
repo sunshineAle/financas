@@ -1,4 +1,5 @@
 <script setup>
+import { contarRevisar } from '../services/revisar.js';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { Pin, PinOff } from 'lucide-vue-next';
@@ -87,9 +88,7 @@ const qtdRevisar = ref(0);
 async function atualizarRevisar() {
   if (ehCelular.value) return;
   try {
-    const r = await fetch('/api/reserva/auto/pendentes', { credentials: 'include' });
-    const j = r.ok ? await r.json() : null;
-    qtdRevisar.value = (j && Array.isArray(j.pendentes) && j.pendentes.length) || 0;
+    qtdRevisar.value = await contarRevisar();
   } catch { qtdRevisar.value = 0; }
 }
 const itensMenu = computed(() => MENU_LATERAL.filter((i) => !i.revisar || qtdRevisar.value > 0));

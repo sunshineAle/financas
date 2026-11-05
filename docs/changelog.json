@@ -1,11 +1,12 @@
 [
   {
-    "versao": "1.2.1",
+    "versao": "1.2.2",
     "data": "2026-11-05",
-    "resumo": "\"A revisar\" virou uma página própria, com cada lançamento mais simples: a meta e o valor lado a lado e os botões logo abaixo.",
+    "resumo": "\"A revisar\" virou uma página própria e agora traz também os lançamentos sem categoria, para escolher a categoria ou ignorar ali mesmo.",
     "itens": [
       "A revisar: página própria (menu lateral, card do Início ou a faixa \"N lançamentos para revisar\" em Transações e em Metas).",
-      "Cada lançamento mostra só a linha da transação, a escolha da meta e o rendimento lado a lado, e os botões Vincular / Não vincular (no resgate: Vincular · De fora · Entrada). Saíram os textos longos."
+      "Cada lançamento mostra só a linha da transação, a escolha da meta e o rendimento lado a lado, e os botões Vincular / Não vincular (no resgate: Vincular · De fora · Entrada). Saíram os textos longos.",
+      "A revisar › Sem categoria: lançamentos de conta e compras de cartão sem categoria (ou na Geral). Escolha a categoria e toque em Salvar; nos de conta, também dá para Ignorar."
     ]
   },
   {

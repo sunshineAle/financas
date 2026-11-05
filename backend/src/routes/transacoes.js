@@ -29,6 +29,26 @@ const SELECT_TRANSACAO = `
 // Entradas agrupadas por categoria de receita (?mes=AAAA-MM; sem mês, tudo).
 // Subcategorias já usadas (para autocompletar), da mais usada para a menos usada.
 // Anos com dados (para o seletor de ano do filtro de meses, anotação 47): do primeiro lançamento até o ano seguinte ao atual.
+// 1.2.2 (05/11): lançamentos sem categoria (ou na "Geral", o destino quando nada casa) para a página A revisar.
+// Conta: saídas sem categoria e entradas sem categoria de receita. Cartão: compras sem categoria (uma linha por compra).
+router.get('/sem-categoria', (req, res) => {
+  const u = req.usuario.id;
+  const geral = db.prepare('SELECT id FROM categorias_orcamento WHERE usuario_id = ? AND LOWER(nome) = LOWER(?) AND excluido_em IS NULL').get(u, NOME_GERAL);
+  const gid = geral ? geral.id : '__nenhuma__';
+  const conta = db.prepare(`${SELECT_TRANSACAO}
+    WHERE t.usuario_id = ? AND t.excluido_em IS NULL AND COALESCE(t.ignorada, 0) = 0 AND t.tipo_mov IS NULL AND t.origem <> 'derivada' AND t.vinculo IS NULL
+      AND ((t.valor < 0 AND (t.categoria_id IS NULL OR t.categoria_id = ?)) OR (t.valor > 0 AND (t.categoria_receita IS NULL OR t.categoria_receita = ?)))
+    ORDER BY t.data DESC, t.criado_em DESC LIMIT 200`).all(u, gid, NOME_GERAL)
+    .map((t) => ({ origem: 'conta', id: t.id, descricao: t.descricao, valor: t.valor, data: t.data, onde: t.conta_nome, icone: t.icone || null }));
+  const cartao = db.prepare(`SELECT l.cartao_id, l.compra_id, MIN(l.descricao) AS descricao, SUM(l.valor) AS valor, MIN(l.data_compra) AS data, c.nome AS cartao_nome
+      FROM lancamentos_cartao l JOIN cartoes c ON c.id = l.cartao_id AND c.excluido_em IS NULL
+      WHERE l.usuario_id = ? AND l.excluido_em IS NULL AND l.tipo_mov IS NULL AND l.valor > 0 AND (l.categoria_id IS NULL OR l.categoria_id = ?)
+      GROUP BY l.cartao_id, l.compra_id ORDER BY MIN(l.data_compra) DESC LIMIT 200`).all(u, gid)
+    .map((l) => ({ origem: 'cartao', id: `${l.cartao_id}:${l.compra_id}`, cartaoId: l.cartao_id, compraId: l.compra_id, descricao: l.descricao, valor: -Math.round(l.valor * 100) / 100, data: l.data, onde: l.cartao_nome }));
+  const itens = [...conta, ...cartao].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  res.json({ itens, receitas: nomesCategoriasReceita(u) });
+});
+
 router.get('/anos', (req, res) => {
   const r = db.prepare("SELECT MIN(substr(data, 1, 4)) AS ini FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL").get(req.usuario.id);
   const c = db.prepare("SELECT MIN(substr(data_compra, 1, 4)) AS ini FROM lancamentos_cartao WHERE usuario_id = ? AND excluido_em IS NULL").get(req.usuario.id);

@@ -1,4 +1,5 @@
 <script setup>
+import { contarRevisar } from '../services/revisar.js';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { lancamentoSalvo } from '../services/lancamento.js';
@@ -87,9 +88,7 @@ const patrimonioAberto = ref(false);
 const qtdRevisar = ref(0);
 async function carregarRevisar() {
   try {
-    const r = await fetch('/api/reserva/auto/pendentes', { credentials: 'include' });
-    const j = r.ok ? await r.json() : null;
-    qtdRevisar.value = (j && Array.isArray(j.pendentes) && j.pendentes.length) || 0;
+    qtdRevisar.value = await contarRevisar();
   } catch { qtdRevisar.value = 0; }
 }
 

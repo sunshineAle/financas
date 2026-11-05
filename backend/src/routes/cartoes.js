@@ -604,6 +604,20 @@ router.patch('/:id/lancamentos/:compraId', (req, res) => {
   res.json({ ok: true, dividaId });
 });
 
+// 1.2.2: só a categoria da compra (todas as parcelas), usada pela página A revisar.
+router.patch('/:id/lancamentos/:compraId/categoria', (req, res) => {
+  const cartao = buscarCartao(req, res);
+  if (!cartao) return;
+  const catId = req.body?.categoriaId ? String(req.body.categoriaId) : null;
+  if (catId && !db.prepare('SELECT 1 FROM categorias_orcamento WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(catId, req.usuario.id)) {
+    return res.status(400).json({ erro: 'Categoria não encontrada.' });
+  }
+  const alteradas = dados.atualizarOnde('lancamentos_cartao', 'cartao_id = ? AND compra_id = ? AND usuario_id = ? AND tipo_mov IS NULL',
+    [cartao.id, req.params.compraId, req.usuario.id], { categoria_id: catId });
+  if (alteradas === 0) return res.status(404).json({ erro: 'Compra não encontrada.' });
+  res.json({ ok: true });
+});
+
 // Remove a compra inteira (todas as parcelas de uma vez).
 // Edita uma compra manual (vale para todas as parcelas dela). O número de
 // parcelas fica fixo. Valor e data só mudam se nenhuma parcela estiver numa
