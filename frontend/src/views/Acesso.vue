@@ -354,7 +354,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="nuvemRestauro" class="origem" data-backup-recente>Backup mais recente: {{ fmtData(nuvemRestauro.data) }}</p>
         <label v-if="!nuvemRestauro" class="campo">
           <span>Arquivo de backup</span>
-          <input type="file" accept=".sfin,application/octet-stream" @change="escolher" />
+          <input type="file" @change="escolher" />
         </label>
         <template v-if="arquivo && arquivo.cifrado">
           <label class="campo">

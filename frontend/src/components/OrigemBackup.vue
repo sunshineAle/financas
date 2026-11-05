@@ -21,7 +21,9 @@ const subNuvem = (id) => (estadoNuvem[id] && estadoNuvem[id].conectado ? 'conect
     <label v-if="modo === 'restaurar'" class="opcao">
       <span class="icone"><Smartphone :size="22" :stroke-width="1.9" /></span>
       <span class="texto"><b>Deste aparelho</b><small>{{ subAparelho || 'escolha o arquivo .sfin em qualquer pasta' }}</small></span>
-      <input type="file" accept=".sfin,application/octet-stream" :disabled="ocupado" @change="escolheu" />
+      <!-- 02/11: sem "accept": no iPhone/iPad e em vários Android, um tipo desconhecido como .sfin deixava o arquivo cinza (não dava
+           para escolher), e a restauração só funcionava pela nuvem. O conteúdo é conferido depois, em lerArquivo(). -->
+      <input type="file" :disabled="ocupado" data-arquivo-backup @change="escolheu" />
     </label>
     <button v-else type="button" class="opcao" :disabled="ocupado" data-deste-aparelho @click="emit('aparelho')">
       <span class="icone"><Smartphone :size="22" :stroke-width="1.9" /></span>
