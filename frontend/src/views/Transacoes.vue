@@ -27,7 +27,7 @@ import DashRosca from '../components/DashRosca.vue';
 import RelBarrasH from '../components/RelBarrasH.vue';
 import RelBarrasMes from '../components/RelBarrasMes.vue';
 import SeletorPopup from '../components/SeletorPopup.vue';
-import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, ChevronLeft, Filter, Landmark, CreditCard, Pencil, ChartPie, ChartBar, TriangleAlert } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, ArrowRightLeft, Receipt, ChevronDown, ChevronRight, ChevronLeft, Filter, Landmark, CreditCard, Pencil, ChartPie, ChartBar, TriangleAlert, Search, X } from 'lucide-vue-next';
 import CampoCategoria from '../components/CampoCategoria.vue';
 import RegraModal from '../components/RegraModal.vue';
 import { avisar } from '../services/avisos.js';
@@ -507,7 +507,21 @@ function infoDe(t) {
   return { chave: `e-${nome}`, nome, cor: corReceita(nome, inf?.cor || null), icone: inf?.icone || null };
 }
 
-const ordenadas = computed(() => transacoes.value.slice().sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0)));
+// 05/11: busca discreta (lupa) — filtra por descrição, categoria ou valor ("18,90", "uber", "mercado").
+const busca = ref(String(route.query.busca || ''));
+const buscaAberta = ref(!!route.query.busca || route.query.buscar === '1');
+const campoBusca = ref(null);
+const semAcento = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function bateBusca(t) {
+  const q = semAcento(busca.value).trim();
+  if (!q) return true;
+  const valor = Math.abs(Number(t.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const alvo = semAcento([t.descricao, t.descricao_base, t.subcategoria, infoDe(t).nome, t.conta_nome, t.cartao_nome, valor].join(' '));
+  return q.split(/\s+/).every((p) => alvo.includes(p));
+}
+function abrirBusca() { if (modo.value !== 'extrato') { router.push({ path: '/transacoes', query: { ver: 'extrato', buscar: '1' } }); return; } buscaAberta.value = true; setTimeout(() => campoBusca.value?.focus(), 30); }
+function fecharBusca() { busca.value = ''; buscaAberta.value = false; }
+const ordenadas = computed(() => transacoes.value.filter(bateBusca).sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0)));
 const diaDe = (d) => String(d).slice(0, 10);
 const ontemISO = (() => { const d = new Date(`${hojeISO}T12:00:00`); d.setDate(d.getDate() - 1); return d.toLocaleDateString('sv-SE'); })();
 function rotuloDia(iso) {
@@ -563,6 +577,8 @@ function alternarAberta(chave) { abertas.value = { ...abertas.value, [chave]: !a
 // modo 'extrato' (?ver=extrato): lista completa por dia; as barras do topo escolhem o mês (o filtro de meses some);
 // modo 'categoria' (?cat=…): chips das categorias, gráfico por mês, limite, subcategorias e as transações dela.
 const modo = computed(() => (route.query.cat ? 'categoria' : route.query.ver === 'extrato' ? 'extrato' : 'blocos'));
+watch(() => [route.query.ver, route.query.buscar], ([ver, buscar]) => { if (ver !== 'extrato') fecharBusca(); else if (buscar === '1') abrirBusca(); });
+onMounted(() => { if (buscaAberta.value) setTimeout(() => campoBusca.value?.focus(), 300); });
 function irModo(q) { router.push({ path: '/transacoes', query: q }); }
 function voltarBlocos() { if (window.history.length > 1 && route.query.ver !== undefined || route.query.cat) router.back(); else irModo({}); }
 const abaGrafico = ref('saida'); // 'saida' | 'entrada'
@@ -702,8 +718,17 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
       <CardPadrao v-if="modo === 'extrato'" class="painel-extrato" data-extrato>
         <div class="cab-extrato">
           <span class="ext-mes">{{ anoInteiro ? ano : `${MESES[periodo.mes - 1]} de ${ano}` }}</span>
-          <button type="button" class="botao-filtro" :class="{ on: filtrosAtivos }" @click.stop="filtroAberto = !filtroAberto"><Filter :size="15" :stroke-width="2" />{{ filtrosAtivos ? `Filtro (${filtrosAtivos})` : 'Filtro' }}</button>
+          <span class="cab-botoes">
+            <button type="button" class="botao-lupa" :class="{ on: buscaAberta || busca }" aria-label="Buscar transação" title="Buscar" data-lupa @click.stop="buscaAberta ? fecharBusca() : abrirBusca()"><Search :size="16" :stroke-width="2" /></button>
+            <button type="button" class="botao-filtro" :class="{ on: filtrosAtivos }" @click.stop="filtroAberto = !filtroAberto"><Filter :size="15" :stroke-width="2" />{{ filtrosAtivos ? `Filtro (${filtrosAtivos})` : 'Filtro' }}</button>
+          </span>
         </div>
+        <label v-if="buscaAberta" class="campo-busca" data-campo-busca>
+          <Search :size="16" :stroke-width="2" aria-hidden="true" />
+          <input ref="campoBusca" v-model="busca" type="search" placeholder="Buscar por nome, categoria ou valor" aria-label="Buscar transação" autocomplete="off" @keydown.esc="fecharBusca" />
+          <button v-if="busca" type="button" class="limpar-busca" aria-label="Limpar busca" @click="busca = ''"><X :size="15" :stroke-width="2" /></button>
+        </label>
+        <small v-if="busca" class="resultado-busca">{{ ordenadas.length }} {{ ordenadas.length === 1 ? 'resultado' : 'resultados' }} {{ anoInteiro ? `em ${ano}` : `em ${MESES[periodo.mes - 1]}` }} · troque o mês nas barras para buscar em outro</small>
         <RelBarrasMes :meses="mesesExtrato" :selecionado="indiceExtrato" :formato="moedaInt" @escolher="escolherMesExtrato" />
       </CardPadrao>
 
@@ -724,6 +749,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
       <template v-if="modo === 'blocos'">
         <!-- 1. Últimas transações (3) + Ver todas — logo abaixo do card de valores (30/10, 03h04) -->
         <CardPadrao class="bloco-tx" titulo="Últimas transações" data-bloco-ultimas>
+          <template #acoes><button type="button" class="botao-lupa" aria-label="Buscar transação" title="Buscar" data-lupa @click="abrirBusca"><Search :size="16" :stroke-width="2" /></button></template>
           <div v-if="ultimas.length" class="cartao-lista-sem">
             <LinhaTransacao v-for="t in ultimas" :key="t.id" :t="t" :info="infoDe(t)" arrastavel selecionavel :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirTx(t)" @abrir="abrirEdicao" @editar="abrirEdicao" @excluir="excluirTx" @segurar="sel.segurar" @alternar="sel.alternar" />
           </div>
@@ -1086,6 +1112,16 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
 .ext-mes::first-letter { text-transform: uppercase; }
 .botao-filtro { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); font: 600 12.5px var(--fonte-texto); cursor: pointer; }
 .botao-filtro.on { color: var(--cor-primaria); border-color: var(--cor-primaria); }
+/* 05/11: busca discreta — só a lupa; o campo aparece ao tocar */
+.cab-botoes { display: inline-flex; align-items: center; gap: 6px; }
+.botao-lupa { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto-suave); cursor: pointer; }
+.botao-lupa.on, .botao-lupa:hover { color: var(--cor-primaria); border-color: color-mix(in srgb, var(--cor-primaria) 50%, var(--cor-borda)); }
+.campo-busca { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px 0 12px; border-radius: 12px; border: 1px solid var(--cor-borda); background: var(--cor-fundo); color: var(--cor-texto-suave); }
+.campo-busca:focus-within { border-color: var(--cor-primaria); }
+.campo-busca input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--cor-texto); font: 400 14.5px var(--fonte-texto); }
+.campo-busca input::-webkit-search-cancel-button { display: none; }
+.limpar-busca { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; border: 0; background: var(--cor-realce); color: var(--cor-texto-suave); cursor: pointer; }
+.resultado-busca { color: var(--cor-texto-suave); font-size: 12px; }
 .chips-cat, .chips-sub { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .chips-cat::-webkit-scrollbar, .chips-sub::-webkit-scrollbar { display: none; }
 .chip-c { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px 0 6px; border-radius: 999px; border: 1.5px solid var(--cor-borda); background: var(--cor-card); color: var(--cor-texto); font: 600 12.5px var(--fonte-texto); white-space: nowrap; cursor: pointer; }
