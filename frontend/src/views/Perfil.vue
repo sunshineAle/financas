@@ -205,7 +205,7 @@ const versaoAberta = ref(route.query.novidades === '1');
 const novidades = ref([]);
 const abertasAnt = ref([]);
 const alternarAnt = (v) => { abertasAnt.value = abertasAnt.value.includes(v) ? abertasAnt.value.filter((x) => x !== v) : [...abertasAnt.value, v]; };
-onMounted(async () => { novidades.value = (await carregarNovidades()).slice(0, 2); // só a versão atual e a anterior });
+onMounted(async () => { novidades.value = (await carregarNovidades()).slice(0, 2); }); // só a versão atual e a anterior
 const feedbackAberto = ref(false);
 const versao = ref('—');
 onMounted(async () => { versao.value = await textoVersao(); });
