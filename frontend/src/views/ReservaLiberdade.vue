@@ -1,4 +1,6 @@
 <script setup>
+import { avisar } from '../services/avisos.js';
+import { confirmar } from '../services/confirmar.js';
 // Metas (aba Metas) e carteira/investimentos (aba Investimentos) de Objetivos. A tela Objetivos escolhe a aba e o item aberto;
 // os dados e os formulários vivem aqui (uma só carga). Props: `aba` 'metas' | 'investimentos'; `metaAberta` / `ativoAberto` (ids,
 // vindos da URL ?meta= / ?ativo=) abrem o extrato da meta ou o detalhe do ativo.
@@ -231,10 +233,10 @@ function editarLancamento(id) { const it = itemPorId(id); if (it) editarAporte(i
 function apagarLancamento(id) { const it = itemPorId(id); if (it) apagarAporte(it); }
 
 async function apagarAporte(item) {
-  if (!confirm(`Apagar este lançamento de ${moeda(Math.abs(item.valor))}? O valor volta para a conta de origem, se houver.`)) return;
+  if (!(await confirmar({ titulo: 'Apagar lançamento?', texto: `Apagar este lançamento de ${moeda(Math.abs(item.valor))}? O valor volta para a conta de origem, se houver.`, acao: 'Apagar' }))) return;
   const r = await api('DELETE', comCdi(`/api/reserva/aportes/${item.id}`));
   if (!r.ok) {
-    alert(r.json?.erro || 'Não foi possível apagar.');
+    avisar(r.json?.erro || 'Não foi possível apagar.', { tipo: 'aviso' });
     return;
   }
   await aposGravar(r.json);
@@ -397,9 +399,9 @@ function editarOperacaoDoDetalhe(linha) {
   modalOp.value = true;
 }
 async function apagarOperacaoDoDetalhe(linha) {
-  if (!confirm(`Apagar este lançamento de ${moeda(linha.total)}? O valor volta para a conta, se houver.`)) return;
+  if (!(await confirmar({ titulo: 'Apagar lançamento?', texto: `Apagar este lançamento de ${moeda(linha.total)}? O valor volta para a conta, se houver.`, acao: 'Apagar' }))) return;
   const r = await api('DELETE', `/api/investimentos/operacoes/${linha.id}`);
-  if (!r.ok) { alert(r.json?.erro || 'Não foi possível apagar.'); return; }
+  if (!r.ok) { avisar(r.json?.erro || 'Não foi possível apagar.', { tipo: 'aviso' }); return; }
   await aposGravar(null);
 }
 async function transferenciaSalva() {

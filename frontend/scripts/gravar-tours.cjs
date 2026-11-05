@@ -64,6 +64,17 @@ const ROTEIRO = {
   ] },
   dividas: { rota: '/dividas', passos: [{ sel: '.topo-valor' }, { sel: '.card-divida, .divida, .lista-dividas', rolar: true }, { sel: '.topo-valor .acao', gesto: 'tocar' }] },
   importar: { rota: '/importar', passos: [{ sel: '.escolha' }, { sel: '.escolha', gesto: 'tocar' }, { sel: '.historico, .lista-historico, .pagina .card-padrao:last-of-type', rolar: true }] },
+  'importar-conferir': { rota: '/importar', preparar: async (p) => {
+    require('fs').writeFileSync('/tmp/tour-imp.csv', 'Data;Descrição;Valor\n03/11/2026;PADARIA DO ZE;-23,50\n04/11/2026;PIX RECEBIDO FULANO;150,00\n05/11/2026;MERCADO ABC;-88,90\n06/11/2026;FARMACIA CENTRAL;-41,20\n');
+    await p.click('.escolha >> nth=0'); await p.waitForTimeout(600);
+    await p.selectOption('select', { index: 1 }); await p.waitForTimeout(300);
+    await (await p.$('input[type=file]')).setInputFiles('/tmp/tour-imp.csv'); await p.waitForTimeout(600);
+    await p.click('button:has-text("Ver pré-visualização")'); await p.waitForTimeout(2200);
+  }, passos: [
+    { sel: '[data-importando-para]' },
+    { sel: '[data-resumo-importacao]' },
+    { sel: '[data-lancamentos-importacao] .linha .icone', gesto: 'tocar', rolar: true },
+  ] },
   relatorios: { rota: '/relatorios', passos: [{ sel: '[data-alterna], .alterna' }, { sel: '[data-relacao]', gesto: 'tocar' }, { sel: '[data-resumo]', rolar: true }] },
   regras: { rota: '/regras', passos: [{ sel: '.pagina > section.card-padrao:nth-of-type(1)' }, { sel: '.pagina > section.card-padrao:nth-of-type(1) .regra-item, .pagina > section.card-padrao:nth-of-type(2)', gesto: 'arrastar-esq', rolar: true }, { sel: '.pagina > section.card-padrao:nth-of-type(3)', rolar: true }] },
   'custos-fixos': { rota: '/custos-fixos', passos: [{ sel: '.topo-valor' }, { sel: '[data-essenciais], .lista-fixos', rolar: true }, { sel: '[data-sugestoes], .quanto-guardar', rolar: true }] },
@@ -96,7 +107,7 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
     const r = ROTEIRO[chave];
     const ctx = await b.newContext({ viewport: { width: L, height: A }, colorScheme: 'dark', deviceScaleFactor: 1 });
     // tours já vistos: não abrem por cima durante a gravação
-    await ctx.addInitScript(() => { try { localStorage.setItem('sf:tours', JSON.stringify({ vistos: ['geral', 'inicio', 'patrimonio', 'transacoes', 'transacoes-cat', 'revisar', 'compromissos', 'contas', 'objetivos', 'cartoes', 'dividas', 'importar', 'relatorios', 'regras', 'custos-fixos', 'backup', 'o-que-mudou'], ligado: true })); } catch (e) { /* */ } });
+    await ctx.addInitScript(() => { try { localStorage.setItem('sf:tours', JSON.stringify({ vistos: ['importar-conferir', 'geral', 'inicio', 'patrimonio', 'transacoes', 'transacoes-cat', 'revisar', 'compromissos', 'contas', 'objetivos', 'cartoes', 'dividas', 'importar', 'relatorios', 'regras', 'custos-fixos', 'backup', 'o-que-mudou'], ligado: true })); } catch (e) { /* */ } });
     const p = await ctx.newPage();
     await p.goto(DEMO); await p.waitForTimeout(2500);
     await p.addStyleTag({ content: CSS });
@@ -109,6 +120,7 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
       if (rota !== rotaAtual) {
         await p.evaluate((x) => window.__router.push(x), rota); await p.waitForTimeout(1800);
         await p.addStyleTag({ content: CSS }).catch(() => {});
+        if (r.preparar && rotaAtual === null) await r.preparar(p);
         rotaAtual = rota;
       }
       inicios.push(n / FPS);

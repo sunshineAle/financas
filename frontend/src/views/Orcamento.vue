@@ -1,4 +1,5 @@
 <script setup>
+import { confirmar } from '../services/confirmar.js';
 import MenuPontos from '../components/MenuPontos.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -172,12 +173,12 @@ function novaEm(tipo, item) {
 watch(lancamentoSalvo, carregarCategorias);
 
 async function excluirReceita(r) {
-  if (!confirm(`Remover a categoria de receita "${r.nome}"? As entradas dela ficam sem categoria.`)) return;
+  if (!(await confirmar({ titulo: 'Remover categoria?', texto: `Remover a categoria de receita "${r.nome}"? As entradas dela ficam sem categoria.`, acao: 'Remover' }))) return;
   await fetch(`/api/categorias/receitas/${r.id}`, { method: 'DELETE', credentials: 'include' });
   await carregarCategorias();
 }
 async function excluirCategoria(categoria) {
-  if (!confirm(`Remover a categoria "${categoria.nome}"?`)) return;
+  if (!(await confirmar({ titulo: 'Remover categoria?', texto: `Remover a categoria "${categoria.nome}"?`, acao: 'Remover' }))) return;
   await fetch(`/api/categorias/${categoria.id}`, { method: 'DELETE', credentials: 'include' });
   await carregarCategorias();
 }

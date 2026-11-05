@@ -7,7 +7,6 @@ import { computed, toRef, onBeforeUnmount } from 'vue';
 import LinhaTransacao from './LinhaTransacao.vue';
 import BarraSelecao from './BarraSelecao.vue';
 import { useSelecao } from '../services/selecao.js';
-import { podeExcluirEmLote } from '../services/excluirTransacoes.js';
 import { infoTransacao } from '../utils/infoTransacao.js';
 
 const props = defineProps({
@@ -60,7 +59,7 @@ const sinal = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
         <span class="numero-tabular total">{{ sinal(g.total) }} {{ moeda.format(Math.abs(g.total)) }}</span>
       </header>
       <LinhaTransacao v-for="t in g.itens" :key="t.id" :t="t" :info="infoDe(t)" :clicavel="sel.ativa.value" arrastavel selecionavel
-        :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="podeExcluirEmLote(t) || !!t.tipo_mov"
+        :modo-selecao="sel.ativa.value" :selecionada="sel.marcada(t)" :pode-excluir="true"
         @editar="emit('editar', t)" @excluir="emit('excluir', t)" @segurar="sel.segurar" @alternar="sel.alternar" />
     </section>
     <BarraSelecao v-if="sel.ativa.value" :quantidade="sel.quantidade.value" :total="sel.total.value" :ocupado="sel.ocupado.value" @todas="sel.todas" @excluir="sel.excluir" @sair="sel.sair" />

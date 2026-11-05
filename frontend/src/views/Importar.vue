@@ -1,11 +1,12 @@
 <script setup>
+import { tourAberto, jaVisto, toursLigados } from '../services/tour.js';
 import { lancamentoSalvo } from '../services/lancamento.js';
 const avisarMudanca = () => { lancamentoSalvo.value++; }; // as telas abertas (Transações, Contas) recarregam
 // Importar extrato ou fatura. Central em 2 etapas (tipo -> conta/cartão) ou contextual (?tipo=&id= vindo do menu do card).
 // Fluxo: arquivo -> pré-visualização obrigatória (corrigir/descartar linhas) -> confirmar -> histórico com desfazer.
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Landmark, CreditCard, FileUp, Undo2, TriangleAlert, Check, ChevronLeft, Pencil, X, Link2 } from 'lucide-vue-next';
+import { Landmark, CreditCard, FileUp, Undo2, TriangleAlert, Check, ChevronLeft, Pencil, X, Link2, SlidersHorizontal, ChevronDown } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
 import AjudaSecao from '../components/AjudaSecao.vue';
 import Modal from '../components/Modal.vue';
@@ -289,6 +290,10 @@ async function desfazer(id) {
 function novaImportacao() { etapa.value = contextual.value ? 2 : 1; corpoArq.value = null; nomeArq.value = ''; analise.value = null; resultado.value = null; filtro.value = 'todas'; periodoModo.value = 'arquivo'; sugestao.value = null; }
 function irParaReserva() { router.push('/objetivos'); }
 const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
+// 05/11: na primeira conferência, o tour guiado explica a tela (destino, resumo e as linhas)
+watch(() => etapa.value === 3 && !!analise.value, (sim) => {
+  if (sim && toursLigados() && !jaVisto('importar-conferir')) setTimeout(() => { if (!tourAberto.value && !document.querySelector('.fundo-modal')) tourAberto.value = 'importar-conferir'; }, 900);
+});
 </script>
 
 <template>
@@ -354,42 +359,62 @@ const ROT_FORMATO = { ofx: 'OFX', csv: 'CSV', xlsx: 'Planilha', pdf: 'PDF' };
 
     <!-- Etapa 3: pré-visualização -->
     <template v-else-if="etapa === 3 && analise">
-      <CardPadrao :titulo="`Importando para: ${rotuloDestino}`" :subtitulo="`${ROT_FORMATO[analise.formato]}${analise.banco ? ' · ' + analise.banco : ''}${analise.perfilAplicado ? ' · layout salvo: ' + analise.perfilAplicado.nome : ''}`">
-        <p class="periodo">Período do arquivo: <b>{{ dataBR(analise.periodoArquivo.inicio) }}</b> a <b>{{ dataBR(analise.periodoArquivo.fim) }}</b><span v-if="analise.fatura && analise.fatura.chave"> · fatura de <b>{{ analise.fatura.chave.split('-').reverse().join('/') }}</b></span></p>
-        <div class="atalhos" role="group" aria-label="Período">
-          <button v-for="p in [['arquivo','Arquivo todo'],['7','7 dias'],['15','15 dias'],['30','30 dias'],['personalizado','Personalizado']]" :key="p[0]" type="button" :class="{ ativo: periodoModo === p[0] }" @click="mudarPeriodo(p[0])">{{ p[1] }}</button>
+      <!-- 05/11: conferência simplificada — destino e resumo em destaque; período e detalhes da leitura ficam em "Ajustar" -->
+      <section class="destino-imp" data-importando-para>
+        <span class="dest-ic" aria-hidden="true"><component :is="tipo === 'fatura' ? CreditCard : Landmark" :size="24" :stroke-width="1.8" /></span>
+        <div class="dest-txt">
+          <small>Importando para</small>
+          <b>{{ rotuloDestino }}</b>
+          <span class="dest-chips">
+            <span class="chip-imp">{{ ROT_FORMATO[analise.formato] }}{{ analise.banco ? ' · ' + analise.banco : '' }}</span>
+            <span class="chip-imp">{{ dataBR(analise.periodo.inicio).slice(0, 5) }} a {{ dataBR(analise.periodo.fim).slice(0, 5) }}</span>
+            <span v-if="analise.fatura && analise.fatura.chave" class="chip-imp">fatura {{ analise.fatura.chave.split('-').reverse().join('/') }}</span>
+          </span>
         </div>
-        <div v-if="periodoModo === 'personalizado'" class="grade">
-          <label class="campo"><span>De</span><input v-model="periodoPers.inicio" type="date" /></label>
-          <label class="campo"><span>Até</span><input v-model="periodoPers.fim" type="date" /></label>
-          <button type="button" class="b-sec" @click="analisar()">Aplicar período</button>
-        </div>
-        <p class="dica">Duplicidade conferida só dentro de {{ dataBR(analise.periodo.inicio) }} a {{ dataBR(analise.periodo.fim) }} (parcelas: ±5 dias).</p>
-        <div v-if="analise.antesDoSaldoInicial && tipo === 'conta'" class="faixa alerta" data-antes-saldo-inicial>
-          <TriangleAlert :size="18" />
-          <span>Este extrato é de antes do saldo inicial. Mover a data de início para {{ dataBR(analise.antesDoSaldoInicial.primeiraData).slice(0, 5) }}?</span>
-          <button type="button" class="b-sec peq" :disabled="movendoInicio" @click="moverInicio">{{ movendoInicio ? 'Movendo…' : 'Mover data' }}</button>
-        </div>
-        <p v-if="analise.leituraGenerica" class="faixa alerta"><TriangleAlert :size="18" /><span>Leitura genérica de PDF: confira as linhas marcadas e os valores antes de confirmar.</span></p>
-        <p v-if="!analise.sinalFixo && tipo === 'fatura'" class="dica">Compras são tratadas como saídas. <button type="button" class="link" @click="inverter">Inverter sinais</button> se estiver ao contrário.</p>
-        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalArquivo !== undefined" class="periodo">Total da fatura no arquivo<AjudaSecao secao="importar.total-fatura" />: <b>{{ moeda(analise.fatura.totalArquivo) }}</b></p>
-        <p v-if="analise.totalIgnoradasArquivo" class="dica">{{ analise.totalIgnoradasArquivo }} linha(s) do arquivo ignorada(s) (cabeçalhos, totais, rodapé).</p>
-        <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalDeclarado !== null && analise.fatura.totalDeclarado !== undefined && Math.abs(analise.fatura.totalDeclarado - analise.fatura.totalArquivo) > 0.009" class="faixa alerta" data-total-diferente><TriangleAlert :size="18" /><span>O arquivo diz que a fatura é {{ moeda(analise.fatura.totalDeclarado) }}, mas as linhas somam {{ moeda(analise.fatura.totalArquivo) }}. Confira os créditos e os sinais.</span></p>
-        <p v-if="tipo === 'fatura' && analise.creditosPorTexto" class="dica">{{ analise.creditosPorTexto }} crédito(s) vieram com o sinal de compra e foram reconhecidos pelo nome (estorno, pagamento, cashback).</p>
-        <div class="resumo">
-          <div><small>A gravar</small><b>{{ totais.qtd }}</b></div>
-          <div v-if="tipo === 'fatura'"><small>Compras</small><b class="sai">{{ moeda(totais.saidas) }}</b></div>
-          <div v-if="tipo === 'fatura'" data-creditos-fatura><small>Créditos</small><b class="ent">{{ moeda(totais.creditos) }}</b></div>
-          <div v-if="tipo !== 'fatura'"><small>Entradas</small><b class="ent">{{ moeda(totais.entradas) }}</b></div>
-          <div v-if="tipo !== 'fatura'"><small>Saídas</small><b class="sai">{{ moeda(totais.saidas) }}</b></div>
-          <div><small>Fora</small><b>{{ totais.descartadas }}</b></div>
-        </div>
-        <div class="atalhos" role="group" aria-label="Filtro">
-          <button v-for="f in [['todas','Todas'],['novas','Novas'],['atencao','Atenção'],['descartadas','Fora']]" :key="f[0]" type="button" :class="{ ativo: filtro === f[0] }" @click="filtro = f[0]">{{ f[1] }}</button>
-        </div>
-      </CardPadrao>
+      </section>
 
-      <CardPadrao titulo="Lançamentos" :subtitulo="divergentes ? `${divergentes} com valor diferente do registrado` : ''" sem-padding>
+      <div class="resumo-imp" data-resumo-importacao>
+        <div class="tile principal"><small>Vão entrar</small><b class="numero-tabular">{{ totais.qtd }}</b><span>lançamento(s)</span></div>
+        <div v-if="tipo === 'fatura'" class="tile"><small>Compras</small><b class="sai numero-tabular">{{ moeda(totais.saidas) }}</b></div>
+        <div v-if="tipo === 'fatura'" class="tile" data-creditos-fatura><small>Créditos</small><b class="ent numero-tabular">{{ moeda(totais.creditos) }}</b></div>
+        <div v-if="tipo !== 'fatura'" class="tile"><small>Entradas</small><b class="ent numero-tabular">{{ moeda(totais.entradas) }}</b></div>
+        <div v-if="tipo !== 'fatura'" class="tile"><small>Saídas</small><b class="sai numero-tabular">{{ moeda(totais.saidas) }}</b></div>
+      </div>
+
+      <!-- só os avisos que pedem uma decisão -->
+      <div v-if="analise.antesDoSaldoInicial && tipo === 'conta'" class="faixa alerta" data-antes-saldo-inicial>
+        <TriangleAlert :size="18" />
+        <span>Este extrato é de antes do saldo inicial. Mover a data de início para {{ dataBR(analise.antesDoSaldoInicial.primeiraData).slice(0, 5) }}?</span>
+        <button type="button" class="b-sec peq" :disabled="movendoInicio" @click="moverInicio">{{ movendoInicio ? 'Movendo…' : 'Mover data' }}</button>
+      </div>
+      <p v-if="analise.leituraGenerica" class="faixa alerta"><TriangleAlert :size="18" /><span>Leitura genérica de PDF: confira as linhas marcadas e os valores antes de confirmar.</span></p>
+      <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalDeclarado !== null && analise.fatura.totalDeclarado !== undefined && Math.abs(analise.fatura.totalDeclarado - analise.fatura.totalArquivo) > 0.009" class="faixa alerta" data-total-diferente><TriangleAlert :size="18" /><span>O arquivo diz que a fatura é {{ moeda(analise.fatura.totalDeclarado) }}, mas as linhas somam {{ moeda(analise.fatura.totalArquivo) }}. Confira os créditos e os sinais.</span></p>
+
+      <details class="ajustar-imp" data-ajustar-importacao>
+        <summary><SlidersHorizontal :size="16" :stroke-width="2" /> Ajustar período e leitura<ChevronDown :size="16" :stroke-width="2" class="seta-aj" /></summary>
+        <div class="corpo-aj">
+          <p class="periodo">Período do arquivo: <b>{{ dataBR(analise.periodoArquivo.inicio) }}</b> a <b>{{ dataBR(analise.periodoArquivo.fim) }}</b></p>
+          <div class="atalhos" role="group" aria-label="Período">
+            <button v-for="p in [['arquivo','Arquivo todo'],['7','7 dias'],['15','15 dias'],['30','30 dias'],['personalizado','Personalizado']]" :key="p[0]" type="button" :class="{ ativo: periodoModo === p[0] }" @click="mudarPeriodo(p[0])">{{ p[1] }}</button>
+          </div>
+          <div v-if="periodoModo === 'personalizado'" class="grade">
+            <label class="campo"><span>De</span><input v-model="periodoPers.inicio" type="date" /></label>
+            <label class="campo"><span>Até</span><input v-model="periodoPers.fim" type="date" /></label>
+            <button type="button" class="b-sec" @click="analisar()">Aplicar período</button>
+          </div>
+          <p class="dica">Duplicidade conferida só dentro de {{ dataBR(analise.periodo.inicio) }} a {{ dataBR(analise.periodo.fim) }} (parcelas: ±5 dias).</p>
+          <p v-if="!analise.sinalFixo && tipo === 'fatura'" class="dica">Compras são tratadas como saídas. <button type="button" class="link" @click="inverter">Inverter sinais</button> se estiver ao contrário.</p>
+          <p v-if="tipo === 'fatura' && analise.fatura && analise.fatura.totalArquivo !== undefined" class="dica">Total da fatura no arquivo<AjudaSecao secao="importar.total-fatura" />: <b>{{ moeda(analise.fatura.totalArquivo) }}</b></p>
+          <p v-if="analise.totalIgnoradasArquivo" class="dica">{{ analise.totalIgnoradasArquivo }} linha(s) do arquivo ignorada(s) (cabeçalhos, totais, rodapé).</p>
+          <p v-if="tipo === 'fatura' && analise.creditosPorTexto" class="dica">{{ analise.creditosPorTexto }} crédito(s) vieram com o sinal de compra e foram reconhecidos pelo nome (estorno, pagamento, cashback).</p>
+          <p v-if="analise.perfilAplicado" class="dica">Layout salvo usado: {{ analise.perfilAplicado.nome }}</p>
+        </div>
+      </details>
+
+      <CardPadrao titulo="Confira os lançamentos" :subtitulo="divergentes ? `${divergentes} com valor diferente do registrado` : 'toque no ✕ para tirar uma linha ou no lápis para corrigir'" sem-padding data-lancamentos-importacao>
+        <div class="atalhos filtros-imp" role="group" aria-label="Filtro">
+          <button v-for="f in [['todas','Todas'],['novas','Novas'],['atencao','Atenção'],['descartadas',`Fora (${totais.descartadas})`]]" :key="f[0]" type="button" :class="{ ativo: filtro === f[0] }" @click="filtro = f[0]">{{ f[1] }}</button>
+        </div>
         <ul class="linhas">
           <li v-for="l in visiveis" :key="l.idx" :class="['linha', l.status, { fora: !grava(l), baixa: l.confianca === 'baixa' }]">
             <div class="topo-linha">
@@ -541,6 +566,31 @@ select, input[type='text'], input[type='number'], input[type='date'], input[type
 .resumo b { font-size: 14.5px; }
 @media (max-width: 480px) { .resumo { grid-template-columns: 1fr 1fr; } }
 .neutro { color: var(--cor-meta); }
+/* 05/11: conferência da importação — destino, resumo em destaque e "Ajustar" recolhido */
+.destino-imp { position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--raio-card, 16px); background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); }
+.destino-imp::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, #5e18d8 16%, transparent), transparent 60%); }
+.destino-imp > * { position: relative; }
+.dest-ic { width: 52px; height: 52px; flex: none; border-radius: 16px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); box-shadow: 0 10px 22px -12px rgb(94 24 216 / .8); }
+.dest-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dest-txt small { font-size: 12px; color: var(--cor-texto-suave); }
+.dest-txt b { font: 600 19px var(--fonte-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dest-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip-imp { font-size: 11.5px; padding: 2px 9px; border-radius: 999px; background: var(--cor-realce); color: var(--cor-texto-suave); }
+.resumo-imp { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
+.tile { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 14px; background: var(--cor-card); border: 1px solid var(--cor-card-borda, var(--cor-borda)); min-width: 0; }
+.tile small { font-size: 12px; color: var(--cor-texto-suave); }
+.tile b { font: 600 16px var(--fonte-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.principal { background: linear-gradient(135deg, color-mix(in srgb, #5e18d8 22%, var(--cor-card)), color-mix(in srgb, #1597a8 18%, var(--cor-card))); border-color: color-mix(in srgb, #5e18d8 35%, var(--cor-borda)); }
+.tile.principal b { font-size: 26px; line-height: 1.1; }
+.tile.principal span { font-size: 12px; color: var(--cor-texto-suave); }
+@media (max-width: 420px) { .resumo-imp { grid-template-columns: 1fr 1fr; } .tile.principal { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: 8px; } }
+.ajustar-imp { border-radius: 14px; border: 1px solid var(--cor-borda); background: var(--cor-card); }
+.ajustar-imp summary { list-style: none; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 14px; cursor: pointer; font: 600 14px var(--fonte-texto); color: var(--cor-texto-suave); }
+.ajustar-imp summary::-webkit-details-marker { display: none; }
+.ajustar-imp .seta-aj { margin-left: auto; transition: transform var(--anim-padrao, .2s) ease; }
+.ajustar-imp[open] .seta-aj { transform: rotate(180deg); }
+.corpo-aj { padding: 0 14px 12px; }
+.filtros-imp { padding: 0 14px; margin-top: 0; }
 .ent { color: var(--cor-entrada); } .sai { color: var(--cor-saida-texto, var(--cor-saida)); }
 .linhas { list-style: none; margin: 0; padding: 0; }
 .linha { padding: 10px 14px; border-bottom: 1px solid var(--cor-borda); display: flex; flex-direction: column; gap: 6px; }

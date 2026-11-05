@@ -1,5 +1,6 @@
 <script setup>
-import { podeExcluirEmLote, excluirVarias } from '../services/excluirTransacoes.js';
+import { confirmar } from '../services/confirmar.js';
+import { podeExcluirEmLote, excluirComAviso, ehTransferenciaMov } from '../services/excluirTransacoes.js';
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { abrirLancamento, lancamentoSalvo } from '../services/lancamento.js';
 import { useRouter, useRoute } from 'vue-router';
@@ -234,7 +235,7 @@ async function salvarAjuste() {
 function importarDoAjuste() { ajuste.value.aberto = false; importar(); }
 
 async function remover(conta) {
-  if (!confirm(`Arquivar a conta "${conta.nome}"? Ela sai da lista (por enquanto não há como restaurar).`)) return;
+  if (!(await confirmar({ titulo: 'Arquivar conta?', texto: `Arquivar a conta "${conta.nome}"? Ela sai da lista (por enquanto não há como restaurar).`, acao: 'Arquivar' }))) return;
   await fetch(`/api/contas/${conta.id}`, { method: 'DELETE', credentials: 'include' });
   await carregarContas();
   carregarExtrato();
@@ -284,13 +285,15 @@ const periodoCurto = computed(() => (anoInteiro.value ? 'no ano' : ehAtual.value
 function importar() { router.push({ path: '/importar', query: { tipo: 'conta', id: contaSel.value.id } }); }
 function transferir() { abrirLancamento({ tipo: 'transferencia', contaId: contaSel.value ? contaSel.value.id : '' }); }
 // 05/11: no extrato da conta o toque não leva a Transações. Arrastar → Editar abre o detalhe da transação (fechar volta
-// para cá) e Excluir apaga aqui mesmo; transferências e estornos são desfeitos pelo detalhe (mexem em duas pontas).
+// para cá); Excluir apaga aqui mesmo, com a confirmação do app — transferência sai das duas contas, estorno devolve a
+// despesa aos totais, saldo inicial e ignoradas também saem. Guardar/Resgatar são apagados pela meta (Editar).
 function editarTransacao(t) { router.push({ name: 'transacoes', query: { editar: t.id } }); }
 async function excluirTransacao(t) {
   if (!podeExcluirEmLote(t)) { editarTransacao(t); return; }
-  if (!confirm(`Apagar "${t.descricao_base || t.descricao}"?`)) return;
-  const r = await excluirVarias([t]);
-  if (r.ok) avisar('Transação apagada.', { tipo: 'ok' }); else avisar('Não foi possível apagar.', { tipo: 'aviso' });
+  try {
+    if (!(await excluirComAviso(t))) return;
+    avisar(ehTransferenciaMov(t) ? 'Transferência excluída das duas contas.' : 'Transação excluída.', { tipo: 'ok' });
+  } catch (e) { avisar(e.message, { tipo: 'aviso' }); }
   await aposExcluir();
 }
 async function aposExcluir() { await carregarContas(); carregarExtrato(); }

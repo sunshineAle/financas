@@ -10,6 +10,7 @@ const BOTAO_SEC = 'min-height:40px;padding:0 16px;border:none;border-radius:10px
 
 function mostrarAviso(worker) {
   if (document.getElementById('sf-aviso-versao')) return;
+  let versaoNova = null;
   const fundo = document.createElement('div');
   fundo.id = 'sf-aviso-versao';
   fundo.style.cssText = FUNDO;
@@ -26,7 +27,14 @@ function mostrarAviso(worker) {
   botao.type = 'button';
   botao.textContent = 'Atualizar';
   botao.style.cssText = BOTAO + ';margin-top:6px';
-  botao.addEventListener('click', () => { try { localStorage.setItem('sf:mostrar-novidades', '1'); } catch { /* ignora */ } botao.disabled = true; botao.textContent = 'Atualizando…'; worker.postMessage({ tipo: 'sf:pular-espera' }); });
+  // 05/11: um aviso só — quem atualiza por aqui já leu o resumo; as "Novidades desta versão" não aparecem de novo ao entrar.
+  botao.addEventListener('click', () => {
+    try {
+      const antiga = localStorage.getItem('sf:novidades-vista');
+      if (antiga && /^0\./.test(antiga)) localStorage.setItem('sf:veio-de-0', '1'); // para o tour "O que mudou na 1.0"
+      if (versaoNova) localStorage.setItem('sf:novidades-vista', versaoNova); else localStorage.setItem('sf:mostrar-novidades', '1');
+    } catch { /* ignora */ }
+    botao.disabled = true; botao.textContent = 'Atualizando…'; worker.postMessage({ tipo: 'sf:pular-espera' }); });
   const depois = document.createElement('button');
   depois.type = 'button';
   depois.textContent = 'Agora não';
@@ -49,6 +57,7 @@ function mostrarAviso(worker) {
   carregarNovidades({ fresca: true }).then((lista) => {
     const n = lista && lista[0];
     if (!n || !n.resumo) return;
+    versaoNova = n.versao;
     resumo.textContent = n.resumo; resumo.style.display = 'block';
     versaoTxt.textContent = rotuloVersao(n) + (ehTeste(n) ? ' · teste' : ''); versaoTxt.style.display = 'block';
     texto.textContent = 'Seus dados continuam no aparelho.';

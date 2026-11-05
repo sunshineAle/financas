@@ -1,5 +1,6 @@
 // Seleção de transações para apagar várias de uma vez (05/11). Segurar uma linha liga a seleção e já marca ela;
 // tocar marca/desmarca; "Todas" marca as que podem ser apagadas; sair limpa. Só as "simples" podem ser marcadas.
+import { confirmar } from './confirmar.js';
 import { ref, computed } from 'vue';
 import { podeExcluirEmLote, excluirVarias } from './excluirTransacoes.js';
 import { avisar } from './avisos.js';
@@ -30,7 +31,7 @@ export function useSelecao(lista, depois) {
   async function excluir() {
     const escolhidas = (lista.value || []).filter((t) => ids.value.has(t.id));
     if (!escolhidas.length) return;
-    if (!confirm(`Apagar ${escolhidas.length} ${escolhidas.length === 1 ? 'transação' : 'transações'}? Os saldos voltam ao que eram sem elas.`)) return;
+    if (!(await confirmar({ titulo: 'Apagar as transações selecionadas?', texto: `Apagar ${escolhidas.length} ${escolhidas.length === 1 ? 'transação' : 'transações'}? Os saldos voltam ao que eram sem elas.`, acao: 'Apagar' }))) return;
     ocupado.value = true;
     try {
       const r = await excluirVarias(escolhidas);

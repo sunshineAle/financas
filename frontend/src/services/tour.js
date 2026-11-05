@@ -71,6 +71,11 @@ export const TOURS = {
     { icone: ArrowRightLeft, titulo: 'Destino', texto: 'A conta ou o cartão em que as linhas entram.' },
     { icone: CheckCheck, titulo: 'Resultado', texto: 'Confira o total do app com o do arquivo. Dá para desfazer depois.' },
   ] },
+  'importar-conferir': { titulo: 'Como conferir a importação', passos: [
+    { icone: ArrowRightLeft, titulo: 'Para onde vai', texto: 'A conta ou o cartão, o formato do arquivo e o período lido.' },
+    { icone: CheckCheck, titulo: 'O resumo', texto: 'Quantos lançamentos vão entrar e quanto somam. "Ajustar" muda o período ou inverte os sinais.' },
+    { icone: ListOrdered, titulo: 'Confira as linhas', texto: 'Novas, Atenção e Fora. O ✕ tira uma linha, o lápis corrige; depois toque em Importar.' },
+  ] },
   relatorios: { titulo: 'Como usar Relatórios', passos: [
     { icone: CalendarRange, titulo: 'Mês ou Ano', texto: 'Escolha o período no botão do topo.' },
     { icone: LineChart, titulo: 'Relação mensal', texto: 'Toque ou arraste no gráfico para escolher o mês.' },
@@ -100,7 +105,7 @@ export const TOURS = {
 };
 export const NOMES_TOUR = {
   geral: 'Visão geral', inicio: 'Início', patrimonio: 'Patrimônio', transacoes: 'Transações', 'transacoes-cat': 'Categoria (em Transações)', revisar: 'A revisar',
-  compromissos: 'Compromissos', contas: 'Contas', objetivos: 'Metas e Investimentos', cartoes: 'Cartões', dividas: 'Dívidas', importar: 'Importar',
+  compromissos: 'Compromissos', contas: 'Contas', objetivos: 'Metas e Investimentos', cartoes: 'Cartões', dividas: 'Dívidas', importar: 'Importar', 'importar-conferir': 'Conferir a importação',
   relatorios: 'Relatórios', regras: 'Regras', 'custos-fixos': 'Custo de vida', backup: 'Dados e backup', 'o-que-mudou': 'O que mudou na 1.0',
 };
 
@@ -131,7 +136,7 @@ export function temJanelaAberta() {
 // Quem já usava antes da 1.0: viu alguma versão 0.N → mostra "O que mudou" uma vez (no lugar do tour geral).
 export function precisaOQueMudou() {
   if (ehContaNova()) return false; // conta criada agora: ela vê o tour geral, não "O que mudou"
-  try { const v = localStorage.getItem('sf:novidades-vista'); return !!v && /^0\./.test(v) && !jaVisto('o-que-mudou'); } catch { return false; }
+  try { const v = localStorage.getItem('sf:novidades-vista'); return ((!!v && /^0\./.test(v)) || localStorage.getItem('sf:veio-de-0') === '1') && !jaVisto('o-que-mudou'); } catch { return false; }
 }
 // Conta nova (cadastro feito nesta instalação): o tour geral vem antes do tour do Início.
 export const ehContaNova = () => { try { return localStorage.getItem('sf:primeiro-cadastro') === 'pendente'; } catch { return false; } };

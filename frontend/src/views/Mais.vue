@@ -1,4 +1,5 @@
 <script setup>
+import AssinaturaAlt from '../components/AssinaturaAlt.vue';
 // Mais = tela-índice (botão "Mais" do rodapé): cabeçalho com foto/nome e a lista de seções, cada uma em SUA página (/mais/<seção>,
 // renderizada por Perfil.vue). Homologação 1.0, seção 21: a mesma ordem do painel da foto (PerfilConteudo) — atalhos em
 // blocos + Início do mês, Tema e Animações ali mesmo, e a lista; Relatórios entra no começo da lista (no celular não está no rodapé).
@@ -82,6 +83,7 @@ async function sair() {
     <PerfilConteudo :extras="EXTRAS" @ir="(r) => router.push(r)" @abrir="abrir" />
 
     <button type="button" class="sair" @click="sair"><LogOut :size="18" :stroke-width="1.8" /> Sair</button>
+    <AssinaturaAlt compacta />
   </div>
 </template>
 

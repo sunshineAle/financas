@@ -1,4 +1,6 @@
 <script setup>
+import { excluirComAviso, ehTransferenciaMov, podeExcluirEmLote } from '../services/excluirTransacoes.js';
+import { confirmar as confirmarApp } from '../services/confirmar.js';
 import { useSelecao } from '../services/selecao.js';
 import BarraSelecao from '../components/BarraSelecao.vue';
 import CampoIconeItem from '../components/CampoIconeItem.vue';
@@ -131,7 +133,7 @@ const foraDosTotais = (t) => !!t.tipo_mov && !MOV_NOS_TOTAIS.includes(t.tipo_mov
 const ehPagCartao = (t) => t.tipo_mov === 'pagamento_cartao' || t.tipo_mov === 'pagamento_cartao_criado';
 async function desfazerMov(t) {
   fecharMenu();
-  if (!confirm(ehTransf(t) ? 'Desfazer esta transferência? Os saldos das duas contas voltam ao que eram.' : 'Desfazer este estorno? A despesa volta a contar nos totais.')) return;
+  if (!(await confirmarApp({ titulo: ehTransf(t) ? 'Desfazer transferência?' : 'Desfazer estorno?', acao: 'Desfazer', texto: ehTransf(t) ? 'Desfazer esta transferência? Os saldos das duas contas voltam ao que eram.' : 'Desfazer este estorno? A despesa volta a contar nos totais.' }))) return;
   const url = t.cartao || ehPagCartao(t) ? `/api/transacoes/estorno-cartao/${t.vinculo}` : ehTransf(t) ? `/api/transacoes/transferencia/${t.vinculo}` : `/api/transacoes/estorno/${t.vinculo}`;
   await pedir(url, { method: 'DELETE' });
   await Promise.all([carregar(), carregarApoio()]);
@@ -390,31 +392,14 @@ async function trocarCategoria(t, valor) {
 }
 
 // Homologação 1.0, seção 6: "Excluir" do arraste. Transferência/estorno desfaz o par; compra no cartão remove a compra.
-function podeExcluirTx(t) {
-  if (ehReserva(t)) return false;
-  if (t.tipo_mov && t.vinculo) return true;
-  if (t.cartao) return t.cartao_origem === 'manual';
-  return t.origem === 'manual';
-}
+function podeExcluirTx(t) { return podeExcluirEmLote(t); }
+// 05/11: excluir pelo arraste usa a mesma regra e a mesma confirmação do extrato da conta (services/excluirTransacoes.js).
 async function excluirTx(t) {
   if (!podeExcluirTx(t)) return;
-  if (t.tipo_mov && t.vinculo && !t.cartao) { await desfazerMov(t); return; }
-  if (t.cartao) {
-    if (!confirm(`Excluir a compra "${t.descricao_base || t.descricao}"${t.total_parcelas > 1 ? ` (todas as ${t.total_parcelas} parcelas)` : ''}?`)) return;
-    await pedir(`/api/cartoes/${t.cartao_id}/lancamentos/${t.compra_id}`, { method: 'DELETE' });
-    await Promise.all([carregar(), carregarApoio()]);
-    return;
-  }
-  await apagar(t);
-}
-async function apagar(t) {
-  if (!confirm(`Apagar "${t.descricao}" (${moeda(t.valor)})?`)) return;
-  const resposta = await pedir(`/api/transacoes/${t.id}`, { method: 'DELETE' });
-  if (!resposta.ok) {
-    const dados = await resposta.json();
-    alert(dados.erro || 'Não foi possível apagar.');
-    return;
-  }
+  try {
+    if (!(await excluirComAviso(t))) return;
+    avisar(ehTransferenciaMov(t) ? 'Transferência excluída das duas contas.' : 'Transação excluída.', { tipo: 'ok' });
+  } catch (e) { avisar(e.message, { tipo: 'aviso' }); }
   await Promise.all([carregar(), carregarApoio()]);
 }
 

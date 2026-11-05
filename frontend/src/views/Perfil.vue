@@ -1,4 +1,6 @@
 <script setup>
+import AssinaturaAlt from '../components/AssinaturaAlt.vue';
+import { confirmar as confirmarApp } from '../services/confirmar.js';
 // Perfil e configurações: cada seção é SUA página (/mais/:secao), e o índice é a tela Mais (/mais, views/Mais.vue).
 // Seções: perfil · financas · reserva · dados-backup · seguranca · configuracoes · notificacoes · sobre. Este arquivo guarda
 // a lógica de todas e mostra só a da rota. As rotas antigas (/perfil, /configuracoes, /backup) redirecionam (ver router.js).
@@ -129,7 +131,7 @@ const FINANCAS = computed(() => [
 const autoMin = ref(String(minutosAutoBloqueio()));
 function mudarAuto() { definirAutoBloqueio(Number(autoMin.value)); }
 async function encerrarTodasSessoes() {
-  if (!confirm('Isso vai desconectar este e todos os outros dispositivos logados. Continuar?')) return;
+  if (!(await confirmarApp({ titulo: 'Encerrar todas as sessões?', texto: 'Isso vai desconectar este e todos os outros dispositivos logados. Continuar?', acao: 'Desconectar' }))) return;
   await fetch('/api/auth/encerrar-sessoes', { method: 'POST', credentials: 'include' });
   router.push('/login');
 }
@@ -449,6 +451,7 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
             <button type="button" class="link-mini" :disabled="estadoBacen.atualizando" @click="atualizarIndices">{{ estadoBacen.atualizando ? 'Atualizando…' : 'Atualizar' }}</button></p>
           <p>Investimentos e metas: {{ dataInvest }}</p>
         </div>
+        <AssinaturaAlt />
       </CardPadrao>
     </section>
 

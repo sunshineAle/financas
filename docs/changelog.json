@@ -1,5 +1,20 @@
 [
   {
+    "versao": "1.1",
+    "data": "2026-11-05",
+    "resumo": "Excluir funciona para qualquer transação do extrato (a transferência sai das duas contas), com confirmação no visual do app. O cartão mostra o limite disponível, a importação ficou mais simples e o Apoie ganhou as opções de pagamento.",
+    "itens": [
+      "Extrato da conta e Transações: Excluir agora apaga transferências (nas duas contas), estornos, saldo inicial, ajustes e transações ignoradas, sempre com uma confirmação explicando o que acontece.",
+      "Todas as confirmações de excluir, remover e arquivar usam a janela do app, no lugar da janela do navegador.",
+      "Seleção para apagar várias: a barra ganhou contorno e destaque na cor do excluir.",
+      "Cartões: o card mostra o limite disponível, a barra de uso e o limite total (a fatura continua no card logo abaixo). O limite usado passa a contar também a fatura que já fechou e ainda não venceu.",
+      "Importar: a conferência ficou mais limpa — destino e resumo em destaque, período e detalhes da leitura em \"Ajustar\", e um tour guiado na primeira vez.",
+      "Apoie o desenvolvedor: três opções de apoio (R$ 10, R$ 25 e R$ 50), com o pagamento numa janela nova.",
+      "Só um aviso de atualização: quem atualiza pelo aviso não vê as novidades repetidas ao entrar.",
+      "Assinatura \"um projeto Alt Design Creative\" na entrada, no Mais, no Sobre e no Apoie."
+    ]
+  },
+  {
     "versao": "1.0",
     "data": "2026-11-05",
     "resumo": "A versão final: navegação nova com Patrimônio e Compromissos, um tour animado em cada página e jeitos mais rápidos de cuidar das transações. Antes de atualizar, faça um backup.",

@@ -20,13 +20,18 @@ const emit = defineEmits(['todas', 'excluir', 'sair']);
 
 <style scoped>
 .barra-selecao { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 60; width: min(560px, calc(100% - 24px));
-  display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 6px; border-radius: 18px; background: var(--cor-fundo-elevado); border: 1px solid var(--cor-borda);
-  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.6); font-family: var(--fonte-texto); }
+  display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 6px; border-radius: 18px; font-family: var(--fonte-texto);
+  /* 05/11: mais destaque — contorno inteiro na cor do excluir (âmbar), fundo levemente tingido e brilho */
+  background: color-mix(in srgb, var(--cor-amarelo) 9%, var(--cor-fundo-elevado)); border: 2px solid var(--cor-amarelo);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cor-amarelo) 16%, transparent), 0 18px 40px -16px rgb(0 0 0 / 0.65);
+  animation: barra-entra var(--anim-padrao, .2s) var(--anim-curva, ease) both; }
+@keyframes barra-entra { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .barra-selecao { animation: none; } }
 @media (min-width: 769px) { .barra-selecao { bottom: 24px; } }
 .sair { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--cor-realce); color: var(--cor-texto); display: grid; place-items: center; cursor: pointer; flex: none; }
 .conta { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; color: var(--cor-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .todas, .excluir { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 12px; font: 600 13.5px var(--fonte-texto); cursor: pointer; }
 .todas { border: 1px solid var(--cor-borda); background: none; color: var(--cor-texto); }
-.excluir { border: 1px solid color-mix(in srgb, var(--cor-amarelo) 35%, transparent); background: color-mix(in srgb, var(--cor-amarelo) 16%, var(--cor-card)); color: var(--cor-amarelo); }
+.excluir { border: 0; background: var(--cor-amarelo); color: #1c1300; }
 .excluir:disabled { opacity: .5; cursor: default; }
 </style>

@@ -17,6 +17,7 @@ const props = defineProps({
   tema: { type: String, default: 'neutro' },
   largura: { type: Number, default: 520 },
   ajuda: { type: String, default: '' },
+  camada: { type: Number, default: 0 }, // z-index acima do padrão (ex.: a confirmação fica por cima de outra janela)
 });
 const emit = defineEmits(['fechar']);
 const caixa = ref(null);
@@ -37,7 +38,10 @@ function ajustarTeclado() {
 }
 
 function aoApertarTecla(evento) {
-  if (evento.key === 'Escape') emit('fechar');
+  if (evento.key !== 'Escape') return;
+  // com a confirmação aberta por cima, o Esc fecha só ela
+  if (!props.camada && document.querySelector('[data-confirmacao]')) return;
+  emit('fechar');
 }
 
 watch(
@@ -72,7 +76,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="aberto" :class="['fundo-modal', 'tema-' + tema]" :style="altura ? { '--vv-h': altura + 'px', '--vv-top': topo + 'px' } : null" @click.self="emit('fechar')">
+      <div v-if="aberto" :class="['fundo-modal', 'tema-' + tema]" :style="{ ...(altura ? { '--vv-h': altura + 'px', '--vv-top': topo + 'px' } : {}), ...(camada ? { zIndex: camada } : {}) }" @click.self="emit('fechar')">
         <div ref="caixa" class="modal" role="dialog" aria-modal="true" :aria-label="titulo" tabindex="-1" :style="{ '--largura': largura + 'px' }">
           <span class="alca" aria-hidden="true"></span>
           <div class="cabecalho-modal">

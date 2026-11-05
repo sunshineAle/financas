@@ -1,4 +1,5 @@
 <script setup>
+import { confirmar } from '../services/confirmar.js';
 // Cartões e Crédito (onda 2): carrossel -> ações -> cards Fatura | Limite usado -> filtro -> extrato -> próximas faturas
 // -> 'Análises' recolhida. Parcelamentos e visão geral viraram componentes (CartaoParcelamentos/CartaoVisaoGeral) p/ Relatórios.
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
@@ -394,7 +395,7 @@ async function salvar() {
   } finally { salvando.value = false; }
 }
 async function remover(c) {
-  if (!confirm(`Remover o cartão "${c.nome}" e todas as compras dele?`)) return;
+  if (!(await confirmar({ titulo: 'Remover cartão?', texto: `Remover o cartão "${c.nome}" e todas as compras dele?`, acao: 'Remover' }))) return;
   await pedir(`/api/cartoes/${c.id}`, { method: 'DELETE' });
   sel.value = 0;
   await carregarCartoes();

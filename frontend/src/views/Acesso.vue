@@ -1,4 +1,5 @@
 <script setup>
+import AssinaturaAlt from '../components/AssinaturaAlt.vue';
 // Tela de acesso do PWA (antes do app): criar a senha de acesso na 1ª vez, pedir ao abrir,
 // e "Esqueci a senha" -> restaurar um backup (e criar uma senha nova). Tudo no aparelho, sem servidor.
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
@@ -382,6 +383,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         </div>
       </div>
     </Teleport>
+    <AssinaturaAlt compacta class="assinatura-acesso" />
   </div>
 </template>
 

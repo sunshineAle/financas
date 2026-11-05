@@ -205,9 +205,17 @@ function resumoDoCartao(cartao) {
   const pagas = new Set(
     db.prepare('SELECT fatura FROM faturas_pagas WHERE cartao_id = ? AND excluido_em IS NULL').all(cartao.id).map((l) => l.fatura)
   );
-  const usado = faturas.arredondar(
-    itens.filter((i) => i.fatura >= aberta && !pagas.has(i.fatura)).reduce((s, i) => s + i.valor, 0)
-  );
+  // 05/11: a fatura que JÁ FECHOU mas ainda não venceu (nem foi paga) continua ocupando o limite — antes ela ficava de
+  // fora e o "usado" aparecia zerado logo depois do fechamento. Faturas vencidas sem pagamento registrado continuam fora
+  // (histórico importado sem os pagamentos não pode inflar o limite; o rotativo aparece em Dívidas).
+  const hojeIso = hoje();
+  const ocupaLimite = (chave) => {
+    if (pagas.has(chave)) return false;
+    if (chave >= aberta) return true;
+    const d = faturas.datasDaFatura(chave, cartao.dia_fechamento, cartao.dia_vencimento);
+    return !!d.vence && d.vence >= hojeIso;
+  };
+  const usado = faturas.arredondar(itens.filter((i) => ocupaLimite(i.fatura)).reduce((s, i) => s + i.valor, 0));
 
   return {
     id: cartao.id,

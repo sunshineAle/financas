@@ -53,6 +53,7 @@ const claro = computed(() => {
 const tipo = computed(() => props.cartao.tipoCredito || 'cartao');
 const seloTipo = computed(() => ({ cartao: { texto: 'Cartão de crédito', icone: CreditCard }, loja: { texto: 'Cartão de loja', icone: Store }, crediario: { texto: 'Crediário', icone: ReceiptText } }[tipo.value] || { texto: 'Cartão de crédito', icone: CreditCard }));
 
+const disponivel = computed(() => props.cartao.limiteDisponivel ?? Math.max(0, (props.cartao.limite || 0) - (props.cartao.limiteUsado || 0)));
 const pct = computed(() => (props.cartao.limite > 0 ? Math.min(100, (props.cartao.limiteUsado / props.cartao.limite) * 100) : 0));
 const pronto = ref(false);
 onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
@@ -72,18 +73,23 @@ onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
       <span v-else-if="tipo === 'loja'" class="selo leve">uso restrito à loja</span>
     </div>
 
+    <!-- 05/11: o valor da fatura saiu do cartão (ele já aparece no card da fatura logo abaixo); o destaque é o LIMITE
+         RESTANTE, com a barra de uso e o limite total. -->
     <div class="centro">
-      <span class="rotulo">Usado</span>
-      <strong class="usado numero-tabular">{{ moedaTotal(cartao.limiteUsado) }}</strong>
       <template v-if="cartao.limite">
+        <span class="rotulo">Limite disponível</span>
+        <strong class="usado numero-tabular" data-limite-disponivel>{{ moedaTotal(disponivel) }}</strong>
+        <span class="barra" role="progressbar" :aria-valuenow="Math.round(pct)" aria-valuemin="0" aria-valuemax="100" :aria-label="`${Math.round(pct)}% do limite usado`"><i :style="{ width: pronto ? pct + '%' : '0%' }"></i></span>
         <span class="metricas numero-tabular">
-          <span>Disponível <b>{{ moedaTotal(cartao.limiteDisponivel ?? Math.max(0, cartao.limite - (cartao.limiteUsado || 0))) }}</b></span>
-          <span>Total <b>{{ moedaTotal(cartao.limite) }}</b></span>
-          <span class="pct"><b>{{ Math.round(pct) }}%</b></span>
+          <span>Usado <b>{{ Math.round(pct) }}%</b></span>
+          <span class="pct">Limite total <b>{{ moedaTotal(cartao.limite) }}</b></span>
         </span>
-        <span class="barra" role="progressbar" :aria-valuenow="Math.round(pct)" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: pronto ? pct + '%' : '0%' }"></i></span>
       </template>
-      <span v-else class="sub">Sem limite definido</span>
+      <template v-else>
+        <span class="rotulo">Limite</span>
+        <strong class="usado sem">Sem limite definido</strong>
+        <span class="sub">Edite o cartão para informar o limite</span>
+      </template>
     </div>
 
     <div class="rodape">
@@ -114,6 +120,8 @@ onMounted(() => requestAnimationFrame(() => { pronto.value = true; }));
 .metricas { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--txt-suave); }
 .metricas b { color: var(--txt); font-weight: 700; }
 .metricas .pct { margin-left: auto; }
+.usado.sem { font-size: clamp(16px, 6cqw, 20px); }
+.centro .barra { margin: 6px 0 4px; }
 .rotulo { font-size: 12px; color: var(--txt-suave); }
 .usado { font-family: var(--fonte-display); font-size: clamp(20px, 8.4cqw, 32px); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
 .sub { font-size: 12px; color: var(--txt-suave); }
