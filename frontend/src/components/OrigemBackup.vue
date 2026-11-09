@@ -11,6 +11,8 @@ import { PROVEDORES, estadoNuvem } from '../services/backup.js';
 const props = defineProps({ modo: { type: String, default: 'restaurar' }, ocupado: { type: Boolean, default: false }, subAparelho: { type: String, default: '' } });
 const emit = defineEmits(['arquivo', 'aparelho', 'nuvem']);
 const nuvens = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
+const nomesNuvens = computed(() => nuvens.value.map(id => PROVEDORES[id].nome));
+const rotuloNuvens = computed(() => nomesNuvens.value.join(', '));
 const aberto = ref(false);
 function escolheu(ev) { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (f) emit('arquivo', f); }
 const subNuvem = (id) => (estadoNuvem[id] && estadoNuvem[id].conectado ? 'conectado' : props.modo === 'salvar' ? 'conectar e enviar' : 'entrar e buscar o backup');
@@ -30,9 +32,9 @@ const subNuvem = (id) => (estadoNuvem[id] && estadoNuvem[id].conectado ? 'conect
       <span class="texto"><b>Deste aparelho</b><small>{{ subAparelho || 'salvar o arquivo .sfin' }}</small></span>
     </button>
     <template v-if="nuvens.length">
-      <button type="button" class="opcao" data-conectar-nuvem :aria-expanded="aberto" @click="aberto = !aberto">
+      <button type="button" class="opcao" data-conectar-nuvem :disabled="ocupado" :aria-expanded="aberto" @click="aberto = !aberto">
         <span class="icone"><Cloud :size="22" :stroke-width="1.9" /></span>
-        <span class="texto"><b>Conectar nuvem</b><small>Google Drive, OneDrive ou Dropbox</small></span>
+        <span class="texto"><b>Conectar nuvem</b><small>{{ rotuloNuvens }}</small></span>
         <ChevronDown :size="18" :stroke-width="2" class="seta" :class="{ aberta: aberto }" />
       </button>
       <div v-if="aberto" class="nuvens" data-nuvens>

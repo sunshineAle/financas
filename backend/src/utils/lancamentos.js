@@ -69,7 +69,7 @@ function criarTransferencia(usuarioId, { origemId, destinoId, valor, data, descr
 // Transforma um lançamento que já existe (ex.: Pix/TED importado) em transferência entre contas próprias.
 // `contaOutraId` = a outra ponta (destino, se o lançamento é saída; origem, se é entrada).
 // Casa com um lançamento já existente na outra conta (mesmo valor, até 3 dias de diferença) ou cria a contrapartida.
-function converterEmTransferencia(usuarioId, transacaoId, contaOutraId, { parceiraId } = {}) {
+function converterEmTransferencia(usuarioId, transacaoId, contaOutraId, { parceiraId, buscarParceira = true } = {}) {
   const t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(transacaoId), usuarioId);
   if (!t) falha('Transação não encontrada.', 404);
   if (t.tipo_mov) falha('Este lançamento já faz parte de uma transferência ou estorno.');
@@ -84,7 +84,7 @@ function converterEmTransferencia(usuarioId, transacaoId, contaOutraId, { parcei
   if (parceiraId) {
     parceira = db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(parceiraId), usuarioId);
     if (!parceira || parceira.tipo_mov || parceira.ignorada === 1) falha('O lançamento par não está disponível.');
-  } else {
+  } else if (buscarParceira) {
     const ms = (d) => Date.parse(`${String(d).slice(0, 10)}T12:00:00Z`);
     parceira = db
       .prepare('SELECT * FROM transacoes WHERE usuario_id = ? AND conta_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL AND ignorada <> 1 AND valor * ? > 0')

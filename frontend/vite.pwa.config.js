@@ -66,6 +66,7 @@ const normalizaBase = (b) => { if (!b) return './'; let x = b.startsWith('/') ? 
 const BASE = normalizaBase(process.env.PAGES_BASE);
 
 export default defineConfig({
+  worker: { format: 'es' },
   root: path.join(aqui, 'demo', 'pwa'),
   publicDir: path.join(aqui, 'public-pwa'),
   base: BASE,

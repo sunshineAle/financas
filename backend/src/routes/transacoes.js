@@ -18,6 +18,13 @@ const regrasMotor = require('../utils/regras');
 const { meioDaTransacao } = require('../utils/meioPagamento');
 const { detectarReservaAutomatica } = require('../utils/reservasAuto');
 
+const transferenciasRevisao = require('../utils/transferenciasRevisao');
+router.get('/transferencias-pendentes', (req, res) => res.json({ itens: transferenciasRevisao.listar(req.usuario.id) }));
+router.post('/:id/revisar-transferencia', (req, res) => {
+  try { res.json(transferenciasRevisao.decidir(req.usuario.id, String(req.params.id), req.body || {})); }
+  catch (e) { res.status(e.status || 400).json({ erro: e.message }); }
+});
+
 router.get('/categorias-receita', (req, res) => res.json(nomesCategoriasReceita(req.usuario.id)));
 
 const SELECT_TRANSACAO = `

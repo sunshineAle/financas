@@ -2,6 +2,7 @@
 import { useRoute } from 'vue-router';
 import AppLayout from './components/AppLayout.vue';
 import TourPagina from './components/TourPagina.vue';
+import BackupRapido from './components/BackupRapido.vue';
 import ConfirmacaoApp from './components/ConfirmacaoApp.vue';
 import NovidadesVersao from './components/NovidadesVersao.vue';
 
@@ -17,4 +18,5 @@ const route = useRoute();
   <TourPagina v-if="route.name !== 'login'" />
   <NovidadesVersao v-if="route.name !== 'login'" />
   <ConfirmacaoApp />
+  <BackupRapido v-if="route.name !== 'login'" />
 </template>

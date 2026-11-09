@@ -3,7 +3,9 @@
 //   import { configBackup, gerarArquivo, baixar, salvarNaPasta, compartilhar, lerArquivo, restaurar, verificarLembrete } from './backup.js';
 import { reactive, ref } from 'vue';
 import { kvGet, kvSet, kvDel } from './idb.js';
-import { senhaDaSessao, modoPWA, chaveMestraDaSessao, embrulhoSenha, embrulhoRecuperacao, desembrulharMestra, normalizarCodigo, codigoValido, adotarMestra } from './acesso.js';
+import { apelidoSalvo, senhaDaSessao, modoPWA, chaveMestraDaSessao, embrulhoSenha, embrulhoRecuperacao, desembrulharMestra, normalizarCodigo, codigoValido, adotarMestra } from './acesso.js';
+import { testarRecuperacaoIsolada } from './validacaoBackup.js';
+import { perfil } from './perfil.js';
 import { avisar } from './avisos.js';
 import { PROVEDORES, estadoNuvem, nuvemConectada, enviarParaNuvem, listarNuvem, baixarDaNuvem } from './nuvem/index.js';
 
@@ -19,7 +21,7 @@ export const INTERVALOS = [
 
 // ---- Configuração (localStorage: é preferência do aparelho) --------------------------------
 function lerCfg() {
-  const base = { intervalo: 'semanal', criptografar: true, automatico: true, manter: 10, ultimo: null, ultimoDestino: null, instalado_em: new Date().toISOString() };
+  const base = { intervalo: 'semanal', criptografar: true, automatico: true, manter: 4, ultimo: null, ultimoDestino: null, instalado_em: new Date().toISOString() };
   try { return { ...base, ...(JSON.parse(localStorage.getItem(CFG) || 'null') || {}) }; } catch { return base; }
 }
 export const configBackup = reactive(lerCfg());
@@ -76,7 +78,7 @@ export function contarDados(dados) {
 
 const dois = (n) => String(n).padStart(2, '0');
 export function nomeDoArquivo(d = new Date()) {
-  return `sistema-financeiro-${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}-${dois(d.getHours())}${dois(d.getMinutes())}.sfin`;
+  return `${import.meta.env.VITE_PREVIA ? 'previa-' : ''}sistema-financeiro-${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}-${dois(d.getHours())}${dois(d.getMinutes())}.sfin`;
 }
 
 export async function empacotar(dados, { criptografar = configBackup.criptografar, senha = senhaDaSessao() } = {}) {
@@ -131,6 +133,7 @@ export async function adotarMestraGuardada() {
 }
 export const descartarMestraGuardada = () => kvDel('sf:mestra-tmp');
 export async function abrirEnvelope(env, senha) {
+  ultimaMestra = null;
   let bytes;
   if (typeof env.dados !== 'string') return env.dados;
   bytes = deB64(env.dados);
@@ -161,6 +164,8 @@ export async function abrirEnvelope(env, senha) {
 // ---- Gerar e entregar ---------------------------------------------------------------------
 export async function gerarArquivo(opcoes) {
   const dados = await exportarDados();
+  // O nome e as preferências de exibição viajam DENTRO do conteúdo cifrado, nunca no cabeçalho.
+  dados.perfil = { ...perfil, nome: perfil.nome || apelidoSalvo() || dados.usuario?.nome || '' };
   const texto = await empacotar(dados, opcoes);
   return { nome: nomeDoArquivo(), blob: new Blob([texto], { type: 'application/octet-stream' }), tamanho: texto.length };
 }
@@ -250,12 +255,13 @@ export async function listarDaPasta() {
 // ---- Nuvem (Google Drive / OneDrive via OAuth no navegador; ver services/nuvem/) -----------------
 // Envia o .sfin JÁ cifrado (o texto nunca sai em claro); mantém só os `manter` mais recentes na pasta do app.
 export async function enviarNuvem(id) {
+  if (!configBackup.criptografar) throw new Error('Ative a criptografia em Dados e backup antes de enviar cópias à nuvem.');
   const { nome, blob } = await gerarArquivo();
   await enviarParaNuvem(id, nome, await blob.text(), { manter: configBackup.manter });
   marcarFeito(id);
   return nome;
 }
-export const listarBackupsNuvem = (id) => listarNuvem(id);
+export const listarBackupsNuvem = (id, opcoes) => listarNuvem(id, opcoes);
 // Baixa o item escolhido e entrega no mesmo formato de lerArquivo (env, cifrado...), para seguir o fluxo de prévia/restauração.
 export async function abrirBackupNuvem(id, item) {
   const texto = await baixarDaNuvem(id, item);
@@ -271,7 +277,8 @@ export async function lerArquivo(file) {
 }
 export async function previa(env, senha) {
   const dados = await abrirEnvelope(env, senha);
-  return { dados, contagens: contarDados(dados), criado_em: env.criado_em, aparelho: env.aparelho };
+  const verificacao = await testarRecuperacaoIsolada(dados);
+  return { dados, contagens: contarDados(dados), criado_em: env.criado_em, aparelho: env.aparelho, verificacao };
 }
 
 export async function guardarCopiaDeSeguranca() {
@@ -327,32 +334,18 @@ export function textoUltimoBackup() {
 }
 
 let rodando = false;
+let cicloLembreteExibido = null;
 export async function verificarLembrete() {
-  if (rodando || !backupDevido()) return;
+  const ciclo = `${configBackup.ultimo || configBackup.instalado_em}|${configBackup.intervalo}`;
+  if (rodando || cicloLembreteExibido === ciclo || !backupDevido()) return;
   rodando = true;
   try {
-    if (configBackup.automatico && configBackup.ultimoDestino === 'pasta') {
-      await carregarPasta();
-      if (estadoPasta.permissao === 'granted') {
-        await salvarNaPasta({ pedirPermissao: false });
-        avisar('Backup automático salvo na pasta.', { tipo: 'ok' });
-        return;
-      }
-    }
-    const nuv = nuvemConectada();
-    if (configBackup.automatico && nuv && configBackup.ultimoDestino === nuv) {
-      try {
-        await enviarNuvem(nuv);
-        avisar(`Backup automático enviado ao ${PROVEDORES[nuv].nome}.`, { tipo: 'ok' });
-        return;
-      } catch (e) {
-        avisar(`Não deu para enviar ao ${PROVEDORES[nuv].nome}: ${(e && e.message) || 'erro'} Toque para tentar.`, { rota: '/backup?fazer=1', tipo: 'alerta', duracao: 12000 });
-        return;
-      }
-    }
-    avisar('Hora do backup. Toque para fazer agora.', { rota: '/backup?fazer=1', tipo: 'alerta', duracao: 12000 });
-  } catch (e) {
-    avisar('Hora do backup. Toque para fazer agora.', { rota: '/backup?fazer=1', tipo: 'alerta', duracao: 12000 });
+    const { abrirBackupRapido } = await import('./backupRapido.js');
+    cicloLembreteExibido = ciclo;
+    if (document.querySelector('[role="dialog"]')) {
+      avisar('Hora do backup. Confirme quando puder.', { grupo: 'lembrete-backup', tipo: 'alerta', duracao: 30000,
+        aoTocar: abrirBackupRapido, acoes: [{ rotulo: 'Fazer backup', primaria: true, acao: abrirBackupRapido }] });
+    } else abrirBackupRapido();
   } finally { rodando = false; }
 }
 
@@ -362,6 +355,7 @@ export function iniciarLembrete() {
   ligado = true;
   carregarPasta().catch(() => {});
   setTimeout(verificarLembrete, 2500);
+  setInterval(verificarLembrete, 30 * 60 * 1000);
   let ultimaVez = Date.now();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && Date.now() - ultimaVez > 600000) { ultimaVez = Date.now(); verificarLembrete(); }
@@ -372,4 +366,25 @@ export function iniciarLembrete() {
 export async function recarregarApp() {
   try { const h = globalThis.__PERSISTENCIA_BANCO; if (h && h.flush) await h.flush(); } catch { /* ignora */ }
   location.reload();
+}
+
+// Usada somente para conferir cópias com a chave da sessão já desbloqueada.
+export async function validarBackupDaSessao(texto) {
+  const env = lerEnvelope(texto);
+  let dados;
+  const mestra = chaveMestraDaSessao();
+  if (env.criptografia?.chave === 'mestra' && mestra) {
+    try {
+      const chave = await crypto.subtle.importKey('raw', mestra, 'AES-GCM', false, ['decrypt']);
+      let bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(env.criptografia.iv) }, chave, deB64(env.dados)));
+      if (env.compressao === 'gzip') bytes = await gunzip(bytes);
+      dados = JSON.parse(new TextDecoder().decode(bytes));
+    } catch { throw new Error('Esta cópia não pôde ser aberta com o acesso atual. Nenhuma cópia foi descartada.'); }
+  } else dados = await abrirEnvelope(env, senhaDaSessao());
+  return testarRecuperacaoIsolada(dados);
+}
+export async function excluirBackupNuvem(id, item) {
+  if (id !== 'google') throw new Error('A exclusão protegida está disponível apenas para as cópias ocultas do Google Drive.');
+  const { excluirCopiaSegura } = await import('./protecaoBackups.js');
+  return excluirCopiaSegura(PROVEDORES[id], item);
 }

@@ -38,9 +38,27 @@ function ajustarTeclado() {
 }
 
 function aoApertarTecla(evento) {
+  if (!props.aberto || evento.defaultPrevented) return;
+  // Só a janela visível de maior camada recebe teclado (confirmação, por exemplo).
+  const fundos = [...document.querySelectorAll('.fundo-modal')].filter(el => el.dataset.modalAtivo === 'true' && el.getClientRects().length);
+  const topo = fundos.reduce((a, b) => !a || Number(getComputedStyle(b).zIndex) >= Number(getComputedStyle(a).zIndex) ? b : a, null);
+  if (topo && caixa.value?.closest('.fundo-modal') !== topo) return;
+  if (evento.key === 'Tab') {
+    const alvos = [...(caixa.value?.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]') || [])]
+      .filter(el => el.tabIndex >= 0 && el.getClientRects().length);
+    const primeiro = alvos[0], ultimo = alvos[alvos.length - 1];
+    if (!primeiro) { evento.preventDefault(); caixa.value?.focus(); return; }
+    if (!caixa.value?.contains(document.activeElement) || document.activeElement === caixa.value) {
+      evento.preventDefault(); (evento.shiftKey ? ultimo : primeiro).focus();
+    } else if (evento.shiftKey && document.activeElement === primeiro) {
+      evento.preventDefault(); ultimo.focus();
+    } else if (!evento.shiftKey && document.activeElement === ultimo) {
+      evento.preventDefault(); primeiro.focus();
+    }
+    return;
+  }
   if (evento.key !== 'Escape') return;
-  // com a confirmação aberta por cima, o Esc fecha só ela
-  if (!props.camada && document.querySelector('[data-confirmacao]')) return;
+  evento.preventDefault();
   emit('fechar');
 }
 
@@ -54,9 +72,11 @@ watch(
       if (vv) { altura.value = Math.round(vv.height); topo.value = Math.round(vv.offsetTop); }
       document.documentElement.style.overflow = 'hidden';
       await nextTick();
+      if (caixa.value?.parentElement) caixa.value.parentElement.dataset.modalAtivo = 'true';
       const alvo = caixa.value?.querySelector('[autofocus], input:not([type=hidden]), select, textarea') || caixa.value;
       alvo?.focus?.({ preventScroll: true });
     } else {
+      if (caixa.value?.parentElement) caixa.value.parentElement.dataset.modalAtivo = 'false';
       window.removeEventListener('keydown', aoApertarTecla);
       vv?.removeEventListener('resize', ajustarTeclado); vv?.removeEventListener('scroll', ajustarTeclado);
       document.documentElement.style.overflow = '';
@@ -76,7 +96,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="aberto" :class="['fundo-modal', 'tema-' + tema]" :style="{ ...(altura ? { '--vv-h': altura + 'px', '--vv-top': topo + 'px' } : {}), ...(camada ? { zIndex: camada } : {}) }" @click.self="emit('fechar')">
+      <div v-if="aberto" data-modal-ativo="true" :class="['fundo-modal', 'tema-' + tema]" :style="{ ...(altura ? { '--vv-h': altura + 'px', '--vv-top': topo + 'px' } : {}), ...(camada ? { zIndex: camada } : {}) }" @click.self="emit('fechar')">
         <div ref="caixa" class="modal" role="dialog" aria-modal="true" :aria-label="titulo" tabindex="-1" :style="{ '--largura': largura + 'px' }">
           <span class="alca" aria-hidden="true"></span>
           <div class="cabecalho-modal">

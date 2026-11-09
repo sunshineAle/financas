@@ -15,6 +15,7 @@ import { ocultar, MASCARA } from '../services/privacidade.js';
 import { inicialDe, nomeExibido } from '../services/perfil.js';
 import { visiveis, dispensarAviso } from '../services/notificacoes.js';
 import { ehCelular } from '../services/layout.js';
+import { abrirBackupRapido } from '../services/backupRapido.js';
 import { bloquear, modoPWA } from '../services/acesso.js';
 
 const Perfil = defineAsyncComponent(() => import('../views/Perfil.vue'));
@@ -38,6 +39,10 @@ watch(() => props.aberto, (v) => { if (!v) vista.value = null; });
 watch(() => route.fullPath, () => { if (props.aberto) emit('fechar'); });
 
 function ir(rota) { emit('fechar'); router.push(rota); }
+async function abrirAviso(a) {
+  if (a.tipo !== 'backup') { ir(a.rota); return; }
+  emit('fechar'); await nextTick(); abrirBackupRapido();
+}
 function abrir(id) {
   if (ehCelular.value) { ir(id === 'apoie' ? '/apoie' : '/mais/' + id); return; }
   vista.value = id;
@@ -81,7 +86,7 @@ onUnmounted(() => window.removeEventListener('keydown', aoTeclar));
         <h3>Avisos</h3>
         <ul class="avisos">
           <li v-for="a in visiveis" :key="a.id" :class="a.tom">
-            <button type="button" class="aviso" @click="ir(a.rota)">
+            <button type="button" class="aviso" @click="abrirAviso(a)">
               <span class="ic"><component :is="ICONE[a.tom] || Info" :size="17" :stroke-width="1.9" /></span>
               <span class="tx"><b>{{ semValor(a.titulo) }}</b><small>{{ semValor(a.detalhe) }}</small></span>
             </button>
@@ -115,7 +120,7 @@ onUnmounted(() => window.removeEventListener('keydown', aoTeclar));
                   <h3>Avisos</h3>
                   <ul class="avisos">
                     <li v-for="a in visiveis" :key="a.id" :class="a.tom">
-                      <button type="button" class="aviso" @click="ir(a.rota)">
+                      <button type="button" class="aviso" @click="abrirAviso(a)">
                         <span class="ic"><component :is="ICONE[a.tom] || Info" :size="17" :stroke-width="1.9" /></span>
                         <span class="tx"><b>{{ semValor(a.titulo) }}</b><small>{{ semValor(a.detalhe) }}</small></span>
                       </button>

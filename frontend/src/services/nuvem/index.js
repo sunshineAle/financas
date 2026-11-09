@@ -39,10 +39,11 @@ async function operar(id, fn, { marcarErro = true } = {}) {
   } finally { estadoNuvem.ocupado = null; }
 }
 
-export async function conectarNuvem(id) {
+export async function conectarNuvem(id, { restaurar = false } = {}) {
   const p = exigir(id);
   return operar(id, async () => {
-    await p.conectar();
+    if (restaurar && p.conectarParaRestaurar) await p.conectarParaRestaurar();
+    else await p.conectar();
     // Teste de acesso: falha aqui = escopo/permissão errados, melhor saber agora.
     await p.listar();
     Object.assign(estadoNuvem[id], { conectado: true, ultimoErro: null, precisaReconectar: false });
@@ -59,8 +60,16 @@ export async function desconectarNuvem(id) {
 export async function enviarParaNuvem(id, nome, texto, { manter = 10 } = {}) {
   const p = exigir(id);
   return operar(id, async () => {
-    await p.enviar(nome, texto);
+    const enviado = await p.enviar(nome, texto);
+    if (id === 'google') {
+      const { conferirEnvio, manterQuatroCopias } = await import('../protecaoBackups.js');
+      await conferirEnvio(p, enviado, texto);
+      estadoNuvem[id].avisoRetencao = null;
+      try { await manterQuatroCopias(p); }
+      catch (e) { estadoNuvem[id].avisoRetencao = e.message; }
+    }
     estadoNuvem[id].ultimoEnvio = new Date().toISOString(); estadoNuvem[id].ultimoErro = null; estadoNuvem[id].precisaReconectar = false; gravar();
+    if (id === 'google' || import.meta.env.VITE_PREVIA) return nome; // Google já usa rotação protegida; outros provedores não são limpos pela prévia.
     try {
       const todos = (await p.listar()).filter((i) => /^sistema-financeiro-.*\.sfin$/.test(i.nome)).sort((a, b) => b.nome.localeCompare(a.nome));
       for (const velho of todos.slice(Math.max(1, Number(manter) || 10))) await p.apagar(velho);
@@ -68,5 +77,13 @@ export async function enviarParaNuvem(id, nome, texto, { manter = 10 } = {}) {
     return nome;
   });
 }
-export async function listarNuvem(id) { const p = exigir(id); return operar(id, async () => (await p.listar()).sort((a, b) => b.nome.localeCompare(a.nome)), { marcarErro: false }); }
+export async function listarNuvem(id, { restaurar = false } = {}) {
+  const p = exigir(id);
+  return operar(id, async () => {
+    const itens = await p.listar({ restaurar });
+    if (restaurar && p.listarAntigos) itens.push(...await p.listarAntigos());
+    const unicos = [...new Map(itens.map(i => [i.id, i])).values()];
+    return unicos.filter(i => restaurar || (import.meta.env.VITE_PREVIA ? i.nome.startsWith('previa-') : !i.nome.startsWith('previa-'))).sort((a,b) => b.data - a.data || b.nome.localeCompare(a.nome));
+  }, { marcarErro: false });
+}
 export async function baixarDaNuvem(id, item) { const p = exigir(id); return operar(id, () => p.baixar(item), { marcarErro: false }); }

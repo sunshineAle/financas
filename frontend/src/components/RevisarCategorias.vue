@@ -22,9 +22,10 @@ async function pedir(metodo, url, corpo) {
   return { ok: r.ok, json: j };
 }
 async function carregar() {
-  const [a, c, pe] = await Promise.all([pedir('GET', '/api/transacoes/sem-categoria'), despesas.value.length ? null : pedir('GET', '/api/categorias'), pedir('GET', '/api/reserva/auto/pendentes')]);
+  const [a, c, pe, tr] = await Promise.all([pedir('GET', '/api/transacoes/sem-categoria'), despesas.value.length ? null : pedir('GET', '/api/categorias'), pedir('GET', '/api/reserva/auto/pendentes'), pedir('GET', '/api/transacoes/transferencias-pendentes')]);
   // o que já está no bloco "Guardar e resgatar" não repete aqui
   const pend = new Set(((pe.ok && pe.json.pendentes) || []).map((x) => x.transacao && x.transacao.id));
+  for (const t of tr.json.itens || []) pend.add(t.id);
   if (c && c.ok) despesas.value = (c.json || []).filter((x) => !/^geral$/i.test(x.nome || '')).map((x) => ({ id: x.id, nome: x.nome }));
   itens.value = (a.ok ? a.json.itens || [] : []).filter((i) => !pend.has(i.id));
   itens.value.forEach((i) => { if (escolha.value[i.id] === undefined) escolha.value[i.id] = ''; });

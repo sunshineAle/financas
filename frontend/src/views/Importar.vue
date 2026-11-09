@@ -477,6 +477,21 @@ watch(() => etapa.value === 3 && !!analise.value, (sim) => {
                 <button v-if="l.status !== 'fora_periodo'" type="button" class="icone" aria-label="Corrigir linha" title="Corrigir" @click="abrirEdicao(l)"><Pencil :size="15" /></button>
               </span>
             </div>
+            <div v-if="l.suspeitaTransferencia" class="diverg" data-transferencia-importacao>
+              <b>Parece transferência</b>
+              <p>O valor sai de uma conta e entra na outra, sem contar como gasto. Sem confirmar, fica em A revisar.</p>
+              <select v-model="l.contaTransferencia" aria-label="Outra conta da transferência" @change="l.parceiraTransferencia = ''; l.decisaoTransferencia = null; l.revisar = true">
+                <option value="">Escolha a outra conta</option>
+                <option v-for="c in l.suspeitaTransferencia.contas" :key="c.id" :value="c.id">{{ c.nome }}</option>
+              </select>
+              <select v-if="l.suspeitaTransferencia.candidatas.some(c => c.contaId === l.contaTransferencia)" v-model="l.parceiraTransferencia" aria-label="Lançamento correspondente" @change="l.decisaoTransferencia = null; l.revisar = true">
+                <option value="">Escolha o lançamento</option>
+                <option v-for="c in l.suspeitaTransferencia.candidatas.filter(c => c.contaId === l.contaTransferencia)" :key="c.id" :value="c.id">{{ c.descricao }} · {{ dataBR(c.data) }}</option>
+              </select>
+              <button type="button" :disabled="!l.contaTransferencia || l.suspeitaTransferencia.diferencaCentavos || (l.suspeitaTransferencia.candidatas.some(c => c.contaId === l.contaTransferencia) && !l.parceiraTransferencia)" @click="l.decisaoTransferencia = { acao: 'vincular', contaId: l.contaTransferencia, parceiraId: l.parceiraTransferencia }; l.revisar = false">Tratar como transferência</button>
+              <button type="button" @click="l.decisaoTransferencia = { acao: 'recusar' }; l.revisar = false">Deixar como está</button>
+              <small v-if="l.decisaoTransferencia">{{ l.decisaoTransferencia.acao === 'vincular' ? 'Transferência confirmada. Será vinculada ao importar.' : 'Será mantido como lançamento comum.' }}</small>
+            </div>
             <div v-if="l.status === 'divergente'" class="diverg" role="group" aria-label="Valor diferente">
               <span>Registrado: <b>{{ moeda(Math.abs(l.existente.valor)) }}</b> · Arquivo: <b>{{ moeda(Math.abs(l.valor)) }}</b></span>
               <button type="button" :class="{ ativo: l.acao === 'atualizar' }" @click="escolherDiverg(l, 'atualizar')">Atualizar para o valor real</button>

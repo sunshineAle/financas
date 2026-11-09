@@ -17,7 +17,7 @@ function ler(usuarioId, corpo, atual = null) {
   const c = corpo || {};
   const d = {};
   const tipo = c.tipo !== undefined ? c.tipo : atual ? atual.tipo : 'saida';
-  if (tipo !== 'saida' && tipo !== 'entrada' && tipo !== 'reserva') return { erro: 'Informe se a regra é de saída, de entrada ou de metas e investimentos.' };
+  if (tipo !== 'saida' && tipo !== 'entrada' && tipo !== 'reserva' && tipo !== 'transferencia') return { erro: 'Informe se a regra é de saída, de entrada, de transferência ou de metas e investimentos.' };
   d.tipo = tipo;
   if (c.padrao !== undefined || !atual) {
     const padrao = String(c.padrao || '').trim().slice(0, 80);
@@ -39,7 +39,9 @@ function ler(usuarioId, corpo, atual = null) {
     if (contaId && !db.prepare('SELECT 1 FROM contas WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(contaId, usuarioId)) return { erro: 'Conta não encontrada.' };
     d.conta_id = contaId;
   }
-  if (tipo === 'reserva') {
+  if (tipo === 'transferencia') {
+    d.categoria_id = null; d.categoria_receita = null; d.meta_id = null; d.ativo_id = null; d.destino = 'transferencia';
+  } else if (tipo === 'reserva') {
     // Seção 15: Guardar/Resgatar numa meta ou aporte/resgate de um investimento
     const destino = c.destino !== undefined ? c.destino : atual ? atual.destino : null;
     if (!['guardar', 'resgatar', 'aporte', 'resgate_inv'].includes(destino)) return { erro: 'Escolha o que a regra faz: guardar, resgatar, aporte ou resgate.' };
@@ -81,6 +83,7 @@ function paraSaida(r) {
     const c = db.prepare('SELECT icone FROM categorias_receita WHERE usuario_id = ? AND nome = ? AND excluido_em IS NULL').get(r.usuario_id, r.categoria_receita);
     categoriaIcone = c ? c.icone : null;
   }
+  if (r.tipo === 'transferencia') categoriaNome = 'Sugerir transferência entre contas próprias';
   let metaNome = null, ativoNome = null;
   if (r.tipo === 'reserva') {
     if (r.meta_id) metaNome = (db.prepare('SELECT nome FROM metas_reserva WHERE id = ?').get(r.meta_id) || {}).nome || null;
@@ -90,7 +93,7 @@ function paraSaida(r) {
   }
   const conta = r.conta_id ? db.prepare('SELECT nome FROM contas WHERE id = ? AND excluido_em IS NULL').get(r.conta_id) : null;
   return {
-    id: r.id, tipo: r.tipo, padrao: r.padrao, valorMin: r.valor_min, valorMax: r.valor_max,
+    id: r.id, criado_em: r.criado_em, tipo: r.tipo, padrao: r.padrao, valorMin: r.valor_min, valorMax: r.valor_max,
     contaId: r.conta_id || null, contaNome: conta ? conta.nome : null,
     categoriaId: r.categoria_id || null, categoriaReceita: r.categoria_receita || null, categoriaNome, categoriaIcone,
     subcategoria: r.subcategoria || '', icone: r.icone || '',
@@ -101,6 +104,7 @@ function paraSaida(r) {
 
 // Aplica a regra às antigas (categoria) e completa subcategoria/ícone das que casam e ainda não têm (não sobrescreve escolha do usuário).
 function aplicar(usuarioId, regra) {
+  if (regra.tipo === 'transferencia') return 0; // A revisão exige confirmação individual, inclusive nas antigas.
   if (regra.tipo === 'reserva') return R.aplicarReservaNasAntigas(usuarioId, regra); // seção 15
   const aplicadas = R.aplicarNasAntigas(usuarioId, regra);
   if (!regra.subcategoria && !regra.icone) return aplicadas;
@@ -136,6 +140,7 @@ router.get('/previa', (req, res) => {
   const q = req.query || {};
   const l = ler(req.usuario.id, { tipo: q.tipo || 'saida', padrao: q.padrao, valorMin: q.valorMin, valorMax: q.valorMax, contaId: q.contaId, categoriaId: q.categoriaId, categoriaReceita: q.categoriaReceita, destino: q.destino, metaId: q.metaId, ativoId: q.ativoId });
   if (l.erro) return res.status(400).json({ erro: l.erro });
+  if (l.dados.tipo === 'transferencia') return res.json({ quantidade: 0, exemplos: [] });
   if (l.dados.tipo === 'reserva') {
     const sai = l.dados.destino === 'guardar' || l.dados.destino === 'aporte';
     const ex = db.prepare(`SELECT id, conta_id, descricao, valor FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND tipo_mov IS NULL AND ${sai ? 'valor < 0' : 'valor > 0'}`).all(req.usuario.id)

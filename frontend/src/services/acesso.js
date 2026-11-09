@@ -369,6 +369,7 @@ export async function aplicarRecAdotado() {
 // ---- Apagar dados e redefinir o app ----
 // Apaga o banco, a senha, a biometria, a chave de recuperação e as preferências deste aparelho. Volta à tela de boas-vindas.
 export async function apagarTudo() {
+  if (import.meta.env.VITE_PREVIA && globalThis.__SF_REINICIAR_PREVIA) return globalThis.__SF_REINICIAR_PREVIA();
   try { if (globalThis.__PERSISTENCIA_BANCO && globalThis.__PERSISTENCIA_BANCO.apagar) await globalThis.__PERSISTENCIA_BANCO.apagar(); } catch { /* segue */ }
   try { await kvLimparTudo(); } catch { /* segue */ }
   try { Object.keys(localStorage).filter((k) => k.startsWith('sf') || k.startsWith('dagda')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignora */ }

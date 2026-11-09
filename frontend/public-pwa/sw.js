@@ -55,7 +55,7 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const rota = (e.notification.data && e.notification.data.rota) || '/';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
-    for (const j of janelas) {
+    for (const j of janelas.filter(j => j.url.startsWith(self.registration.scope))) {
       if ('focus' in j) { j.postMessage({ tipo: 'sf:abrir-rota', rota }); return j.focus(); }
     }
     return self.clients.openWindow('./#' + rota);

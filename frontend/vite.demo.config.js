@@ -13,6 +13,7 @@ const d = (p) => path.join(aqui, 'demo', p);
 // Gera UM arquivo HTML com o sistema inteiro (telas + backend + banco SQLite
 // em JavaScript) que abre com duplo clique, sem servidor.
 export default defineConfig({
+  worker: { format: 'es' },
   root: 'demo',
   base: './',
   plugins: [vue(), viteSingleFile()],

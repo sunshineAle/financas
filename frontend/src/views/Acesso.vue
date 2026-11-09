@@ -2,23 +2,30 @@
 import AssinaturaAlt from '../components/AssinaturaAlt.vue';
 // Tela de acesso do PWA (antes do app): criar a senha de acesso na 1ª vez, pedir ao abrir,
 // e "Esqueci a senha" -> restaurar um backup (e criar uma senha nova). Tudo no aparelho, sem servidor.
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import Orbe from '../components/Orbe.vue';
 import MarcaDagda from '../components/MarcaDagda.vue';
 import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint, Delete, KeyRound } from 'lucide-vue-next';
 import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria,
-  acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
+  adotarMestra, codigoValido, acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
 import AvisoSenha from '../components/AvisoSenha.vue';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
-import { jaInstalado, conviteDisponivel, instalarApp, instrucoes } from '../services/instalacao.js';
+import { jaInstalado, instalarApp } from '../services/instalacao.js';
+import InstrucoesInstalacao from '../components/InstrucoesInstalacao.vue';
 import { perfil } from '../services/perfil.js';
 import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem, guardarMestraParaAdotar, adotarMestraGuardada, descartarMestraGuardada } from '../services/backup.js';
 import { conectarNuvem } from '../services/nuvem/index.js';
+import AjudaSecao from '../components/AjudaSecao.vue';
+import ListaBackups from '../components/ListaBackups.vue';
+import RestaurarBackupModal from '../components/RestaurarBackupModal.vue';
 import OrigemBackup from '../components/OrigemBackup.vue';
 import { reavisar } from '../services/atualizacao.js';
 import { marcarPrimeiroCadastro } from '../services/primeiroCadastro.js';
 
 const emit = defineEmits(['liberado']);
+const ehPrevia = !!import.meta.env.VITE_PREVIA;
+// Prepara a biblioteca antes do clique: o Google exige gesto direto do usuário para abrir a janela.
+onMounted(() => { if (PROVEDORES.google.configurado()) PROVEDORES.google.preparar().catch(() => {}); });
 
 const partesOrbe = [
   { nome: 'Entradas', valor: 1, cor: 'var(--entrada-royal-medio)' },
@@ -30,7 +37,7 @@ const partesOrbe = [
 
 // modo: entrar | criar | redefinir (após restaurar) | restaurar | codigo (esqueci: digitar o código) | nova-senha (após o código) | chave (mostrar o código novo)
 const posRestauro = (() => { try { return sessionStorage.getItem('sf:pos-restauro') === '1'; } catch { return false; } })();
-const modo = ref(posRestauro ? 'redefinir' : (configurada() ? 'entrar' : 'criar'));
+const modo = ref(posRestauro ? 'redefinir' : (configurada() ? 'entrar' : 'escolher'));
 const apelido = ref(apelidoSalvo() || perfil.nome || '');
 const senha = ref('');
 const confirmacao = ref('');
@@ -49,7 +56,7 @@ onMounted(iniciarEspera);
 onMounted(reavisar);
 
 // Boas-vindas: só no primeiro acesso (cadastro novo). Quem já tem acesso vê só o desbloqueio.
-const boasVindas = computed(() => modo.value === 'criar');
+const boasVindas = computed(() => ['criar', 'escolher'].includes(modo.value));
 const BENEFICIOS = [
   { icone: ShieldCheck, texto: 'Seus dados ficam só no seu aparelho' },
   { icone: WifiOff, texto: 'Funciona offline, sem servidor' },
@@ -57,7 +64,7 @@ const BENEFICIOS = [
 ];
 const mostrarInstrucoes = ref(false);
 async function instalar() {
-  const r = await instalarApp();
+  const r = await instalarApp({ previa: ehPrevia });
   mostrarInstrucoes.value = r === 'instrucoes';
 }
 
@@ -94,15 +101,16 @@ function liberar() {
   emit('liberado', { rect: r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null, html: orbeRef.value ? orbeRef.value.outerHTML : '' });
 }
 
-const titulo = computed(() => ({ entrar: apelidoSalvo() ? `Olá, ${apelidoSalvo()}` : 'Entrar', criar: 'Criar acesso', redefinir: 'Crie um novo acesso', restaurar: 'Restaurar backup', codigo: 'Esqueci a senha', 'nova-senha': 'Nova senha', chave: 'Código de recuperação' }[modo.value]));
+const titulo = computed(() => ({ escolher: 'Bem-vindo de volta', entrar: apelidoSalvo() ? `Olá, ${apelidoSalvo()}` : 'Entrar', criar: 'Novo acesso', redefinir: 'Proteja este aparelho', restaurar: 'Restaurar backup', codigo: 'Esqueci a senha', 'nova-senha': 'Nova senha', chave: 'Código de recuperação' }[modo.value]));
 const subtitulo = computed(() => ({
+  escolher: '',
   entrar: ehPinAcesso ? 'Digite seu PIN.' : 'Digite sua senha ou PIN.',
   codigo: 'Digite o código de recuperação que você guardou no cadastro.',
   'nova-senha': 'Código aceito. Crie a nova senha ou PIN deste aparelho.',
   chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
-  criar: 'Escolha um apelido e uma senha ou PIN. Não pedimos e-mail nem usamos servidor.',
-  redefinir: 'Backup restaurado. Defina agora o apelido e a senha ou PIN deste aparelho.',
-  restaurar: 'Escolha um arquivo .sfin. Os dados atuais deste aparelho serão substituídos.',
+  criar: 'Escolha um apelido e uma senha ou PIN.',
+  redefinir: 'Seu nome e seus dados foram restaurados. Defina apenas uma senha ou PIN para este aparelho.',
+  restaurar: 'Escolha uma cópia para continuar.',
 }[modo.value]));
 const TEXTO_CADASTRO = 'Este cadastro serve para proteger o acesso ao app no seu aparelho. Seus dados são mantidos protegidos no dispositivo.';
 
@@ -132,7 +140,7 @@ async function enviar() {
       if (senha.value !== confirmacao.value) { erro.value = 'A confirmação não é igual à senha ou PIN.'; return; }
       const primeiro = modo.value === 'criar';
       const restaurado = modo.value === 'redefinir';
-      if (restaurado) await adotarMestraGuardada();
+      if (restaurado) { adotarMestra(null, null); await adotarMestraGuardada(); }
       await criarSenha(senha.value, apelido.value.trim());
       if (restaurado) { await aplicarRecAdotado(); await descartarMestraGuardada(); }
       if (primeiro) marcarPrimeiroCadastro();
@@ -177,6 +185,7 @@ const arquivo = ref(null);
 const senhaBackup = ref('');
 const dadosPrevia = ref(null);
 
+
 // Folha "Restaurar Backup": restauração local (arquivo) ou Nuvem (Drive, Proton, OneDrive, Mega). Sem OAuth nem servidor:
 // em todos os casos abre o seletor de arquivos do aparelho; o app da nuvem instalado aparece nele.
 const folha = ref(false);
@@ -185,6 +194,8 @@ const origemRestauro = ref('');
 const COM_LOGIN = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
 const nuvensAbertas = ref(false);
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
+const backupsEncontrados = ref([]);
+const provedorEscolhido = ref(null);
 const nuvemRestauro = ref(null); // { id, nome, data }
 const ROTULO_ENTRAR = { google: 'Google', microsoft: 'Microsoft', dropbox: 'Dropbox' };
 const fmtData = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -192,47 +203,67 @@ async function entrarNuvem(id) {
   const p = PROVEDORES[id];
   erro.value = ''; carregando.value = true; dadosPrevia.value = null; arquivo.value = null; senhaBackup.value = '';
   try {
-    await conectarNuvem(id);
-    const itens = await listarBackupsNuvem(id);
+    await conectarNuvem(id, { restaurar: true });
+    const itens = await listarBackupsNuvem(id, { restaurar: true });
     if (!itens.length) throw new Error(`Não encontramos backups do app na sua conta ${p.nome}. Confira se entrou na conta certa.`);
-    const mais = itens[0];
-    arquivo.value = await abrirBackupNuvem(id, mais);
-    nuvemRestauro.value = { id, nome: p.nome, data: mais.data };
+    backupsEncontrados.value = itens; provedorEscolhido.value = id;
     folha.value = false; modo.value = 'restaurar'; origemRestauro.value = p.nome;
-    if (!arquivo.value.cifrado) await verPrevia();
   } catch (e) { if (!(e && e.codigo === 'cancelado')) { erro.value = e.message; folha.value = false; modo.value = 'restaurar'; origemRestauro.value = ''; } }
   finally { carregando.value = false; }
+}
+async function selecionarBackup(item) {
+  erro.value = ''; carregando.value = true; dadosPrevia.value = null; senhaBackup.value = ''; arquivo.value = null;
+  try {
+    const id = provedorEscolhido.value;
+    arquivo.value = await abrirBackupNuvem(id, item);
+    nuvemRestauro.value = { id, nome: PROVEDORES[id].nome, data: item.data };
+
+  } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
 const escolher = (ev, origem = '') => escolherArquivo(ev.target.files && ev.target.files[0], origem);
 async function escolherArquivo(f, origem = '') {
   erro.value = '';
   dadosPrevia.value = null;
   if (!f) return;
+  arquivo.value = null;
+  nuvemRestauro.value = null; backupsEncontrados.value = []; provedorEscolhido.value = null; senhaBackup.value = '';
   if (folha.value) { folha.value = false; modo.value = 'restaurar'; origemRestauro.value = origem; }
   try {
     arquivo.value = await lerArquivo(f);
-    if (!arquivo.value.cifrado) await verPrevia();
+
   } catch (e) { erro.value = e.message; arquivo.value = null; }
 }
-async function verPrevia() {
-  erro.value = '';
-  carregando.value = true;
-  try { dadosPrevia.value = await previa(arquivo.value.env, senhaBackup.value); }
-  catch (e) { erro.value = e.message; } finally { carregando.value = false; }
-}
+async function receberRestauro(r) { senhaBackup.value = r.senha; dadosPrevia.value = r; await restaurarAgora(); }
 async function restaurarAgora() {
   erro.value = '';
   carregando.value = true;
   try {
-    await restaurar(dadosPrevia.value.dados, 'substituir');
-    await guardarMestraParaAdotar().catch((e) => console.warn('sf: chave do backup não guardada', e && e.message));
-    try { sessionStorage.setItem('sf:pos-restauro', '1'); if (nuvemRestauro.value) sessionStorage.setItem('sf:pos-restauro-nuvem', nuvemRestauro.value.id); } catch { /* ignora */ }
+    const dados = dadosPrevia.value.dados;
+    const nome = String(dados.perfil?.nome || dados.usuario?.nome || 'Eu').trim().slice(0, 30) || 'Eu';
+    // Um código de recuperação não deve virar a senha de acesso. Backups sem cifra também pedem uma senha nova.
+    const podeReusar = arquivo.value.cifrado && !codigoValido(senhaBackup.value) && !validarNovaSenha(senhaBackup.value);
+    await guardarMestraParaAdotar();
+    await restaurar(dados, 'substituir');
+    Object.assign(perfil, { nome, email: '', foto: '', cor: 'azul', ...(dados.perfil || {}), nome });
+    localStorage.setItem('sf:perfil', JSON.stringify({ ...perfil }));
+    if (podeReusar) {
+      // Preserva a chave do backup e o código de recuperação, com a mesma senha que acabou de abrir o arquivo.
+      adotarMestra(null, null);
+      await adotarMestraGuardada();
+      await criarSenha(senhaBackup.value, nome);
+      await aplicarRecAdotado();
+      await descartarMestraGuardada();
+      sessionStorage.removeItem('sf:pos-restauro');
+    } else {
+      sessionStorage.setItem('sf:pos-restauro', '1');
+    }
     await recarregarApp();
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
+function abrirDemo() { globalThis.__SF_ABRIR_DEMO?.(); }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
 function voltar() {
-  senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'criar'; }
+  senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; backupsEncontrados.value = []; provedorEscolhido.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'escolher'; }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada' };
 const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
 </script>
@@ -242,23 +273,27 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
     <section class="painel-hero">
       <div ref="orbeRef" class="orbe-entrada"><MarcaDagda completa /></div>
       <template v-if="boasVindas">
-        <span class="titulo-hero">Bem-vindo</span>
-        <p class="frase-hero">Seus dados ficam neste aparelho, só com você.</p>
-        <ul class="beneficios">
-          <li v-for="b in BENEFICIOS" :key="b.texto"><component :is="b.icone" :size="18" :stroke-width="1.9" /><span>{{ b.texto }}</span></li>
-        </ul>
         <template v-if="!jaInstalado">
-          <button type="button" class="instalar" @click="instalar"><Download :size="18" :stroke-width="2" /> Instalar o app</button>
-          <p v-if="mostrarInstrucoes || !conviteDisponivel" class="dica-instalar" :class="{ forte: mostrarInstrucoes }">{{ instrucoes() }}</p>
+          <button type="button" class="instalar" @click="instalar"><Download :size="18" :stroke-width="2" /> {{ ehPrevia ? 'Como instalar o app' : 'Instalar o app' }}</button>
         </template>
       </template>
     </section>
 
     <section class="painel-form">
-      <!-- Entrar: login rápido (PIN na tela ou senha; biometria chamada sozinha) -->
-      <form v-if="modo === 'entrar'" class="formulario entrar" data-login @submit.prevent="enviar">
+      <div v-if="modo === 'escolher'" class="formulario" data-escolher-acesso>
         <h1>{{ titulo }}</h1>
-        <p class="subtitulo">{{ subtitulo }}</p>
+        <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
+        <button v-if="PROVEDORES.google.configurado()" type="button" :disabled="carregando" @click="entrarNuvem('google')">{{ carregando ? 'Buscando backups…' : 'Entrar com Google' }}</button>
+        <span class="texto-cadastro">Com a senha do seu backup.<AjudaSecao titulo="Restaurar pelo Google" :texto="['O Google localiza suas cópias na área oculta e na pasta antiga Dagda Capital. Isso não substitui a senha do backup.', 'Os arquivos antigos são preservados. Nenhum novo cadastro é necessário para restaurar.']" /></span>
+        <button type="button" class="restaurar" @click="folha = true">Restaurar meu Dagda</button>
+        <button v-if="ehPrevia" type="button" class="secundario" @click="abrirDemo">Testar com dados fictícios</button>
+        <button type="button" class="link" @click="modo = 'criar'">Criar acesso novo</button>
+        <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
+      </div>
+      <!-- Entrar: login rápido (PIN na tela ou senha; biometria chamada sozinha) -->
+      <form v-else-if="modo === 'entrar'" class="formulario entrar" data-login @submit.prevent="enviar">
+        <h1>{{ titulo }}</h1>
+        <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
         <template v-if="ehPinAcesso">
           <div class="pontos" :class="{ erro: !!erro }" aria-live="polite" :aria-label="`${senha.length} dígitos digitados`">
             <span v-for="n in Math.max(4, senha.length)" :key="n" :class="{ cheio: n <= senha.length }"></span>
@@ -283,6 +318,8 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando || espera > 0 || (ehPinAcesso && senha.length < 4)">{{ carregando ? 'Aguarde…' : 'Entrar' }}</button>
+        <button v-if="PROVEDORES.google.configurado()" type="button" class="secundario" :disabled="carregando" @click="entrarNuvem('google')">Entrar com Google</button>
+        <button v-if="ehPrevia" type="button" class="secundario" @click="abrirDemo">Testar com dados fictícios</button>
         <div class="links-ajuda">
           <button type="button" class="link" @click="abrirCodigo"><KeyRound :size="16" :stroke-width="2" /> Esqueci a senha</button>
           <span aria-hidden="true">·</span>
@@ -293,8 +330,8 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
       <!-- Criar / redefinir após restaurar / nova senha pelo código -->
       <form v-else-if="['criar', 'redefinir', 'nova-senha'].includes(modo) && !oferta" class="formulario" @submit.prevent="enviar">
         <h1>{{ titulo }}</h1>
-        <p class="subtitulo">{{ subtitulo }}</p>
-        <label v-if="modo !== 'nova-senha'" class="campo">
+        <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
+        <label v-if="modo === 'criar'" class="campo">
           <span>Apelido</span>
           <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Como quer ser chamado" autofocus />
         </label>
@@ -306,18 +343,18 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
           <span>Repita a senha ou PIN</span>
           <input v-model="confirmacao" type="password" autocomplete="new-password" required placeholder="••••••••" />
         </label>
-        <AvisoSenha />
+        <AvisoSenha compacto />
         <p v-if="modo === 'criar'" class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
-        <button v-if="modo === 'criar'" type="button" class="restaurar" @click="folha = true"><DatabaseBackup :size="20" :stroke-width="2" /> Restaurar Backup</button>
+        <button v-if="modo === 'criar'" type="button" class="link" @click="voltar">Voltar</button>
         <button v-if="modo === 'nova-senha'" type="button" class="link" @click="voltar">Cancelar</button>
       </form>
 
       <!-- Esqueci a senha: código de recuperação -->
       <form v-else-if="modo === 'codigo'" class="formulario" data-esqueci @submit.prevent="enviar">
         <h1>{{ titulo }}</h1>
-        <p class="subtitulo">{{ subtitulo }}</p>
+        <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
         <label class="campo">
           <span>Código de recuperação</span>
           <input v-model="codigoDigitado" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="ABCD-EFGH-JKLM-NPQR-STUV-WXYZ" class="campo-codigo" autofocus />
@@ -350,31 +387,20 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
 
       <div v-else class="formulario">
         <h1>{{ titulo }}</h1>
-        <p class="subtitulo">{{ subtitulo }}</p>
+        <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
         <p v-if="origemRestauro" class="origem">Origem: {{ origemRestauro }}</p>
-        <p v-if="nuvemRestauro" class="origem" data-backup-recente>Backup mais recente: {{ fmtData(nuvemRestauro.data) }}</p>
-        <label v-if="!nuvemRestauro" class="campo">
+        <p v-if="nuvemRestauro" class="origem" data-backup-recente>Backup escolhido: {{ fmtData(nuvemRestauro.data) }}</p>
+        <ListaBackups v-if="backupsEncontrados.length" :itens="backupsEncontrados" :ocupado="carregando" @selecionar="selecionarBackup" />
+        <label v-if="!provedorEscolhido" class="campo">
           <span>Arquivo de backup</span>
           <input type="file" @change="escolher" />
         </label>
-        <template v-if="arquivo && arquivo.cifrado">
-          <label class="campo">
-            <span>Senha do backup ou código de recuperação</span>
-            <input v-model="senhaBackup" type="password" autocomplete="off" placeholder="Senha da época do backup ou o código" @keyup.enter="verPrevia" />
-          </label>
-          <button type="button" class="secundario" :disabled="carregando || !senhaBackup" @click="verPrevia">Abrir backup</button>
-        </template>
-        <div v-if="dadosPrevia" class="previa">
-          <b>Este backup contém</b>
-          <ul><li v-for="r in resumo" :key="r">{{ r }}</li><li v-if="!resumo.length">Nenhum registro</li></ul>
-          <small>Os dados atuais deste aparelho serão substituídos. Depois você cria uma nova senha de acesso.</small>
-        </div>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
-        <button v-if="dadosPrevia" type="button" :disabled="carregando" @click="restaurarAgora">{{ carregando ? 'Restaurando…' : 'Restaurar e continuar' }}</button>
         <button type="button" class="link" @click="voltar">Voltar</button>
       </div>
     </section>
 
+    <RestaurarBackupModal :arquivo="arquivo" :executando="carregando" :erro-executar="erro" @fechar="arquivo = null; dadosPrevia = null; erro = ''" @restaurar="receberRestauro" />
     <Teleport to="body">
       <div v-if="folha" class="folha-fundo" @click.self="folha = false">
         <div class="folha" role="dialog" aria-modal="true" aria-label="Restaurar Backup">
@@ -383,6 +409,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         </div>
       </div>
     </Teleport>
+    <InstrucoesInstalacao :aberto="mostrarInstrucoes" :previa="ehPrevia" @fechar="mostrarInstrucoes = false" />
     <AssinaturaAlt compacta class="assinatura-acesso" />
   </div>
 </template>
@@ -501,4 +528,8 @@ button.bio-mini:hover:not(:disabled) { background: var(--cor-realce); color: var
   button.tecla { width: 64px; height: 64px; }
 }
 @media (max-height: 640px) { button.tecla { width: 56px; height: 56px; font-size: 22px; } .teclado { gap: 6px 16px; } }
+</style>
+
+<style scoped>
+.formulario h1{font-size:22px}.modo-escolher.tela-acesso{grid-template-columns:1fr;grid-template-rows:auto auto;align-content:center;min-height:100dvh}.modo-escolher .painel-hero{border:0;background:none;padding:24px 24px 0}.modo-escolher .orbe-entrada,.modo-criar .orbe-entrada{width:min(42vw,24vh,180px)}.modo-escolher .painel-form{padding-top:20px}.texto-cadastro{display:flex;align-items:center;gap:6px}.modo-criar .texto-cadastro{font-size:12px}
 </style>

@@ -114,7 +114,7 @@ async function alertaDeBackup() {
     const m = await import('./backup.js');
     if (!m.backupDevido()) return [];
     const dias = Math.floor(m.diasDesdeUltimo());
-    return [{ id: `backup-${hojeChave().slice(0, 7)}-${Math.floor(dias / 7)}`, tipo: 'backup', titulo: 'Hora de fazer o backup', detalhe: m.textoUltimoBackup(), rota: '/backup', tom: 'alerta' }];
+    return [{ id: `backup-${hojeChave().slice(0, 7)}-${Math.floor(dias / 7)}`, tipo: 'backup', titulo: 'Hora de fazer o backup', detalhe: m.textoUltimoBackup(), rota: '/?confirmarBackup=1', tom: 'alerta' }];
   } catch { return []; }
 }
 
@@ -154,7 +154,10 @@ async function mostrar(a) {
     const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
     if (reg && reg.showNotification) { await reg.showNotification(a.titulo, opcoes); return; }
   } catch { /* cai para a Notification comum */ }
-  try { new Notification(a.titulo, opcoes); } catch { /* ignora */ }
+  try {
+    const n = new Notification(a.titulo, opcoes);
+    n.onclick = () => { n.close(); window.focus(); location.hash = '#' + a.rota; };
+  } catch { /* ignora */ }
 }
 
 export function pendentesDoDia(lista, enviados = lerJson(ENVIADOS, {}), hoje = hojeChave()) {

@@ -4,6 +4,10 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { ShieldCheck, TriangleAlert, Undo2, CloudUpload, Unlink } from 'lucide-vue-next';
+import AjudaSecao from '../components/AjudaSecao.vue';
+import ListaBackups from '../components/ListaBackups.vue';
+import RestaurarBackupModal from '../components/RestaurarBackupModal.vue';
+import { confirmar } from '../services/confirmar.js';
 import CardPadrao from '../components/CardPadrao.vue';
 import OrigemBackup from '../components/OrigemBackup.vue';
 import NuvemLogo from '../components/NuvemLogo.vue';
@@ -11,7 +15,7 @@ import AvisoSenha from '../components/AvisoSenha.vue';
 import {
   configBackup, salvarConfig, INTERVALOS, suporte, ocupado, textoUltimoBackup, diasDesdeUltimo, backupDevido,
   baixar, compartilhar, lerArquivo, previa, restaurar, desfazerRestauracao, temCopiaDeSeguranca, recarregarApp,
-  PROVEDORES, estadoNuvem, enviarNuvem, listarBackupsNuvem, abrirBackupNuvem,
+  excluirBackupNuvem, PROVEDORES, estadoNuvem, enviarNuvem, listarBackupsNuvem, abrirBackupNuvem,
 } from '../services/backup.js';
 import { conectarNuvem, desconectarNuvem } from '../services/nuvem/index.js';
 import { estadoArmazenamento, riscoArmazenamento } from '../services/armazenamento.js';
@@ -34,7 +38,6 @@ const salvarAparelho = () => executar(podeCompartilhar ? compartilhar : baixar, 
 const conectadas = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado() && estadoNuvem[id].conectado));
 const salvarNuvem = (id) => executar(async () => {
   if (!estadoNuvem[id].conectado || estadoNuvem[id].precisaReconectar) await conectarNuvem(id);
-  configBackup.ultimoDestino = id; salvarConfig();
   return enviarNuvem(id);
 }, (n) => `Backup enviado ao ${PROVEDORES[id].nome} (${n}).`);
 async function desconectar(id) { await desconectarNuvem(id); if (configBackup.ultimoDestino === id) { configBackup.ultimoDestino = null; salvarConfig(); } }
@@ -53,18 +56,21 @@ async function abrirArquivo(f) {
 }
 async function aceitarLido(lido) {
   erro.value = ''; pre.value = null; arq.value = lido; senhaArq.value = '';
-  if (!lido.cifrado) await verPrevia();
+
 }
 const restaurarNuvem = (id) => executar(async () => {
-  if (!estadoNuvem[id].conectado || estadoNuvem[id].precisaReconectar) await conectarNuvem(id);
-  listaNuvem.value = await listarBackupsNuvem(id); listaDe.value = id;
+  await conectarNuvem(id, { restaurar: true });
+  listaNuvem.value = await listarBackupsNuvem(id, { restaurar: true }); listaDe.value = id;
   if (!listaNuvem.value.length) throw new Error(`Não há backups do app no ${PROVEDORES[id].nome}.`);
   return undefined;
 }, () => '');
-const escolherDaNuvem = (item) => executar(async () => { const lido = await abrirBackupNuvem(listaDe.value, item); listaNuvem.value = []; await aceitarLido(lido); return undefined; }, () => '');
-async function verPrevia() {
-  erro.value = ''; trabalhando.value = true;
-  try { pre.value = await previa(arq.value.env, senhaArq.value); } catch (e) { erro.value = e.message; } finally { trabalhando.value = false; }
+const escolherDaNuvem = (item) => executar(async () => { const lido = await abrirBackupNuvem(listaDe.value, item); await aceitarLido(lido); return undefined; }, () => '');
+async function receberRestauro(r) { pre.value=r; modo.value=r.modo; await restaurarAgora(); }
+async function excluirCopia(item) {
+  if (!(await confirmar({titulo:'Excluir esta cópia?',texto:'A exclusão só será liberada depois de recuperar outra cópia em um banco de teste, sem alterar seus dados.',acao:'Excluir cópia'}))) return;
+  trabalhando.value=true;erro.value='';
+  try { await excluirBackupNuvem(listaDe.value,item); listaNuvem.value=await listarBackupsNuvem(listaDe.value,{restaurar:true}); avisar('Cópia excluída; outra cópia recuperável foi preservada.',{tipo:'ok'}); }
+  catch(e){erro.value=e.message;}finally{trabalhando.value=false;}
 }
 async function restaurarAgora() {
   erro.value = ''; trabalhando.value = true;
@@ -85,6 +91,8 @@ onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
 <template>
   <div class="pagina" :class="{ embutido }">
     <h1 v-if="!embutido" class="titulo-pagina">Dados e backup</h1>
+    <p class="dica" data-drive-oculto>Backups no Google Drive<AjudaSecao titulo="Cópias do Google Drive" :texto="['Os backups novos ficam na área oculta do app. Mantemos até quatro cópias após testar a recuperação da nova cópia.', 'Uma cópia só pode ser excluída depois de validar outra em um banco descartável. Se o teste não puder ser concluído, as cópias são preservadas e o limite pode ser excedido.', 'A pasta antiga e as cópias oficiais são somente leitura nesta prévia. Excluir os dados ocultos nas configurações do Google apaga as cópias, fora da proteção do app. Mantenha também uma cópia .sfin exportada.']" /></p>
+    <p v-if="estadoNuvem.google.avisoRetencao" class="dica" role="status">{{ estadoNuvem.google.avisoRetencao }}</p>
 
     <p v-if="riscoArmazenamento" class="faixa alerta" role="alert"><TriangleAlert :size="18" /><span>{{ riscoArmazenamento }}</span></p>
     <p v-if="erro" class="faixa erro" role="alert"><TriangleAlert :size="18" /><span>{{ erro }}</span></p>
@@ -105,24 +113,9 @@ onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
 
     <CardPadrao id="sec-restaurar" titulo="Restaurar backup" subtitulo="Substitui ou mescla com os dados deste aparelho">
       <OrigemBackup modo="restaurar" :ocupado="trabalhando || !!estadoNuvem.ocupado" @arquivo="abrirArquivo" @nuvem="restaurarNuvem" />
-      <ul v-if="listaNuvem.length" class="lista-n">
-        <li v-for="i in listaNuvem" :key="i.id"><button type="button" data-backup-item @click="escolherDaNuvem(i)"><span>{{ i.nome }}</span><small>{{ kb(i.tamanho) }}</small></button></li>
-      </ul>
-      <p v-if="arq" class="dica">Arquivo: <b>{{ arq.nome }}</b></p>
-      <template v-if="arq && arq.cifrado">
-        <label class="campo-col"><span>Senha do backup ou código de recuperação</span><input v-model="senhaArq" type="password" autocomplete="off" @keyup.enter="verPrevia" /></label>
-        <div class="linha-botoes"><button type="button" class="b-sec" :disabled="!senhaArq || trabalhando" @click="verPrevia">Abrir backup</button></div>
-      </template>
-      <div v-if="pre" class="previa">
-        <b>Este backup contém</b>
-        <ul><li v-for="r in resumo" :key="r">{{ r }}</li><li v-if="!resumo.length">Nenhum registro</li></ul>
-        <small>Criado em {{ fmt(pre.criado_em) }}</small>
-        <div class="modo">
-          <label><input v-model="modo" type="radio" value="substituir" /> <b>Substituir</b> os dados deste aparelho (guarda uma cópia de segurança antes)</label>
-          <label><input v-model="modo" type="radio" value="mesclar" /> <b>Mesclar</b>: junta com o que já existe (vale o registro mais recente)</label>
-        </div>
-        <button type="button" class="b-prim" :disabled="trabalhando || ocupado" @click="restaurarAgora">{{ trabalhando ? 'Restaurando…' : 'Restaurar agora' }}</button>
-      </div>
+      <p v-if="trabalhando" class="dica" role="status">Conferindo a operação… aguarde.</p>
+      <ListaBackups v-if="listaNuvem.length" :itens="listaNuvem" :ocupado="trabalhando" :permitir-excluir="listaDe === 'google'" @selecionar="escolherDaNuvem" @excluir="excluirCopia" />
+      <RestaurarBackupModal :arquivo="arq" :executando="trabalhando" :erro-executar="erro" permitir-mesclar @fechar="arq=null;pre=null;erro=''" @restaurar="receberRestauro" />
       <button v-if="copiaEm" type="button" class="b-sec" :disabled="trabalhando" @click="desfazer"><Undo2 :size="16" /> Desfazer última restauração ({{ fmt(copiaEm) }})</button>
     </CardPadrao>
 
@@ -130,12 +123,8 @@ onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
       <label class="campo-linha"><span>Lembrar de fazer backup</span>
         <select v-model="configBackup.intervalo" @change="mudou"><option v-for="i in INTERVALOS" :key="i.id" :value="i.id">{{ i.rotulo }}</option></select>
       </label>
-      <label v-if="conectadas.length" class="campo-linha"><span>Enviar sozinho à nuvem quando der a hora</span>
-        <input v-model="configBackup.automatico" type="checkbox" @change="mudou" />
-      </label>
-      <label v-if="conectadas.length" class="campo-linha"><span>Backups mantidos na nuvem</span>
-        <select v-model.number="configBackup.manter" @change="mudou"><option :value="5">5</option><option :value="10">10</option><option :value="30">30</option></select>
-      </label>
+      <p class="dica">No prazo escolhido, você confirma o backup usando o último destino. “Agora não” dispensa a confirmação até a próxima abertura do app. Com o app fechado, não há garantia de lembrete; o prazo é conferido ao abrir ou voltar ao app.</p>
+      <p v-if="conectadas.includes('google')" class="dica">Até 4 cópias recentes no Google Drive. A última cópia recuperável é protegida pelo teste de recuperação.</p>
       <label class="campo-linha"><span>Cifrar com a senha de acesso</span>
         <input v-model="configBackup.criptografar" type="checkbox" @change="mudou" />
       </label>

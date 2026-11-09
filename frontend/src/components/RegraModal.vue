@@ -26,10 +26,11 @@ const contas = ref([]);
 const metas = ref([]);
 const ativos = ref([]);
 const sugestoesSub = ref([]);
+const ehTransferencia = computed(() => f.value.tipo === 'transferencia');
 const ehReserva = computed(() => f.value.tipo === 'reserva');
 const destinoMeta = computed(() => f.value.destino === 'guardar' || f.value.destino === 'resgatar');
 const temaForm = computed(() => (ehReserva.value ? (destinoMeta.value ? 'meta' : 'investimento') : f.value.tipo));
-const TIPOS = [{ id: 'saida', rotulo: 'Saída', tema: 'saida' }, { id: 'entrada', rotulo: 'Entrada', tema: 'entrada' }, { id: 'reserva', rotulo: 'Metas e invest.', tema: 'meta' }];
+const TIPOS = [{ id: 'transferencia', rotulo: 'Transferências', tema: 'entrada' }, { id: 'saida', rotulo: 'Saída', tema: 'saida' }, { id: 'entrada', rotulo: 'Entrada', tema: 'entrada' }, { id: 'reserva', rotulo: 'Metas e invest.', tema: 'meta' }];
 const DESTINOS = [{ id: 'guardar', rotulo: 'Guardar', tema: 'meta' }, { id: 'resgatar', rotulo: 'Resgatar', tema: 'meta' }, { id: 'aporte', rotulo: 'Aporte', tema: 'investimento' }, { id: 'resgate_inv', rotulo: 'Resgate', tema: 'investimento' }];
 async function carregarReserva() {
   try {
@@ -58,7 +59,7 @@ watch(() => props.aberto, async (a) => {
     aplicar: !i.id,
     destino: i.destino || 'guardar', metaId: i.metaId || '', ativoId: i.ativoId || '',
   };
-  if (i.tipo === 'reserva') f.value.tipo = 'reserva';
+  if (['reserva', 'transferencia'].includes(i.tipo)) f.value.tipo = i.tipo;
   erro.value = ''; previa.value = null;
   carregarReserva();
   try { const r = await fetch('/api/contas', { credentials: 'include' }); contas.value = r.ok ? await r.json() : []; } catch { contas.value = []; }
@@ -115,7 +116,7 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" ajuda="regras" :titulo="editando ? 'Editar regra' : ehReserva ? 'Nova regra de meta ou investimento' : 'Nova regra de categoria'" :tema="temaForm" :rotulo-salvar="editando ? 'Salvar' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
+  <FormularioModal :aberto="aberto" ajuda="regras" :titulo="editando ? 'Editar regra' : ehTransferencia ? 'Nova regra de transferência' : ehReserva ? 'Nova regra de meta ou investimento' : 'Nova regra de categoria'" :tema="temaForm" :rotulo-salvar="editando ? 'Salvar' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
     <div v-if="editando" class="estado" :class="{ pausada: !ativa }">
       <span><b>{{ ativa ? 'Regra ativa' : 'Regra pausada' }}</b><small>{{ ativa ? 'Categoriza os próximos lançamentos.' : 'Não categoriza nada até ser ativada.' }}</small></span>
       <button type="button" class="alternar" @click="emit('alternar', inicial)">
@@ -123,13 +124,14 @@ async function salvar() {
       </button>
     </div>
     <CampoTipo v-if="!tipoFixo" v-model="f.tipo" :opcoes="TIPOS" />
-    <CampoTexto v-model="f.padrao" rotulo="Quando o nome contiver" :placeholder="ehReserva ? 'Ex: APLICACAO RDB, COMPRA MXRF11' : 'Ex: Padaria do José'" obrigatorio :tema="temaForm" />
+    <CampoTexto v-model="f.padrao" :rotulo="ehTransferencia ? 'Nome completo do titular' : 'Quando o nome contiver'" :placeholder="ehReserva ? 'Ex: APLICACAO RDB, COMPRA MXRF11' : 'Ex: Padaria do José'" obrigatorio :tema="temaForm" />
     <template v-if="ehReserva">
       <CampoTipo v-model="f.destino" rotulo="O que a regra faz" :opcoes="DESTINOS" />
       <CampoSelecao v-if="destinoMeta" v-model="f.metaId" :rotulo="f.destino === 'guardar' ? 'Guardar na meta' : 'Resgatar da meta'" :opcoes="[{ valor: '', rotulo: 'Escolha a meta' }, ...metas.map((m) => ({ valor: m.id, rotulo: m.nome }))]" tema="meta" />
       <CampoSelecao v-else v-model="f.ativoId" :rotulo="f.destino === 'aporte' ? 'Aporte no investimento' : 'Resgate do investimento'" :opcoes="[{ valor: '', rotulo: ativos.length ? 'Escolha o investimento' : 'Cadastre um investimento em Objetivos' }, ...ativos.map((a) => ({ valor: a.id, rotulo: a.ticker || a.nome }))]" tema="investimento" />
       <p class="nota">{{ f.destino === 'guardar' ? 'Saídas com esse nome viram Guardar na meta.' : f.destino === 'resgatar' ? 'Entradas com esse nome viram Resgatar da meta; o que passar do guardado vira Rendimento.' : f.destino === 'aporte' ? 'Saídas com esse nome viram aporte no investimento.' : 'Entradas com esse nome viram resgate do investimento.' }} Não contam como entrada nem saída.</p>
     </template>
+    <p v-else-if="ehTransferencia" class="nota">Use o nome completo do titular em “Quando o nome contiver”. PIX ou esse nome geram um aviso, inclusive fora da regra exata. Nada é convertido sem sua confirmação.</p>
     <template v-else>
       <CampoCategoria v-if="f.tipo === 'saida'" :key="'s'" v-model="f.categoriaId" tipo="saida" :tema="f.tipo" rotulo="Vai para a categoria" />
       <CampoCategoria v-else :key="'e'" v-model="f.categoriaReceita" tipo="entrada" :tema="f.tipo" rotulo="Vai para a categoria" />
@@ -142,7 +144,7 @@ async function salvar() {
       <CampoValor v-model="f.valorMin" :tipo="ehReserva ? 'saida' : f.tipo" rotulo="De" />
       <CampoValor v-model="f.valorMax" :tipo="ehReserva ? 'saida' : f.tipo" rotulo="Até" />
     </div>
-    <label class="opcao"><input v-model="f.aplicar" type="checkbox" /> Aplicar às transações antigas</label>
+    <label v-if="!ehTransferencia" class="opcao"><input v-model="f.aplicar" type="checkbox" /> Aplicar às transações antigas</label>
     <p v-if="previa" class="previa" role="status">{{ previa.quantidade === 0 ? (ehReserva ? 'Nenhum lançamento antigo combina.' : 'Nenhum lançamento antigo muda de categoria.') : `${previa.quantidade} ${previa.quantidade === 1 ? 'lançamento antigo' : 'lançamentos antigos'} ${f.aplicar ? (previa.quantidade === 1 ? 'será movido' : 'serão movidos') : (previa.quantidade === 1 ? 'poderia ser movido' : 'poderiam ser movidos')} ${ehReserva ? 'para este destino' : 'para esta categoria'}` }}{{ previa.exemplos && previa.exemplos.length ? ` (ex.: ${previa.exemplos.slice(0, 2).join(', ')})` : '' }}.</p>
     <template v-if="editando" #extra>
       <button type="button" class="sf-botao secundario excluir" :disabled="salvando" @click="emit('excluir', inicial)"><Trash2 :size="16" :stroke-width="2" aria-hidden="true" /> Excluir</button>

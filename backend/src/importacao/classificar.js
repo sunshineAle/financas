@@ -162,6 +162,8 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       });
   }
 
+  const TR = require('../utils/transferenciasRevisao');
+  const ctxTR = TR.contexto(usuarioId);
   const saida = linhas.map((l) => {
     const r = {
       idx: l.idx, data: l.data, descricao: l.descricao, valor: l.valor, fitid: l.fitid || null, confianca: l.confianca,
@@ -263,6 +265,13 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       r.status = 'reserva'; r.reserva = { rotulo: rv.rotulo, sentido: rv.sentido, produto: rv.produto };
       r.categoriaId = null; r.categoriaNome = null; r.categoriaAuto = false;
       r.observacao = `${rv.rotulo}: depois de importar, você pode vincular a uma meta.`;
+      return r;
+    }
+    const suspeita = TR.sugerir({ ...l, conta_id: conta.id }, ctxTR);
+    if (suspeita) {
+      r.suspeitaTransferencia = suspeita;
+      r.revisar = true;
+      r.observacao = suspeita.motivo;
       return r;
     }
     // Pix/TED para conta própria vira transferência

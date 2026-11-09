@@ -151,6 +151,7 @@ function gravarConta(ctx, conta, linhas, corpo) {
   const inseridas = new Map();
   const E = integ.lancamentos();
   const caixinhasAVincular = [];
+  const revisarTransferencias = [];
 
   for (const l of linhas) {
     const valor = arred(Number(l.valor));
@@ -189,6 +190,7 @@ function gravarConta(ctx, conta, linhas, corpo) {
     registrar(importacao.id, 'transacoes', t.id, formato, 'inserido', null);
     inseridas.set(l.idx, t);
     resultado.novas++;
+    if (l.decisaoTransferencia) revisarTransferencias.push({ id: t.id, decisao: l.decisaoTransferencia });
 
     if (l.status === 'reserva' && l.reserva && l.reserva.caixinha) {
       // Anotação 56: caixinha ligada a meta. Com meta escolhida, vincula depois do laço (em ordem de data); sem meta, fica
@@ -299,6 +301,14 @@ function gravarConta(ctx, conta, linhas, corpo) {
     const banco = arred(Number(corpo.saldoExtrato.valor));
     if (Math.abs(noApp - banco) > 0.009) resultado.conferenciaSaldo = { data: dia || null, banco, app: noApp, diferenca: arred(banco - noApp), contaId: conta.id };
   }
+  for (const { id, decisao } of revisarTransferencias) {
+    try {
+      require('../utils/transferenciasRevisao').decidir(usuarioId, id, decisao);
+      if (decisao.acao === 'vincular') resultado.transferencias++;
+    }
+    catch (e) { resultado.avisos.push(`Transferência pendente: ${e.message}`); }
+  }
+
 }
 
 // ------------------------------------------------------------------------------------------- fatura
