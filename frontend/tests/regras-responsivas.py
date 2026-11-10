@@ -33,7 +33,10 @@ with sync_playwright() as pw:
         assert 'Regra antiga editada' not in texto
         adicionar=bloco.get_by_role('button',name='Adicionar em Regras de transferência',exact=True)
         pos=adicionar.bounding_box();titulo=bloco.locator('h2').bounding_box()
-        assert pos['x'] < titulo['x'] and abs(pos['y']-titulo['y']) < 5
+        cab=bloco.locator('.cab-bloco').bounding_box()
+        assert pos['x'] > titulo['x'] and abs(pos['y']-titulo['y']) < 5
+        assert abs((pos['x']+pos['width'])-(cab['x']+cab['width'])) < 2
+        assert pos['width'] >= 44 and pos['height'] >= 44
         cols=page.locator('.grade-regras').evaluate("e=>getComputedStyle(e).gridTemplateColumns.split(' ').length")
         assert cols == (1 if width==390 else 2)
         ver=bloco.get_by_role('button',name=re.compile('Ver todas as regras'))
@@ -56,8 +59,8 @@ with sync_playwright() as pw:
         if not vazio.locator('.regra-item').count():
             expect(vazio.get_by_role('button',name=re.compile('Ver todas as regras'))).to_be_disabled()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        page.screenshot(path=f'/tmp/regras-85-{width}.png',full_page=True)
+        page.screenshot(path=f'/tmp/regras-92-{width}.png',full_page=True)
         assert not erros,erros
-        print(f'PASS Regras em {width}px: três por criação, edição não reordena, lista completa, retorno e foco, + por tipo, sem overflow')
+        print(f'PASS Regras em {width}px: três por criação, edição não reordena, lista completa, retorno e foco, + na extremidade oposta por tipo, sem overflow')
         contexto.close()
     browser.close()

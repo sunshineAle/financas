@@ -5,6 +5,7 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import Modal from './Modal.vue';
+import TourExemplos from './TourExemplos.vue';
 import { marcarNovidadesVistas } from '../services/novidades.js';
 import TEMPOS from '../../public-pwa/tours/tempos.json';
 import { TOURS, tourAberto, chaveDaRota, jaVisto, marcarVisto, toursLigados, ligarTours, temJanelaAberta, precisaOQueMudou, ehContaNova } from '../services/tour.js';
@@ -30,8 +31,12 @@ function aoCarregarAnim() {
     passo.value = Math.min(i, tour.value.passos.length - 1);
   }, 200);
 }
-function escolherPasso(i) { manual = true; passo.value = i; }
+function escolherPasso(i) {
+  manual = true; passo.value = i;
+  if (tourIlustrado.value) requestAnimationFrame(() => document.querySelector('[data-tour]')?.closest('.corpo-modal')?.scrollTo({ top: 0, behavior: 'auto' }));
+}
 const tour = computed(() => (tourAberto.value ? TOURS[tourAberto.value] : null));
+const tourIlustrado = computed(() => ['regras', 'revisar'].includes(tourAberto.value));
 const ultimo = computed(() => tour.value && passo.value >= tour.value.passos.length - 1);
 watch(tourAberto, () => { passo.value = 0; manual = false; animOk.value = true; pararRelogio(); });
 
@@ -63,21 +68,22 @@ function concluir() {
   tourAberto.value = null;
   setTimeout(() => tentar(), 600); // ex.: depois do geral, o do Início
 }
-function seguir() { if (ultimo.value) concluir(); else { manual = true; passo.value++; } }
+function seguir() { if (ultimo.value) concluir(); else escolherPasso(passo.value + 1); }
 function responderDicas(sim) { ligarTours(sim); if (!sim) marcarVisto('geral'); concluir(); }
 </script>
 
 <template>
-  <Modal :aberto="!!tour" :titulo="tour ? tour.titulo : ''" tema="neutro" :largura="620" @fechar="concluir">
-    <div v-if="tour" class="tour" data-tour :data-tour-chave="tourAberto">
-      <figure v-if="animOk" class="anim">
+  <Modal :aberto="!!tour" :titulo="tour ? tour.titulo : ''" tema="neutro" :largura="tourIlustrado ? 900 : 620" @fechar="concluir">
+    <div v-if="tour" class="tour" :class="{ ilustrado: tourIlustrado }" data-tour :data-tour-chave="tourAberto">
+      <TourExemplos v-if="tourIlustrado" :key="tourAberto" :chave="tourAberto" :passo="passo" @passo="escolherPasso" />
+      <figure v-else-if="animOk" class="anim">
         <img :key="srcAnim" :src="srcAnim" :alt="`Animação: ${tour.titulo}, passo a passo`" width="300" @load="aoCarregarAnim" @error="animOk = false" />
       </figure>
       <ol class="passos">
-        <li v-for="(p, i) in tour.passos" :key="i" :class="{ atual: i === passo, feito: i < passo }" @click="escolherPasso(i)">
+        <li v-for="(p, i) in tour.passos" :key="i"><button type="button" class="passo-botao" :class="{ atual: i === passo, feito: i < passo }" :aria-current="i === passo ? 'step' : undefined" :aria-label="`Passo ${i + 1}: ${p.titulo}`" @click="escolherPasso(i)">
           <span class="num" aria-hidden="true"><component :is="p.icone" :size="18" :stroke-width="2" /></span>
           <span class="txt"><b><small>{{ i + 1 }}.</small> {{ p.titulo }}</b><span>{{ p.texto }}</span></span>
-        </li>
+        </button></li>
       </ol>
       <p v-if="tour.mudou && ultimo" class="pergunta">Mostrar as dicas de cada página na primeira visita?</p>
     </div>
@@ -103,9 +109,11 @@ function responderDicas(sim) { ligarTours(sim); if (!sim) marcarVisto('geral'); 
 @media (min-width: 769px) { .tour { display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: start; gap: 16px; } .anim { width: 200px; } .pergunta { grid-column: 1 / -1; } }
 @media (max-height: 700px) { .anim { width: min(100%, 130px); } }
 .passos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.passos li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; border-radius: 14px; border: 1px solid transparent; cursor: pointer; opacity: .55; transition: opacity var(--anim-rapida, .15s) ease, background var(--anim-rapida, .15s) ease, border-color var(--anim-rapida, .15s) ease; }
-.passos li.feito { opacity: .8; }
-.passos li.atual { opacity: 1; background: var(--cor-card); border-color: color-mix(in srgb, var(--cor-primaria) 45%, var(--cor-borda)); }
+.passos button { width: 100%; background: transparent; color: inherit; font: inherit; text-align: left; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; border-radius: 14px; border: 1px solid transparent; cursor: pointer; opacity: .55; transition: opacity var(--anim-rapida, .15s) ease, background var(--anim-rapida, .15s) ease, border-color var(--anim-rapida, .15s) ease; }
+.passos button.feito { opacity: .8; }
+.passos button.atual { opacity: 1; background: var(--cor-card); border-color: color-mix(in srgb, var(--cor-primaria) 45%, var(--cor-borda)); }
+.passo-botao:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 2px; }
+@media (min-width: 769px) { .tour.ilustrado { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
 .num { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); }
 .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .txt b { font: 600 15px var(--fonte-display); color: var(--cor-texto); }
@@ -116,5 +124,5 @@ function responderDicas(sim) { ligarTours(sim); if (!sim) marcarVisto('geral'); 
 .b-sec, .b-prim { min-height: 44px; padding: 0 18px; border-radius: 12px; font: 600 15px var(--fonte-texto); cursor: pointer; }
 .b-sec { background: none; border: 1px solid var(--cor-borda); color: var(--cor-texto); }
 .b-prim { flex: 1; max-width: 220px; border: none; color: #fff; background: linear-gradient(135deg, #5e18d8, #1597a8); }
-@media (prefers-reduced-motion: reduce) { .passos li { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .passos button { transition: none; } }
 </style>

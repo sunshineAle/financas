@@ -10,7 +10,7 @@ import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApeli
   adotarMestra, codigoValido, acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
 import AvisoSenha from '../components/AvisoSenha.vue';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
-import { jaInstalado, instalarApp } from '../services/instalacao.js';
+import { jaInstalado, instalarApp, ehApple } from '../services/instalacao.js';
 import InstrucoesInstalacao from '../components/InstrucoesInstalacao.vue';
 import { perfil } from '../services/perfil.js';
 import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem, guardarMestraParaAdotar, adotarMestraGuardada, descartarMestraGuardada } from '../services/backup.js';
@@ -242,7 +242,7 @@ async function restaurarAgora() {
     const nome = String(dados.perfil?.nome || dados.usuario?.nome || 'Eu').trim().slice(0, 30) || 'Eu';
     // Um código de recuperação não deve virar a senha de acesso. Backups sem cifra também pedem uma senha nova.
     const podeReusar = arquivo.value.cifrado && !codigoValido(senhaBackup.value) && !validarNovaSenha(senhaBackup.value);
-    await guardarMestraParaAdotar();
+    await guardarMestraParaAdotar(dados);
     await restaurar(dados, 'substituir');
     Object.assign(perfil, { nome, email: '', foto: '', cor: 'azul', ...(dados.perfil || {}), nome });
     localStorage.setItem('sf:perfil', JSON.stringify({ ...perfil }));
@@ -274,7 +274,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
       <div ref="orbeRef" class="orbe-entrada"><MarcaDagda completa /></div>
       <template v-if="boasVindas">
         <template v-if="!jaInstalado">
-          <button type="button" class="instalar" @click="instalar"><Download :size="18" :stroke-width="2" /> {{ ehPrevia ? 'Como instalar o app' : 'Instalar o app' }}</button>
+          <button type="button" class="instalar" @click="instalar"><Download :size="18" :stroke-width="2" /> {{ ehApple() ? 'Como instalar' : 'Instalar aplicativo' }}</button>
         </template>
       </template>
     </section>
@@ -286,7 +286,6 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <button v-if="PROVEDORES.google.configurado()" type="button" :disabled="carregando" @click="entrarNuvem('google')">{{ carregando ? 'Buscando backups…' : 'Entrar com Google' }}</button>
         <span class="texto-cadastro">Com a senha do seu backup.<AjudaSecao titulo="Restaurar pelo Google" :texto="['O Google localiza suas cópias na área oculta e na pasta antiga Dagda Capital. Isso não substitui a senha do backup.', 'Os arquivos antigos são preservados. Nenhum novo cadastro é necessário para restaurar.']" /></span>
         <button type="button" class="restaurar" @click="folha = true">Restaurar meu Dagda</button>
-        <button v-if="ehPrevia" type="button" class="secundario" @click="abrirDemo">Testar com dados fictícios</button>
         <button type="button" class="link" @click="modo = 'criar'">Criar acesso novo</button>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
       </div>
@@ -318,8 +317,6 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando || espera > 0 || (ehPinAcesso && senha.length < 4)">{{ carregando ? 'Aguarde…' : 'Entrar' }}</button>
-        <button v-if="PROVEDORES.google.configurado()" type="button" class="secundario" :disabled="carregando" @click="entrarNuvem('google')">Entrar com Google</button>
-        <button v-if="ehPrevia" type="button" class="secundario" @click="abrirDemo">Testar com dados fictícios</button>
         <div class="links-ajuda">
           <button type="button" class="link" @click="abrirCodigo"><KeyRound :size="16" :stroke-width="2" /> Esqueci a senha</button>
           <span aria-hidden="true">·</span>
@@ -390,7 +387,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
         <p v-if="origemRestauro" class="origem">Origem: {{ origemRestauro }}</p>
         <p v-if="nuvemRestauro" class="origem" data-backup-recente>Backup escolhido: {{ fmtData(nuvemRestauro.data) }}</p>
-        <ListaBackups v-if="backupsEncontrados.length" :itens="backupsEncontrados" :ocupado="carregando" @selecionar="selecionarBackup" />
+        <ListaBackups contexto-entrada v-if="backupsEncontrados.length" :itens="backupsEncontrados" :ocupado="carregando" @selecionar="selecionarBackup" />
         <label v-if="!provedorEscolhido" class="campo">
           <span>Arquivo de backup</span>
           <input type="file" @change="escolher" />

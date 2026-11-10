@@ -1,7 +1,7 @@
 // Convite nativo onde disponível; Apple e navegadores sem convite recebem passos em janela própria.
 import { ref } from 'vue';
-import { ehAppleMovel, orientacaoInstalacao } from './instalacaoOrientacoes.js';
-export { orientacaoInstalacao };
+import { ehAppleMovel, ehApple, orientacaoInstalacao } from './instalacaoOrientacoes.js';
+export { ehApple, orientacaoInstalacao };
 export const ehIOS = ehAppleMovel;
 export const standalone = () => {
   try { return !!window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true; } catch { return false; }

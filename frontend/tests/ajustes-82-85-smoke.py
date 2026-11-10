@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright, expect
 from urllib.parse import urlparse, parse_qs
 import os
 URL = os.environ.get('DAGDA_TEST_URL', 'http://127.0.0.1:8001/').split('?')[0]
-SDK = """window.google={accounts:{oauth2:{initTokenClient(opts){return{requestAccessToken(){opts.callback({access_token:'teste-ficticio',expires_in:3600})}}},revoke(t,cb){cb()}}}};"""
+SDK = """window.google={accounts:{oauth2:{initTokenClient(opts){return{requestAccessToken(){opts.callback({access_token:'teste-ficticio',expires_in:3600,scope:opts.scope})}}},revoke(t,cb){cb()}}}};"""
 
 def sem_tour(page):
     page.evaluate("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}))")
@@ -26,7 +26,7 @@ def testar_apple_opcoes(browser):
         page = ctx.new_page(); erros=[]
         page.on('pageerror',lambda e:erros.append(str(e)))
         page.goto(URL,wait_until='networkidle')
-        botao=page.get_by_role('button',name='Como instalar o app',exact=True)
+        botao=page.get_by_role('button',name=('Instalar aplicativo' if nome == 'Android Chrome' else 'Como instalar'),exact=True)
         expect(botao).to_be_visible();botao.click()
         modal=page.get_by_role('dialog',name=titulo,exact=True)
         expect(modal).to_be_visible();expect(modal.locator('[data-instalacao-previa]')).to_contain_text('não será instalada')

@@ -37,9 +37,10 @@ export const TOURS = {
     { icone: Filter, titulo: 'Subcategorias', texto: 'Filtre as transações pela subcategoria.' },
   ] },
   revisar: { titulo: 'Como usar o A revisar', passos: [
-    { icone: CircleHelp, titulo: 'O que é', texto: 'Guardar e resgatar do extrato que o app não soube ligar a uma meta.' },
-    { icone: CheckCheck, titulo: 'Decida', texto: 'Escolha a meta (e o rendimento, no resgate) e toque em Vincular.' },
-    { icone: WandSparkles, titulo: 'Vire regra', texto: 'Da próxima vez o app faz sozinho.' },
+    { icone: ArrowRightLeft, titulo: 'Transferência entre contas', texto: 'Confira as duas contas, o titular e o valor exato. Vincular confirma o par; Não é transferência mantém o lançamento sem conversão.' },
+    { icone: Tags, titulo: 'Despesa sem categoria', texto: 'Escolha a categoria e Salvar. A compra já está no extrato: revisar não deve lançá-la outra vez.' },
+    { icone: ReceiptText, titulo: 'Pagamento de dívida', texto: 'Uma parcela pode chegar sem categoria. Aqui você confere a classificação; Salvar não vincula, reduz nem quita a dívida.' },
+    { icone: PiggyBank, titulo: 'Guardar e resgatar', texto: 'Vincule o movimento à meta. No resgate, separe o que já era seu do rendimento; De fora e Entrada dependem da origem do dinheiro.' },
   ] },
   compromissos: { titulo: 'Como usar Compromissos', passos: [
     { icone: ReceiptText, titulo: 'Total a pagar', texto: 'Faturas abertas mais as parcelas de dívidas deste mês.' },
@@ -82,9 +83,10 @@ export const TOURS = {
     { icone: ChartPie, titulo: 'Detalhes', texto: 'Toque numa parte do gráfico para ver o que tem nela.' },
   ] },
   regras: { titulo: 'Como usar Regras', passos: [
-    { icone: WandSparkles, titulo: 'Trecho → categoria', texto: 'Ensine o app a categorizar pelo nome que aparece no extrato.' },
-    { icone: Hand, titulo: 'Arraste', texto: 'Para a esquerda pausa; para a direita exclui.' },
-    { icone: Target, titulo: 'Metas e investimentos', texto: 'Uma regra também pode guardar numa meta ou registrar um aporte.' },
+    { icone: WandSparkles, titulo: 'Blocos com exemplos', texto: 'Despesas, entradas, transferências e metas ficam em blocos. Cada um mostra até três regras adicionadas mais recentemente.' },
+    { icone: Plus, titulo: 'Adicionar no +', texto: 'O + no cabeçalho já escolhe o tipo do bloco. Informe o nome que vem no extrato e o destino da regra.' },
+    { icone: ListOrdered, titulo: 'Ver todas as regras', texto: 'A lista completa abre numa janela da própria página. Editar uma regra antiga não muda sua data de criação.' },
+    { icone: Hand, titulo: 'Editar, pausar ou excluir', texto: 'Toque na regra para editar. Arrastar à esquerda pausa; à direita exclui. Pausar não apaga a regra nem as transações.' },
   ] },
   'custos-fixos': { titulo: 'Como usar o Custo de vida', passos: [
     { icone: CalendarDays, titulo: 'Mês financeiro', texto: 'Quando o seu mês começa (no menu, Início do mês).' },
@@ -110,13 +112,15 @@ export const NOMES_TOUR = {
 };
 
 const CHAVE = 'sf:tours';
+// Os tours revistos podem aparecer uma vez para quem mantém as dicas ligadas.
+const chaveVista = chave => ['regras', 'revisar'].includes(chave) ? `${chave}:ilustrado-2` : chave;
 function ler() { try { return { vistos: [], ligado: true, ...(JSON.parse(localStorage.getItem(CHAVE) || '{}')) }; } catch { return { vistos: [], ligado: true }; } }
 function gravar(e) { try { localStorage.setItem(CHAVE, JSON.stringify(e)); } catch { /* ignora */ } }
 export const tourAberto = ref(null); // chave do tour na tela
 export const toursLigados = () => ler().ligado;
 export function ligarTours(sim) { const e = ler(); e.ligado = !!sim; gravar(e); }
-export const jaVisto = (chave) => ler().vistos.includes(chave);
-export function marcarVisto(chave) { const e = ler(); if (!e.vistos.includes(chave)) e.vistos.push(chave); gravar(e); }
+export const jaVisto = chave => ler().vistos.includes(chaveVista(chave));
+export function marcarVisto(chave) { const e = ler(); const id = chaveVista(chave); if (!e.vistos.includes(id)) e.vistos.push(id); gravar(e); }
 export function reverTour(chave) { tourAberto.value = chave; }
 
 // Rota → tour

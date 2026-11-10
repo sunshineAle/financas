@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 import tempfile, os, json, re
 URL=os.environ.get('DAGDA_TEST_URL','http://127.0.0.1:8003/').split('?')[0]
-SDK="""window.google={accounts:{oauth2:{initTokenClient(o){return{requestAccessToken(){o.callback({access_token:'simulado',expires_in:3600})}}},revoke(t,cb){cb()}}}};"""
+SDK="""window.google={accounts:{oauth2:{initTokenClient(o){return{requestAccessToken(){o.callback({access_token:'simulado',expires_in:3600,scope:o.scope})}}},revoke(t,cb){cb()}}}};"""
 def api(p,url):return p.evaluate('async u=>(await(await fetch(u)).json())',url)
 with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  b=pw.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
@@ -25,20 +25,19 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  p.locator('[data-arquivo-backup]').set_input_files(arq)
  modal=p.get_by_role('dialog',name='Restaurar backup',exact=True);expect(modal).to_be_visible()
  modal.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao')
- modal.get_by_role('button',name='Conferir backup',exact=True).click()
  expect(modal.locator('[data-resultado-validacao]')).to_be_visible(timeout=30000)
  assert api(p,'/api/backup/exportar')['tabelas']==antes
  assert 'demonstracao' not in texto and 'Demonstração' not in texto
  modal.get_by_role('button',name='Voltar',exact=True).click()
  ruim=Path(tmp)/'corrompido.sfin';env=json.loads(texto);env['dados']='AAAA';ruim.write_text(json.dumps(env))
  p.locator('[data-arquivo-backup]').set_input_files(ruim);expect(modal).to_be_visible()
- modal.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao');modal.get_by_role('button',name='Conferir backup',exact=True).click()
+ modal.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao');
  expect(modal.get_by_role('alert')).to_be_visible();assert not modal.locator('[data-resultado-validacao]').count()
  assert api(p,'/api/backup/exportar')['tabelas']==antes
  modal.get_by_role('button',name='Voltar',exact=True).click()
  # JSON que pode ser lido mas não restaurado deve falhar no SQLite descartável.
  ruim.write_text(json.dumps({'sfin':1,'dados':{'formato':'sfin-dados','versao_esquema':1,'tabelas':{'contas':[{'id':'sem-nome'}]}}}))
- p.locator('[data-arquivo-backup]').set_input_files(ruim);expect(modal).to_be_visible();modal.get_by_role('button',name='Conferir backup',exact=True).click()
+ p.locator('[data-arquivo-backup]').set_input_files(ruim);expect(modal).to_be_visible();
  expect(modal.get_by_role('alert')).to_be_visible(timeout=30000);assert not modal.locator('[data-resultado-validacao]').count()
  assert api(p,'/api/backup/exportar')['tabelas']==antes
  modal.get_by_role('button',name='Voltar',exact=True).click()
@@ -115,7 +114,6 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  q.get_by_role('button',name='Restaurar meu Dagda',exact=True).click();q.locator('[data-arquivo-backup]').set_input_files(pin)
  rest=q.get_by_role('dialog',name='Restaurar backup',exact=True)
  rest.get_by_placeholder('Senha da época do backup ou o código').fill('2468')
- rest.get_by_role('button',name='Conferir backup',exact=True).click()
  expect(rest.locator('[data-resultado-validacao]')).to_be_visible(timeout=30000)
  rest.get_by_role('button',name='Restaurar e continuar',exact=True).click()
  expect(q.get_by_role('heading',name='Olá, Demonstração',exact=True)).to_be_visible(timeout=15000)

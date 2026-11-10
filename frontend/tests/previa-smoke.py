@@ -5,7 +5,7 @@ import json, os, tempfile
 from urllib.parse import urlparse, parse_qs
 URL = os.environ.get('DAGDA_TEST_URL', 'http://127.0.0.1:8001/')
 ERROS = []
-SDK = """window.google={accounts:{oauth2:{initTokenClient(opts){window.__escopoTeste=opts.scope;return{requestAccessToken(){opts.callback({access_token:'token-simulado-teste',expires_in:3600})}}},revoke(t,cb){cb()}}}};"""
+SDK = """window.google={accounts:{oauth2:{initTokenClient(opts){window.__escopoTeste=opts.scope;return{requestAccessToken(){opts.callback({access_token:'token-simulado-teste',expires_in:3600,scope:opts.scope})}}},revoke(t,cb){cb()}}}};"""
 def observar(p):
     p.on('pageerror', lambda e: ERROS.append(str(e)))
 def api(p, method, url, body=None):
@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory(prefix='dagda-smoke-') as tmp, sync_playwright(
     p.goto(URL,wait_until='networkidle')
     expect(p.locator('[data-escolher-acesso]')).to_be_visible()
     expect(p.get_by_role('button',name='Entrar com Google',exact=True)).to_be_visible()
-    p.locator('[data-escolher-acesso]').get_by_role('button',name='Testar com dados fictícios',exact=True).click()
+    p.locator('#exemplo-previa').click()
     expect(p.locator('main')).to_be_visible(timeout=20000)
     sem_tour(p)
     # O tour pode abrir antes de desligar a preferência. Não interfere no produto nem nos dados.
@@ -70,10 +70,8 @@ with tempfile.TemporaryDirectory(prefix='dagda-smoke-') as tmp, sync_playwright(
     p.get_by_role('button',name='Restaurar meu Dagda',exact=True).click()
     p.locator('[data-arquivo-backup]').set_input_files(arquivo)
     p.get_by_placeholder('Senha da época do backup ou o código').fill('errada')
-    p.get_by_role('button',name='Conferir backup',exact=True).click()
     expect(p.get_by_role('alert')).to_contain_text('incorreto')
     p.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao')
-    p.get_by_role('button',name='Conferir backup',exact=True).click()
     expect(p.get_by_role('button',name='Restaurar e continuar')).to_be_visible(timeout=10000)
     p.get_by_role('button',name='Restaurar e continuar').click()
     expect(p.get_by_role('heading',name='Olá, Demonstração')).to_be_visible(timeout=15000)
@@ -106,7 +104,6 @@ with tempfile.TemporaryDirectory(prefix='dagda-smoke-') as tmp, sync_playwright(
     assert 'drive.file' in q.evaluate('window.__escopoTeste')
     q.locator('[data-lista-backups] button').click()
     q.get_by_placeholder('Senha da época do backup ou o código').fill('senha-antiga-ficticia')
-    q.get_by_role('button',name='Conferir backup',exact=True).click()
     expect(q.get_by_role('button',name='Restaurar e continuar')).to_be_visible(timeout=15000)
     q.get_by_role('button',name='Restaurar e continuar').click()
     expect(q.get_by_role('heading',name='Olá, Perfil antigo fictício')).to_be_visible(timeout=15000)

@@ -3,6 +3,9 @@ const ambienteAtual = () => typeof navigator === 'undefined' ? {} : navigator;
 export function ehAppleMovel(ambiente = ambienteAtual()) {
   return /iPhone|iPad|iPod/.test(ambiente.userAgent || '') || (ambiente.platform === 'MacIntel' && ambiente.maxTouchPoints > 1);
 }
+export function ehApple(ambiente = ambienteAtual()) {
+  return ehAppleMovel(ambiente) || /Macintosh|Mac OS X/.test(ambiente.userAgent || '') || ambiente.platform === 'MacIntel';
+}
 export function orientacaoInstalacao(ambiente = ambienteAtual()) {
   const ua = ambiente.userAgent || '';
   if (ehAppleMovel(ambiente)) {
@@ -10,7 +13,7 @@ export function orientacaoInstalacao(ambiente = ambienteAtual()) {
     return {
       titulo: 'Instalar no iPhone ou iPad',
       passos: [
-        ...(outroNavegador ? ['Abra este endereço no Safari. Se estiver dentro de outro aplicativo, copie o endereço e cole no Safari.'] : []),
+        ...(outroNavegador ? ['Para seguir estas instruções no Safari, abra este endereço nele. Se estiver dentro de outro aplicativo, copie o endereço e cole no Safari.'] : []),
         'No Safari, toque em Compartilhar (quadrado com uma seta para cima).',
         'Role as opções e toque em Adicionar à Tela de Início. Se necessário, toque em Editar Ações para encontrar essa opção.',
         'Confirme em Adicionar. Depois, abra o Dagda pelo ícone na Tela de Início.',

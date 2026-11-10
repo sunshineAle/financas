@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { ehAppleMovel, orientacaoInstalacao } from '../src/services/instalacaoOrientacoes.js';
+import { ehAppleMovel, ehApple, orientacaoInstalacao } from '../src/services/instalacaoOrientacoes.js';
 
 test('iPhone recebe passos visíveis de Compartilhar e Adicionar à Tela de Início', () => {
   const a = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1', platform: 'iPhone' };
@@ -17,11 +17,13 @@ test('iPad com identificação de desktop continua recebendo instruções móvei
 });
 test('navegador interno ou Chrome iOS orienta abrir o mesmo endereço no Safari', () => {
   const a = { userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit CriOS/130 Mobile Safari/604.1', platform: 'iPhone' };
-  assert.match(orientacaoInstalacao(a).passos[0], /Abra este endereço no Safari/);
+  assert.match(orientacaoInstalacao(a).passos[0], /instruções no Safari/);
 });
 test('Mac sem toque usa Dock, e Android recebe o menu do navegador', () => {
   const mac = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)', platform: 'MacIntel', maxTouchPoints: 0 };
   assert.equal(ehAppleMovel(mac), false);
+  assert.equal(ehApple(mac), true);
+  assert.equal(ehApple({ userAgent: 'Android Chrome', platform: 'Linux' }), false);
   assert.match(orientacaoInstalacao(mac).passos.join(' '), /Adicionar ao Dock/);
   assert.match(orientacaoInstalacao({ userAgent: 'Android Chrome', platform: 'Linux' }).passos[0], /menu do navegador/);
 });

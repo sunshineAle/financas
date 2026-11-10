@@ -1,7 +1,7 @@
 // Backup do Sistema Financeiro: arquivo .sfin (JSON do estado inteiro, compactado e cifrado com a senha de acesso).
 // Formato e rotas: /home/claude/work-cartoes/CONTRATO-SFIN.md.
 //   import { configBackup, gerarArquivo, baixar, salvarNaPasta, compartilhar, lerArquivo, restaurar, verificarLembrete } from './backup.js';
-import { reactive, ref } from 'vue';
+import { reactive, ref, toRaw } from 'vue';
 import { kvGet, kvSet, kvDel } from './idb.js';
 import { apelidoSalvo, senhaDaSessao, modoPWA, chaveMestraDaSessao, embrulhoSenha, embrulhoRecuperacao, desembrulharMestra, normalizarCodigo, codigoValido, adotarMestra } from './acesso.js';
 import { testarRecuperacaoIsolada } from './validacaoBackup.js';
@@ -114,15 +114,18 @@ export function lerEnvelope(texto) {
 export const estaCifrado = (env) => !!env.criptografia;
 
 let ultimaMestra = null;
+// Cada prévia retém apenas a chave correspondente ao seu conteúdo, fora do estado reativo/serializável.
+const mestrasDasPrevias = new WeakMap();
 // Chave mestra do último backup aberto (v2). A tela de acesso a guarda, cifrada por uma chave NÃO-EXTRAÍVEL no IndexedDB,
 // para o aparelho adotá-la ao criar a senha nova depois de restaurar (o mesmo código de recuperação continua valendo).
-export async function guardarMestraParaAdotar() {
-  if (!ultimaMestra) { await kvDel('sf:mestra-tmp'); return; }
+export async function guardarMestraParaAdotar(dados) {
+  const chaveAberta = dados ? mestrasDasPrevias.get(toRaw(dados)) : ultimaMestra;
+  if (!chaveAberta) { await kvDel('sf:mestra-tmp'); return; }
   const k = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, ultimaMestra.mestra));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, chaveAberta.mestra));
   // rec pode vir de um objeto reativo da tela (Proxy): copia em JSON puro para o IndexedDB aceitar.
-  const rec = ultimaMestra.rec ? JSON.parse(JSON.stringify(ultimaMestra.rec)) : null;
+  const rec = chaveAberta.rec ? JSON.parse(JSON.stringify(chaveAberta.rec)) : null;
   if (!(await kvSet('sf:mestra-tmp', { k, iv, ct, rec }))) throw new Error('Não foi possível guardar a chave do backup.');
 }
 export async function adotarMestraGuardada() {
@@ -132,8 +135,9 @@ export async function adotarMestraGuardada() {
   return true;
 }
 export const descartarMestraGuardada = () => kvDel('sf:mestra-tmp');
-export async function abrirEnvelope(env, senha) {
-  ultimaMestra = null;
+export async function abrirEnvelope(env, senha, capturarMestra) {
+  let mestraAberta = null;
+  if (!capturarMestra) ultimaMestra = null;
   let bytes;
   if (typeof env.dados !== 'string') return env.dados;
   bytes = deB64(env.dados);
@@ -148,7 +152,7 @@ export async function abrirEnvelope(env, senha) {
       bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(c.iv) }, k, bytes));
     } catch { throw new Error('O conteúdo do backup está corrompido.'); }
     // Guarda para o aparelho adotar a mesma chave (o código de recuperação continua valendo depois de restaurar).
-    ultimaMestra = { mestra, rec: (c.chaves && c.chaves.recuperacao) || null };
+    mestraAberta = { mestra, rec: (c.chaves && c.chaves.recuperacao) || null };
   } else if (env.criptografia) {
     if (!senha) throw new Error('Informe a senha usada neste backup.');
     try {
@@ -158,7 +162,10 @@ export async function abrirEnvelope(env, senha) {
     } catch { throw new Error('Senha incorreta para este backup (use a senha de acesso da época em que ele foi feito).'); }
   }
   if (env.compressao === 'gzip') bytes = await gunzip(bytes);
-  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Error('O conteúdo do backup está corrompido.'); }
+  let dados;
+  try { dados = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Error('O conteúdo do backup está corrompido.'); }
+  if (capturarMestra) capturarMestra(mestraAberta); else ultimaMestra = mestraAberta;
+  return dados;
 }
 
 // ---- Gerar e entregar ---------------------------------------------------------------------
@@ -276,8 +283,10 @@ export async function lerArquivo(file) {
   return { env, cifrado: estaCifrado(env), nome: file.name, tamanho: file.size };
 }
 export async function previa(env, senha) {
-  const dados = await abrirEnvelope(env, senha);
+  let mestraDaPrevia = null;
+  const dados = await abrirEnvelope(env, senha, chave => { mestraDaPrevia = chave; });
   const verificacao = await testarRecuperacaoIsolada(dados);
+  if (mestraDaPrevia) mestrasDasPrevias.set(dados, mestraDaPrevia);
   return { dados, contagens: contarDados(dados), criado_em: env.criado_em, aparelho: env.aparelho, verificacao };
 }
 

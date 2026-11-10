@@ -11,7 +11,8 @@ export { ErroNuvem };
 export const PROVEDORES = { google, microsoft, dropbox };
 const CHAVE = 'sf:nuvem:estado';
 
-// Estado do aparelho (localStorage: só marcas e datas, nunca token nem conteúdo).
+// Vínculo escolhido neste aparelho (só marcas e datas). Não é prova de token ativo nem de permissão atual.
+// O provedor Google verifica expiração e escopos da resposta real antes de reutilizar a sessão.
 function ler() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null') || {}; } catch { return {}; } }
 const base = ler();
 export const estadoNuvem = reactive({
@@ -44,7 +45,7 @@ export async function conectarNuvem(id, { restaurar = false } = {}) {
   return operar(id, async () => {
     if (restaurar && p.conectarParaRestaurar) await p.conectarParaRestaurar();
     else await p.conectar();
-    // Teste de acesso: falha aqui = escopo/permissão errados, melhor saber agora.
+    // Conectar pode reutilizar a sessão; não obriga uma nova tela Google. A listagem ainda confirma o acesso remoto.
     await p.listar();
     Object.assign(estadoNuvem[id], { conectado: true, ultimoErro: null, precisaReconectar: false });
     gravar();

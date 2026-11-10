@@ -8,7 +8,7 @@ const orientacao = orientacaoInstalacao();
 <template>
   <Modal :aberto="aberto" :titulo="orientacao.titulo" @fechar="emit('fechar')">
     <p v-if="previa" class="nota" data-instalacao-previa>Esta prévia é só para testes e não será instalada. Estes são os passos para instalar o app oficial.</p>
-    <p v-else class="nota">Neste navegador, a instalação é concluída pelo menu do próprio navegador.</p>
+    <p class="nota">Para deixar o Dagda {{ orientacao.titulo === 'Instalar no Mac' ? 'no Dock' : 'na Tela de Início' }} e acessá-lo como aplicativo, siga os passos abaixo usando o recurso do seu navegador.</p>
     <ol class="passos"><li v-for="passo in orientacao.passos" :key="passo">{{ passo }}</li></ol>
     <template #rodape><button type="button" class="concluir" @click="emit('fechar')">Entendi</button></template>
   </Modal>

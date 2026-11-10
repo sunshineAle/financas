@@ -4,7 +4,7 @@
 //   arrastar para a ESQUERDA = pausar/ativar · arrastar para a DIREITA = excluir (com "Desfazer" no aviso).
 // Só passa da metade da largura conta; abaixo disso a linha volta suave. O arraste só começa quando o movimento
 // horizontal domina, então a rolagem vertical da página continua normal (touch-action: pan-y).
-// Anotação 85: três recentes por tipo, lista completa em janela e criação no cabeçalho.
+// Anotações 85/92: três recentes por tipo, lista completa em janela e + na extremidade oposta ao título.
 import { ref, computed, nextTick, onMounted } from 'vue';
 import { Plus } from 'lucide-vue-next';
 import CardPadrao from '../components/CardPadrao.vue';
@@ -90,8 +90,8 @@ onMounted(carregar);
       <CardPadrao v-for="bl in BLOCOS" :key="bl.tipo" :data-bloco-regras="bl.tipo">
         <template #cabecalho>
           <div class="cab-bloco">
-            <button type="button" class="mais-regra" :aria-label="`Adicionar em ${bl.titulo}`" :title="`Adicionar em ${bl.titulo}`" @click="novaRegra(bl.tipo)"><Plus :size="20" :stroke-width="2.4" /></button>
             <div class="titulo-bloco"><h2>{{ bl.titulo }}<AjudaSecao :secao="bl.tipo === 'reserva' ? 'regras.reserva' : 'regras'" /></h2><small>{{ listaDe(bl.tipo).length }} {{ listaDe(bl.tipo).length === 1 ? 'regra' : 'regras' }}</small></div>
+            <button type="button" class="mais-regra" :aria-label="`Adicionar em ${bl.titulo}`" :title="`Adicionar em ${bl.titulo}`" @click="novaRegra(bl.tipo)"><Plus :size="20" :stroke-width="2.4" /></button>
           </div>
         </template>
         <p v-if="carregando" class="nota" role="status">Carregando regras…</p>
@@ -116,7 +116,7 @@ h1 { margin: 0; font: 700 22px var(--fonte-display); }
 .grade-regras { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (min-width: 1100px) { .grade-regras { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .cab-bloco { display: flex; gap: 12px; align-items: flex-start; width: 100%; }
-.titulo-bloco { min-width: 0; }
+.titulo-bloco { min-width: 0; flex: 1; }
 .titulo-bloco h2 { margin: 0; font: 700 17px var(--fonte-display); overflow-wrap: anywhere; }
 .titulo-bloco small, .nota { font-size: 13px; color: var(--cor-texto-suave); }
 .nota { margin: 0; }
