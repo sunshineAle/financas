@@ -33,6 +33,9 @@ test('primeira conexão pede só drive.appdata e lista todas as páginas da áre
   assert.equal(itens.length,2); assert.equal(itens[0].tamanho,42);
   assert.ok(urls.every(u=>u.searchParams.get('spaces')==='appDataFolder'));
   assert.equal(urls[1].searchParams.get('pageToken'),'segunda');
+  const restauracao=await google.listar({restaurar:true});
+  assert.ok(restauracao.length>0);
+  assert.ok(restauracao.every(i=>!i.nome.startsWith('previa-')), 'Restaurar no app oficial não oferece dados fictícios da prévia');
 });
 test('token válido é reutilizado; consentimento adicional só para um escopo novo', async () => {
   const google=await importar();

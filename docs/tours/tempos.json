@@ -43,9 +43,10 @@
   "passos": [
    0,
    3,
-   6
+   6,
+   9
   ],
-  "total": 9
+  "total": 12
  },
  "compromissos": {
   "passos": [
@@ -107,9 +108,10 @@
   "passos": [
    0,
    3,
-   6.38
+   6,
+   9
   ],
-  "total": 9.38
+  "total": 12.38
  },
  "custos-fixos": {
   "passos": [

@@ -260,7 +260,6 @@ async function restaurarAgora() {
     await recarregarApp();
   } catch (e) { erro.value = e.message; } finally { carregando.value = false; }
 }
-function abrirDemo() { globalThis.__SF_ABRIR_DEMO?.(); }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
 function voltar() {
   senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; backupsEncontrados.value = []; provedorEscolhido.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'escolher'; }

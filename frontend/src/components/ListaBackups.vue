@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Trash2 } from 'lucide-vue-next';
 import { copiaGerenciavel } from '../services/protecaoBackups.js';
+const ehPrevia = !!import.meta.env.VITE_PREVIA;
 const props = defineProps({ itens: { type: Array, default: () => [] }, ocupado: Boolean, permitirExcluir: Boolean, contextoEntrada: Boolean });
 const emit = defineEmits(['selecionar', 'excluir']);
 const expandidos = ref({});
@@ -16,7 +17,7 @@ const data = n => new Date(n).toLocaleString('pt-BR');
     <p v-if="contextoEntrada" class="motivo-exclusao" data-exclusao-entrada>Para gerenciar ou excluir cópias, entre no app e abra Dados e backup. Antes de excluir, o Dagda precisa comprovar que outra cópia é recuperável com seu acesso.</p>
     <section v-for="g in grupos" :key="g.nome"><h3>{{ g.nome }}</h3>
       <div v-for="i in g.itens" :key="i.id" class="copia">
-        <button type="button" data-selecionar-backup :disabled="ocupado" @click="emit('selecionar',i)"><b>{{ data(i.data) }}</b><small>{{ Math.ceil(i.tamanho/1024) }} KB{{ i.legado ? ' · pasta antiga do Drive · somente leitura' : !copiaGerenciavel(i) ? ' · somente leitura nesta prévia' : '' }}</small></button>
+        <button type="button" data-selecionar-backup :disabled="ocupado" @click="emit('selecionar',i)"><b>{{ data(i.data) }}</b><small>{{ Math.ceil(i.tamanho/1024) }} KB{{ i.legado ? ' · pasta antiga do Drive · somente leitura' : !copiaGerenciavel(i) ? (ehPrevia ? ' · somente leitura nesta prévia' : ' · somente leitura') : '' }}</small></button>
         <button v-if="(permitirExcluir || contextoEntrada) && copiaGerenciavel(i)" type="button" class="excluir" :disabled="ocupado || !permitirExcluir" :title="!permitirExcluir ? 'Entre no app para gerenciar suas cópias com segurança' : 'Excluir esta cópia'" :data-exclusao-bloqueada="!permitirExcluir || undefined" :aria-label="`Excluir cópia de ${data(i.data)}`" @click="emit('excluir',i)"><Trash2 :size="18" /></button>
       </div>
       <button v-if="g.todos.length > g.itens.length" type="button" :disabled="ocupado" @click="expandidos[g.nome] = true">Ver outras cópias</button>

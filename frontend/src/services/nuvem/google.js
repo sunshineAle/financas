@@ -147,7 +147,7 @@ export const google = {
       arquivos.push(...(j.files || []));
       pagina = j.nextPageToken;
     } while (pagina);
-    return arquivos.filter((f) => f.name.endsWith('.sfin') && (restaurar || (import.meta.env?.VITE_PREVIA ? f.name.startsWith('previa-') : !f.name.startsWith('previa-')))).map((f) => ({ id: f.id, nome: f.name, tamanho: Number(f.size) || 0, data: Date.parse(f.createdTime) || 0 }));
+    return arquivos.filter((f) => f.name.endsWith('.sfin') && (import.meta.env?.VITE_PREVIA ? (restaurar || f.name.startsWith('previa-')) : !f.name.startsWith('previa-'))).map((f) => ({ id: f.id, nome: f.name, tamanho: Number(f.size) || 0, data: Date.parse(f.createdTime) || 0 }));
   },
   // Compatibilidade: somente leitura da pasta usada pelo mesmo Client ID antes da área oculta.
   // Não migra, não renomeia e não remove os backups antigos.

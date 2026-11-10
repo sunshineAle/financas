@@ -1,8 +1,8 @@
 // Service worker do Dagda Capital (PWA): guarda o app para funcionar offline.
 // A lista de arquivos e a versão (hash do conteúdo do build) são preenchidas no build (vite.pwa.config.js).
 // Caminhos relativos ao sw.js: funcionam na raiz e em subcaminhos (ex.: /financas/).
-const VERSAO = '8878198d8a';
-const ARQUIVOS = ["./","./index.html","./manifest.webmanifest","./assets/icone-fundo-DhnfmhqG.svg","./assets/icone-CaGpKugs.svg","./assets/icone-fundo-RAqefblp.svg","./assets/icone-COxbkEuE.svg","./assets/icone-fundo-ByPrcen9.svg","./assets/icone-LzPLBE44.svg","./assets/icone-fundo-CKewohm3.svg","./assets/icone-BSJeuUX-.svg","./assets/icone-fundo-DF7iJT4U.svg","./assets/icone-fundo-CdqAZkpK.svg","./assets/logo-C2q0lYt4.svg","./assets/icone-Bx13Hb_w.svg","./assets/logo-nZjLMEzg.svg","./assets/icone-fundo-3oVuSJI9.svg","./assets/icone-D7KoPird.svg","./assets/logo-CWIrTzDU.svg","./assets/icone-fundo-DxYtipJT.svg","./assets/icone-DVvzzDI4.svg","./assets/icone-DZ-8bvuj.svg","./assets/gate-DnZncQiS.css","./assets/main-COsdc7CR.css","./assets/tokens-gm5cKdFn.css","./assets/Revisar-fAiwn6Yg.css","./assets/Patrimonio-C4GZko55.css","./assets/Compromissos-BTn34lM6.css","./assets/index-BCPFOp1x.js","./assets/desfoque-CLSuyJE4.js","./assets/atualizacao-CgxpLI8m.js","./assets/boot-pwa-BGLYVy16.js","./assets/_commonjsHelpers-IkB594pC.js","./assets/gate-PT8io8Nb.js","./assets/atualizacao-Dm373JX_.js","./assets/main-DhYvlqHI.js","./assets/novidades-CMTZ2Lcx.js","./assets/tokens-DhyReUOW.js","./assets/armazenamento-DOyGxM_E.js","./assets/backup-qrR1-z4l.js","./assets/acesso-CxeBQCC3.js","./assets/avisos-DFKL7Oq7.js","./assets/bacen-CcuIZu2-.js","./assets/feedback-Cz_9xhxD.js","./assets/idb-qiV6c4F-.js","./assets/notificacoes-CViybbaV.js","./assets/preload-helper-B1tnf050.js","./assets/runtime-core.esm-bundler-DZMOdr1X.js","./assets/reactivity.esm-bundler-BRPFS9YT.js","./assets/Revisar-D1zPFpuj.js","./assets/Patrimonio-Docxi7KM.js","./assets/Compromissos-D83I3wf2.js","./assets/xlsx-DaTX-4ds.js","./assets/pdf-CEBtTkzr.js","./assets/pdf.worker-D6E8MGF_.js","./icons/apple-touch-icon.png","./icons/favicon-48.png","./icons/icon-192.png","./icons/icon-512-maskable.png","./icons/icon-512.png","./icons/logo-dagda.svg"];
+const VERSAO = '46c0a31983';
+const ARQUIVOS = ["./","./index.html","./manifest.webmanifest","./assets/icone-fundo-DhnfmhqG.svg","./assets/icone-CaGpKugs.svg","./assets/icone-fundo-RAqefblp.svg","./assets/icone-COxbkEuE.svg","./assets/icone-fundo-ByPrcen9.svg","./assets/icone-LzPLBE44.svg","./assets/icone-fundo-CKewohm3.svg","./assets/icone-BSJeuUX-.svg","./assets/icone-fundo-DF7iJT4U.svg","./assets/icone-fundo-CdqAZkpK.svg","./assets/icone-Bx13Hb_w.svg","./assets/logo-C2q0lYt4.svg","./assets/logo-nZjLMEzg.svg","./assets/icone-fundo-3oVuSJI9.svg","./assets/icone-D7KoPird.svg","./assets/logo-CWIrTzDU.svg","./assets/icone-fundo-DxYtipJT.svg","./assets/icone-DVvzzDI4.svg","./assets/icone-DZ-8bvuj.svg","./assets/gate-DgOWuigo.css","./assets/main-COvJ7QlB.css","./assets/tokens-Br80UFu9.css","./assets/Revisar-D1ydG7w7.css","./assets/Patrimonio-C4GZko55.css","./assets/Compromissos-BTn34lM6.css","./assets/index-DvT8ypqM.js","./assets/desfoque-CLSuyJE4.js","./assets/atualizacao-CMi1qWeQ.js","./assets/boot-pwa-m9dbGswl.js","./assets/_commonjsHelpers-IkB594pC.js","./assets/gate-C6STMch2.js","./assets/atualizacao-Dm373JX_.js","./assets/main-DJpi1-Cf.js","./assets/novidades-eZN2QlJP.js","./assets/tokens-DPIPco_Q.js","./assets/armazenamento-di55WAE1.js","./assets/backup-C6g4ut6Q.js","./assets/acesso-igrEpXu9.js","./assets/avisos-BEbVrKFB.js","./assets/bacen-dPvGXVZN.js","./assets/feedback-Cz_9xhxD.js","./assets/idb-qiV6c4F-.js","./assets/notificacoes-DOUIcPRU.js","./assets/preload-helper-B1tnf050.js","./assets/runtime-core.esm-bundler-CQ-vrNWi.js","./assets/reactivity.esm-bundler-CMoWRJod.js","./assets/backupRapido-aRrKVQTn.js","./assets/protecaoBackups-CrL8ev14.js","./assets/Revisar-DJ9vNbdM.js","./assets/Patrimonio-D4E9vl90.js","./assets/Compromissos-CHoOyo4z.js","./assets/xlsx-DaTX-4ds.js","./assets/pdf-CEBtTkzr.js","./assets/pdf.worker-D6E8MGF_.js","./assets/exportacao-DbXh-w9A.js","./assets/db-BJrZT2Ql.js","./assets/esquema-Bp2b7aNk.js","./assets/validarBackup-BxImhIDD.js","./icons/apple-touch-icon.png","./icons/favicon-48.png","./icons/icon-192.png","./icons/icon-512-maskable.png","./icons/icon-512.png","./icons/logo-dagda.svg","./tours/backup.webp","./tours/cartoes.webp","./tours/compromissos.webp","./tours/contas.webp","./tours/custos-fixos.webp","./tours/dividas.webp","./tours/geral.webp","./tours/importar-conferir.webp","./tours/importar.webp","./tours/inicio.webp","./tours/o-que-mudou.webp","./tours/objetivos.webp","./tours/patrimonio.webp","./tours/regras.webp","./tours/relatorios.webp","./tours/revisar.webp","./tours/tempos.json","./tours/transacoes-cat.webp","./tours/transacoes.webp"];
 const CACHE = 'sf-app-' + VERSAO;
 const CACHE_EXTERNO = 'sf-externo';
 
@@ -39,6 +39,11 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(req).then((r) => { if (r && r.ok) { const c2 = r.clone(); caches.open(CACHE).then((c) => c.put(req, c2)); } return r; }).catch(() => caches.match(req)));
     return;
   }
+  // Tours são imagens demonstrativas locais; a versão na query não muda o arquivo precacheado.
+  if (url.pathname.startsWith(new URL('tours/', self.registration.scope).pathname)) {
+    e.respondWith(caches.open(CACHE).then(async c => (await c.match(req, { ignoreSearch: true })) || fetch(req)));
+    return;
+  }
   // Navegação: devolve a página do app (funciona offline).
   if (req.mode === 'navigate') {
     e.respondWith(caches.match('./index.html').then((r) => r || fetch(req)).catch(() => caches.match('./index.html')));
@@ -55,7 +60,7 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const rota = (e.notification.data && e.notification.data.rota) || '/';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
-    for (const j of janelas) {
+    for (const j of janelas.filter(j => j.url.startsWith(self.registration.scope))) {
       if ('focus' in j) { j.postMessage({ tipo: 'sf:abrir-rota', rota }); return j.focus(); }
     }
     return self.clients.openWindow('./#' + rota);

@@ -6,7 +6,7 @@ export async function excluirCopiaSegura(provedor, item) {
   // A lista real da área oculta é a autoridade: nunca aceitar um ID da pasta legada.
   const itens = (await provedor.listar({ restaurar: true })).filter(gerenciavel);
   const alvo = itens.find(i => i.id === item.id);
-  if (!alvo) throw new Error('Esta cópia é somente leitura aqui. Backups antigos e do app oficial são preservados na prévia.');
+  if (!alvo) throw new Error('Esta cópia é somente leitura aqui. Apenas as cópias gerenciáveis da área oculta podem ser excluídas.');
   let outraValida = false;
   for (const outra of itens.filter(i => i.id !== alvo.id).sort((a,b) => b.data - a.data)) {
     try { await validarBackupDaSessao(await provedor.baixar(outra)); outraValida = true; break; } catch { /* não é prova de recuperação */ }

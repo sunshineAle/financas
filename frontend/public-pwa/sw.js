@@ -39,6 +39,11 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(req).then((r) => { if (r && r.ok) { const c2 = r.clone(); caches.open(CACHE).then((c) => c.put(req, c2)); } return r; }).catch(() => caches.match(req)));
     return;
   }
+  // Tours são imagens demonstrativas locais; a versão na query não muda o arquivo precacheado.
+  if (url.pathname.startsWith(new URL('tours/', self.registration.scope).pathname)) {
+    e.respondWith(caches.open(CACHE).then(async c => (await c.match(req, { ignoreSearch: true })) || fetch(req)));
+    return;
+  }
   // Navegação: devolve a página do app (funciona offline).
   if (req.mode === 'navigate') {
     e.respondWith(caches.match('./index.html').then((r) => r || fetch(req)).catch(() => caches.match('./index.html')));

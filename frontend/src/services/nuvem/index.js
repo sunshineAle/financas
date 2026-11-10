@@ -84,7 +84,7 @@ export async function listarNuvem(id, { restaurar = false } = {}) {
     const itens = await p.listar({ restaurar });
     if (restaurar && p.listarAntigos) itens.push(...await p.listarAntigos());
     const unicos = [...new Map(itens.map(i => [i.id, i])).values()];
-    return unicos.filter(i => restaurar || (import.meta.env.VITE_PREVIA ? i.nome.startsWith('previa-') : !i.nome.startsWith('previa-'))).sort((a,b) => b.data - a.data || b.nome.localeCompare(a.nome));
+    return unicos.filter(i => import.meta.env.VITE_PREVIA ? (restaurar || i.nome.startsWith('previa-')) : !i.nome.startsWith('previa-')).sort((a,b) => b.data - a.data || b.nome.localeCompare(a.nome));
   }, { marcarErro: false });
 }
 export async function baixarDaNuvem(id, item) { const p = exigir(id); return operar(id, () => p.baixar(item), { marcarErro: false }); }

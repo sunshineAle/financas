@@ -1,5 +1,18 @@
 [
   {
+    "versao": "1.3",
+    "data": "2026-11-10",
+    "resumo": "Restaure seu Dagda pelo Google Drive ou por arquivo, sem criar outro perfil. Backup com menos cliques e proteção das cópias recuperáveis. Regras, instalação e tours mais claros.",
+    "itens": [
+      "Primeiro acesso com restauração direta; desbloqueio diário por senha ou PIN, sem repetir a opção Google.",
+      "Google Drive: cópias ocultas, reutilização da sessão quando possível e até quatro cópias recentes após verificar a recuperação.",
+      "Senha do backup conferida automaticamente; conteúdo validado antes de Restaurar e continuar. Nome e código de recuperação preservados quando presentes.",
+      "A revisar avisa sobre possíveis transferências entre contas próprias e aguarda sua confirmação.",
+      "Regras: três recentes por bloco, lista completa em janela e botão de adicionar na extremidade do cabeçalho.",
+      "Instalação adaptada ao navegador e orientações para Apple; tours com exemplos preenchidos e destaque animado, disponíveis offline."
+    ]
+  },
+  {
     "versao": "1.2.2",
     "data": "2026-11-05",
     "resumo": "\"A revisar\" virou uma página própria e agora traz também os lançamentos sem categoria, para escolher a categoria ou ignorar ali mesmo.",
@@ -7,22 +20,6 @@
       "A revisar: página própria (menu lateral, card do Início ou a faixa \"N lançamentos para revisar\" em Transações e em Metas).",
       "Cada lançamento mostra só a linha da transação, a escolha da meta e o rendimento lado a lado, e os botões Vincular / Não vincular (no resgate: Vincular · De fora · Entrada). Saíram os textos longos.",
       "A revisar › Sem categoria: lançamentos de conta e compras de cartão sem categoria (ou na Geral). Escolha a categoria e toque em Salvar; nos de conta, também dá para Ignorar."
-    ]
-  },
-  {
-    "versao": "1.2",
-    "data": "2026-11-05",
-    "resumo": "Guardar/Resgatar soltos no extrato agora podem ser apagados, o cheque especial só aparece em conta que tem, cada meta pode render o seu % do CDI e a fatura entende melhor parcelamento, saldo anterior e siglas do banco.",
-    "itens": [
-      "Metas: ao apagar um lançamento que veio do extrato, o app pergunta se ele sai também do extrato da conta. No extrato, Guardar e Resgatar podem ser excluídos (o valor sai da meta junto). Lançamentos que tinham ficado presos voltam para \"A revisar\".",
-      "Contas: nova opção \"Tem cheque especial?\" na conta corrente, com limite e juros. Sem ela, saldo negativo não vira dívida: a conta mostra um aviso para conferir os lançamentos ou ajustar o saldo.",
-      "Metas: campo \"Rende quanto do CDI?\" (ex.: 89%). Poupança segue a regra da poupança. O rendimento mostrado é bruto, antes do IR.",
-      "Fatura: siglas como \"PG ENT PR EF\" e \"VL FAT EF\" passam a fechar a fatura anterior (não viram estorno). Na conferência da importação há a opção \"Pagamento/fechamento da fatura anterior\".",
-      "Fatura parcelada: o app pergunta se o banco cobra as parcelas na própria fatura. Se sim, a fatura fica quitada e não nasce dívida (antes contava duas vezes).",
-      "Importar fatura: quando o total do banco é maior que a soma das linhas, o app oferece lançar a diferença como saldo anterior (não é gasto novo) ou encargos.",
-      "Cartão: escolha se a compra feita no dia do fechamento vai para esta fatura ou para a próxima.",
-      "Registrar pagamento: opção \"Paga fora do período / sem conta de origem\", que não mexe em saldo. Aviso para faturas de mais de 2 meses atrás.",
-      "Importar extrato: o app compara o saldo do banco com o do app na mesma data e oferece Ajustar saldo. Na conta, dá para apagar de uma vez os lançamentos de antes do saldo inicial."
     ]
   }
 ]

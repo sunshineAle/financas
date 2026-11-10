@@ -19,7 +19,6 @@ import importacao from '../../../backend/src/routes/importacao.js';
 import custosFixos from '../../../backend/src/routes/custosFixos.js';
 import auth from '../stubs/auth-routes.cjs';
 import openFinance from '../stubs/open-finance.cjs';
-import { semearDados } from '../seed.js';
 
 // Rota de backup do Setor A (pode ainda não existir: o glob não quebra o build; o front tem plano B).
 const achadas = import.meta.glob('../../../backend/src/routes/backup.js', { eager: true });
@@ -96,9 +95,13 @@ window.fetch = async (url, opcoes = {}) => {
 
 // Dados de exemplo sob demanda (tela Mais → "Carregar exemplo", ou evento 'sf:carregar-exemplo').
 export async function carregarExemplo() {
+  if (!import.meta.env.VITE_PREVIA) throw new Error('Exemplos disponíveis apenas na prévia.');
+  const { semearDados } = await import('../seed.js');
   await semearDados(chamar, db);
   globalThis.__BANCO_DEMO.salvar();
   if (globalThis.__PERSISTENCIA_BANCO) await globalThis.__PERSISTENCIA_BANCO.flush();
 }
-window.__SF_CARREGAR_EXEMPLO = async () => { await carregarExemplo(); location.reload(); };
-window.addEventListener('sf:carregar-exemplo', () => { window.__SF_CARREGAR_EXEMPLO(); });
+if (import.meta.env.VITE_PREVIA) {
+  window.__SF_CARREGAR_EXEMPLO = async () => { await carregarExemplo(); location.reload(); };
+  window.addEventListener('sf:carregar-exemplo', () => { window.__SF_CARREGAR_EXEMPLO(); });
+}

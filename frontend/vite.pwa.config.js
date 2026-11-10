@@ -42,7 +42,9 @@ function serviceWorker() {
       const saida = opcoes.dir;
       const nomes = Object.keys(pacote).filter((n) => n !== 'sw.js');
       const arquivos = ['./', './index.html', './manifest.webmanifest', ...nomes.map((n) => './' + n)];
-      for (const extra of fs.readdirSync(path.join(saida, 'icons'))) arquivos.push('./icons/' + extra);
+      for (const pasta of ['icons', 'tours']) {
+        for (const extra of fs.readdirSync(path.join(saida, pasta))) arquivos.push('./' + pasta + '/' + extra);
+      }
       const unicos = [...new Set(arquivos)];
       const h = crypto.createHash('sha1');
       for (const n of [...unicos].sort()) {
