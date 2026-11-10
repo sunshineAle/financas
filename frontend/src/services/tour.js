@@ -37,7 +37,7 @@ export const TOURS = {
     { icone: Filter, titulo: 'Subcategorias', texto: 'Filtre as transações pela subcategoria.' },
   ] },
   revisar: { titulo: 'Como usar o A revisar', passos: [
-    { icone: ArrowRightLeft, titulo: 'Transferência entre contas', texto: 'Confira as duas contas, o titular e o valor exato. Vincular confirma o par; Não é transferência mantém o lançamento sem conversão.' },
+    { icone: ArrowRightLeft, titulo: 'Transferência entre contas', texto: 'Confira as contas, datas e o valor exato antes de Confirmar transferência. Você também pode manter a classificação atual.' },
     { icone: Tags, titulo: 'Despesa sem categoria', texto: 'Escolha a categoria e Salvar. A compra já está no extrato: revisar não deve lançá-la outra vez.' },
     { icone: ReceiptText, titulo: 'Pagamento de dívida', texto: 'Uma parcela pode chegar sem categoria. Aqui você confere a classificação; Salvar não vincula, reduz nem quita a dívida.' },
     { icone: PiggyBank, titulo: 'Guardar e resgatar', texto: 'Vincule o movimento à meta. No resgate, separe o que já era seu do rendimento; De fora e Entrada dependem da origem do dinheiro.' },

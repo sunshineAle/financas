@@ -44,6 +44,8 @@ const TABELAS = {
       'notificar_fatura_proxima INTEGER NOT NULL DEFAULT 1',
       // Anotação 54: início do mês financeiro (JSON {tipo,dia|n}); vai no backup para restaurar igual em outro aparelho.
       'inicio_mes TEXT',
+      // Nome bancário opcional, independente do apelido; legado permanece sem informação.
+      'nome_titular TEXT',
     ],
     fk: { usuario_id: 'usuarios' },
     exporta: true,
@@ -152,6 +154,11 @@ const TABELAS = {
       'valor REAL NOT NULL',
       'data TEXT NOT NULL',
       'categorizacao_automatica INTEGER NOT NULL DEFAULT 0',
+      // Procedência histórica da classificação, nunca inferida por regras atuais.
+      'classificacao_origem TEXT',
+      'regra_id TEXT',
+      'regra_snapshot TEXT',
+      'classificacao_anterior TEXT',
       "origem TEXT NOT NULL DEFAULT 'conectada'",
       'categoria_receita TEXT',
       'id_externo TEXT',

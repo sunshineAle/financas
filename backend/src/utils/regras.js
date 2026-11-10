@@ -32,6 +32,17 @@ function acharRegra(usuarioId, tipo, transacao) {
   return candidatas.sort((a, b) => peso(b) - peso(a))[0];
 }
 
+// Copia somente a regra que foi efetivamente aplicada. Editar/excluir depois não reescreve o passado.
+function provenienciaRegra(regra) {
+  const categoria = regra.categoria_id ? db.prepare('SELECT nome FROM categorias_orcamento WHERE id = ? AND usuario_id = ?').get(regra.categoria_id, regra.usuario_id) : null;
+  const snapshot = {
+    id: regra.id, padrao: regra.padrao, tipo: regra.tipo, destino: regra.destino || null,
+    categoriaId: regra.categoria_id || null, categoriaNome: categoria?.nome || null,
+    categoriaReceita: regra.categoria_receita || null, aplicadaEm: new Date().toISOString(),
+  };
+  return { classificacao_origem: 'regra', regra_id: regra.id, regra_snapshot: JSON.stringify(snapshot) };
+}
+
 function registrarUso(regra) {
   try { dados.atualizar('regras_categorias', regra.id, { aplicacoes: (regra.aplicacoes || 0) + 1 }); } catch { /* contador é só informativo */ }
 }
@@ -68,14 +79,15 @@ function afetadas(usuarioId, regra) {
 function aplicarNasAntigas(usuarioId, regra) {
   const linhas = afetadas(usuarioId, regra);
   dados.transacao(() => {
+    const procedencia = provenienciaRegra(regra);
     for (const l of linhas) {
       if (l.tabela === 'transacoes') {
         if (regra.tipo === 'entrada') {
-          dados.atualizar('transacoes', l.id, { categoria_receita: regra.categoria_receita || null, categorizacao_automatica: 1 });
+          dados.atualizar('transacoes', l.id, { categoria_receita: regra.categoria_receita || null, categorizacao_automatica: 1, ...procedencia });
         } else {
           if (l.categoria_id) dados.somar('categorias_orcamento', l.categoria_id, 'gasto_atual', -Math.abs(l.valor));
           dados.somar('categorias_orcamento', regra.categoria_id, 'gasto_atual', Math.abs(l.valor));
-          dados.atualizar('transacoes', l.id, { categoria_id: regra.categoria_id, categorizacao_automatica: 1 });
+          dados.atualizar('transacoes', l.id, { categoria_id: regra.categoria_id, categorizacao_automatica: 1, ...procedencia });
         }
       } else {
         dados.atualizar('lancamentos_cartao', l.id, { categoria_id: regra.categoria_id });
@@ -122,4 +134,4 @@ function aplicarReservaNasAntigas(usuarioId, regra) {
   return n;
 }
 
-module.exports = { normalizar, acharRegra, acharRegraReserva, aplicarReservaNasAntigas, casa, afetadas, aplicarNasAntigas, registrarUso, arredondar };
+module.exports = { provenienciaRegra, normalizar, acharRegra, acharRegraReserva, aplicarReservaNasAntigas, casa, afetadas, aplicarNasAntigas, registrarUso, arredondar };

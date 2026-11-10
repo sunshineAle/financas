@@ -98,10 +98,10 @@ function converterEmTransferencia(usuarioId, transacaoId, contaOutraId, { parcei
   const origemConta = db.prepare('SELECT nome FROM contas WHERE id = ?').get(t.conta_id);
   dados.transacao(() => {
     tirarDosTotais(t);
-    dados.atualizar('transacoes', t.id, { tipo_mov: 'transferencia_vinculada', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null });
+    dados.atualizar('transacoes', t.id, { tipo_mov: 'transferencia_vinculada', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null, classificacao_anterior:JSON.stringify({categoria_id:t.categoria_id,categoria_receita:t.categoria_receita,subcategoria:t.subcategoria,classificacao_origem:t.classificacao_origem,regra_id:t.regra_id,regra_snapshot:t.regra_snapshot,categorizacao_automatica:t.categorizacao_automatica}) });
     if (parceira) {
       tirarDosTotais(parceira);
-      dados.atualizar('transacoes', parceira.id, { tipo_mov: 'transferencia_vinculada', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null });
+      dados.atualizar('transacoes', parceira.id, { tipo_mov: 'transferencia_vinculada', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null, classificacao_anterior:JSON.stringify({categoria_id:parceira.categoria_id,categoria_receita:parceira.categoria_receita,subcategoria:parceira.subcategoria,classificacao_origem:parceira.classificacao_origem,regra_id:parceira.regra_id,regra_snapshot:parceira.regra_snapshot,categorizacao_automatica:parceira.categorizacao_automatica}) });
     } else {
       const v = -t.valor;
       dados.inserir('transacoes', {
@@ -135,7 +135,10 @@ function desfazerPar(usuarioId, vinculo) {
         dados.excluir('transacoes', t.id);
       } else {
         // Original (ou lançamento importado): volta a contar como antes
-        dados.atualizar('transacoes', t.id, { tipo_mov: null, vinculo: null, ignorada: 0 });
+        let anterior = {};
+        if(t.tipo_mov === 'transferencia_vinculada') { try { anterior=JSON.parse(t.classificacao_anterior||'{}'); } catch {} }
+        dados.atualizar('transacoes', t.id, { ...anterior, tipo_mov: null, vinculo: null, ignorada: 0, classificacao_anterior:null, revisao:'transferencia_recusada' });
+        if(t.tipo_mov === 'transferencia_vinculada' && anterior.categoria_id && t.valor<0) devolverAosTotais({...t,...anterior});
         if (t.tipo_mov === 'estornada') devolverAosTotais(t);
       }
     });
@@ -463,12 +466,9 @@ const PALAVRAS_PIX = /\b(pix|ted|doc|transf(erencia|\.)?|tev)\b/;
 function detectarDestino(descricao, { nomeTitular, contas, contaAtualId }) {
   const d = semAcento(descricao);
   if (!PALAVRAS_PIX.test(d)) return { tipo: null, contaId: null, contaNome: null };
-  const achada = (contas || []).find((c) => c.id !== contaAtualId && semAcento(c.nome).split(/[^a-z0-9]+/).filter((p) => p.length >= 4).some((p) => d.includes(p)));
-  if (achada) return { tipo: 'propria', contaId: achada.id, contaNome: achada.nome };
-  const partes = semAcento(nomeTitular).split(/[^a-z]+/).filter((p) => p.length >= 3);
-  if (partes.length >= 2 && partes.every((p) => d.includes(p))) return { tipo: 'propria', contaId: null, contaNome: null };
-  if (partes.length === 1 && partes[0].length >= 5 && d.includes(partes[0])) return { tipo: 'propria', contaId: null, contaNome: null };
-  return { tipo: 'terceiro', contaId: null, contaNome: null };
+  // O mesmo comparador da revisão; mencionar banco não prova conta própria.
+  const evidencia = require('./transferenciasRevisao').reconhecer(descricao, nomeTitular);
+  return { tipo: evidencia > 0 ? 'propria' : null, contaId: null, contaNome: null };
 }
 
 module.exports = {

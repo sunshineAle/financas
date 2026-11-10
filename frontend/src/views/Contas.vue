@@ -124,7 +124,7 @@ async function carregarExtrato() {
     let lista = dados.transacoes;
     if (p.tipo === 'ano') lista = lista.filter((t) => String(t.data).startsWith(`${p.ano}-`));
     transacoesConta.value = lista;
-    const ativas = lista.filter((t) => !t.ignorada);
+    const ativas = lista.filter((t) => t.ignorada !== 1);
     resumoConta.value = {
       entradas: ativas.filter((t) => t.valor > 0).reduce((s, t) => s + t.valor, 0),
       saidas: ativas.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0),

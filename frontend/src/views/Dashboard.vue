@@ -161,7 +161,7 @@ async function carregar() {
       const rt = await fetch(`/api/transacoes${anoInteiro.value ? '' : `?mes=${chave}`}`, { credentials: 'include' });
       if (rt.ok && minha === senha) {
         const hoje = new Date().toISOString().slice(0, 10);
-        atividade.value = ((await rt.json()).transacoes || []).filter((t) => !t.ignorada && t.data <= hoje).slice(0, 4);
+        atividade.value = ((await rt.json()).transacoes || []).filter((t) => t.ignorada !== 1 && t.data <= hoje).slice(0, 4);
       }
     } catch { /* sem atividade recente: o bloco mostra o aviso vazio */ }
   } finally {

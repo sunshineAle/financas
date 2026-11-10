@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(exigirAutenticacao);
 
 const { dataValida, arredondar } = require('../utils/faturas');
-const { categorizarTransacao } = require('../utils/categorizacao');
+const { categorizarTransacao, categorizarDetalhado, dadosDaClassificacao, classificacaoManual } = require('../utils/categorizacao');
 
 // Categorias de entrada (receita): ficam separadas das de despesa e cada usuário gerencia as suas
 // (tela Categorias). Aqui só a lista de nomes, para os formulários.
@@ -20,6 +20,7 @@ const { detectarReservaAutomatica } = require('../utils/reservasAuto');
 
 const transferenciasRevisao = require('../utils/transferenciasRevisao');
 router.get('/transferencias-pendentes', (req, res) => res.json({ itens: transferenciasRevisao.listar(req.usuario.id) }));
+router.get('/:id/origem', (req,res) => { try {res.json({item:transferenciasRevisao.obter(req.usuario.id,String(req.params.id))});} catch(e){res.status(e.status||400).json({erro:e.message});} });
 router.post('/:id/revisar-transferencia', (req, res) => {
   try { res.json(transferenciasRevisao.decidir(req.usuario.id, String(req.params.id), req.body || {})); }
   catch (e) { res.status(e.status || 400).json({ erro: e.message }); }
@@ -154,7 +155,8 @@ router.get('/vinculaveis', (req, res) => res.json(lanc.listarVinculaveis(req.usu
 // Pix/TED: parece para conta própria (transferência) ou para terceiro (despesa)? ?descricao=...&contaId=...
 router.get('/detectar-destino', (req, res) => {
   const contas = db.prepare('SELECT id, nome FROM contas WHERE usuario_id = ? AND excluido_em IS NULL').all(req.usuario.id);
-  res.json(lanc.detectarDestino(String(req.query.descricao || ''), { nomeTitular: req.usuario.nome, contas, contaAtualId: req.query.contaId ? String(req.query.contaId) : null }));
+  const cfg = db.prepare('SELECT nome_titular FROM configuracoes WHERE usuario_id = ? AND excluido_em IS NULL').get(req.usuario.id);
+  res.json(lanc.detectarDestino(String(req.query.descricao || ''), { nomeTitular: cfg?.nome_titular || req.usuario.nome, contas, contaAtualId: req.query.contaId ? String(req.query.contaId) : null }));
 });
 
 // Transferência entre contas próprias: saída + entrada ligadas por `vinculo`, fora dos totais; saldos das contas manuais atualizados.
@@ -423,21 +425,23 @@ router.post('/', (req, res) => {
     .all(req.usuario.id);
 
   let categoria = null;
+  let procedencia = classificacaoManual();
   let automatica = 0;
   if (categoriaId && tipo === 'saida') {
     categoria = categorias.find((c) => c.id === String(categoriaId));
     if (!categoria) return res.status(400).json({ erro: 'Categoria não encontrada.' });
   } else if (tipo === 'saida') {
     // 1) regras do usuário (nome + valor + conta), 2) nome da categoria na descrição, 3) "Geral"
-    const achada = categorizarTransacao(texto, categorias, { usuarioId: req.usuario.id, valor: numero, contaId: conta.id });
+    const detalhada = categorizarDetalhado(texto, categorias, { usuarioId: req.usuario.id, valor: numero, contaId: conta.id });
+    const achada = detalhada.categoriaId; procedencia = dadosDaClassificacao(detalhada);
     categoria = { id: achada || garantirGeralDespesa(req.usuario.id).id };
     automatica = 1;
   }
   let categoriaReceitaFinal = tipo === 'entrada' ? categoriaReceita || null : null;
   if (tipo === 'entrada' && !categoriaReceitaFinal) {
     const regra = regrasMotor.acharRegra(req.usuario.id, 'entrada', { descricao: texto, valor: numero, contaId: conta.id });
-    if (regra && nomesCategoriasReceita(req.usuario.id).includes(regra.categoria_receita)) { categoriaReceitaFinal = regra.categoria_receita; regrasMotor.registrarUso(regra); }
-    else categoriaReceitaFinal = NOME_GERAL;
+    if (regra && nomesCategoriasReceita(req.usuario.id).includes(regra.categoria_receita)) { categoriaReceitaFinal = regra.categoria_receita; procedencia = regrasMotor.provenienciaRegra(regra); regrasMotor.registrarUso(regra); }
+    else { categoriaReceitaFinal = NOME_GERAL; procedencia = {classificacao_origem:'padrao',regra_id:null,regra_snapshot:null}; }
   }
 
   const valorGravado = arredondar(tipo === 'saida' ? -numero : numero);
@@ -449,7 +453,7 @@ router.post('/', (req, res) => {
     novoId = dados.inserir('transacoes', {
       conta_id: conta.id, usuario_id: req.usuario.id, categoria_id: categoria ? categoria.id : null, descricao: texto,
       valor: valorGravado, data: dia, categorizacao_automatica: automatica, origem: 'manual',
-      categoria_receita: categoriaReceitaFinal, subcategoria, icone,
+      categoria_receita: categoriaReceitaFinal, subcategoria, icone, ...procedencia,
     }).id;
 
     if (conta.origem === 'manual') dados.somar('contas', conta.id, 'saldo', valorGravado);
@@ -625,7 +629,7 @@ router.put('/:id', (req, res) => {
     }
     dados.atualizar('transacoes', t.id, {
       descricao, data, valor, conta_id: contaId, categoria_id: categoriaId, categorizacao_automatica: automatica,
-      categoria_receita: categoriaReceita, subcategoria, icone,
+      categoria_receita: categoriaReceita, subcategoria, icone, ...(corpo.categoriaId !== undefined || corpo.categoriaReceita !== undefined ? classificacaoManual() : {}),
     });
   });
 

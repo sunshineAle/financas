@@ -1,5 +1,17 @@
 [
   {
+    "versao": "1.4",
+    "data": "2026-11-10",
+    "resumo": "Reconhecimento de transferências com nome do titular e revisão mais clara. Confira conflitos com regras e valores que vieram de um saldo seu fora do Dagda, sem cadastrar todas as suas contas.",
+    "itens": [
+      "Perfil: nome completo do titular separado do apelido, para sugerir transferências mesmo com nomes cortados no extrato.",
+      "A revisar mostra as contas, datas e valores de cada ponta no padrão do sistema, com menos texto.",
+      "PIX já classificado por regra só gera conflito quando há indícios relevantes; você escolhe manter a classificação ou revisar a transferência.",
+      "Conferir origem permite distinguir receita, outra conta cadastrada e saldo próprio fora do Dagda. O dinheiro já registrado não é somado novamente.",
+      "Decisões preservadas no backup; confirmação explícita para mudar a classificação."
+    ]
+  },
+  {
     "versao": "1.3",
     "data": "2026-11-10",
     "resumo": "Restaure seu Dagda pelo Google Drive ou por arquivo, sem criar outro perfil. Backup com menos cliques e proteção das cópias recuperáveis. Regras, instalação e tours mais claros.",
@@ -10,16 +22,6 @@
       "A revisar avisa sobre possíveis transferências entre contas próprias e aguarda sua confirmação.",
       "Regras: três recentes por bloco, lista completa em janela e botão de adicionar na extremidade do cabeçalho.",
       "Instalação adaptada ao navegador e orientações para Apple; tours com exemplos preenchidos e destaque animado, disponíveis offline."
-    ]
-  },
-  {
-    "versao": "1.2.2",
-    "data": "2026-11-05",
-    "resumo": "\"A revisar\" virou uma página própria e agora traz também os lançamentos sem categoria, para escolher a categoria ou ignorar ali mesmo.",
-    "itens": [
-      "A revisar: página própria (menu lateral, card do Início ou a faixa \"N lançamentos para revisar\" em Transações e em Metas).",
-      "Cada lançamento mostra só a linha da transação, a escolha da meta e o rendimento lado a lado, e os botões Vincular / Não vincular (no resgate: Vincular · De fora · Entrada). Saíram os textos longos.",
-      "A revisar › Sem categoria: lançamentos de conta e compras de cartão sem categoria (ou na Geral). Escolha a categoria e toque em Salvar; nos de conta, também dá para Ignorar."
     ]
   }
 ]

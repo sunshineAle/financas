@@ -274,15 +274,7 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       r.observacao = suspeita.motivo;
       return r;
     }
-    // Pix/TED para conta própria vira transferência
-    const dest = integ.detectarDestino(l.descricao, { nomeTitular, contas, contaAtualId: conta.id });
-    if (dest && dest.tipo === 'propria' && dest.contaId) {
-      r.transferencia = { contaId: dest.contaId, contaNome: dest.contaNome };
-      r.acao = 'transferencia'; r.observacao = `Parece transferência para sua conta ${dest.contaNome}.`;
-      r.categoriaId = null; r.categoriaNome = null; r.categoriaAuto = false;
-    } else if (dest && dest.tipo === 'terceiro' && l.valor < 0) {
-      r.observacao = 'Pix/TED para outra pessoa: conta como despesa.';
-    }
+    // Nome ou banco na descrição é somente evidência: não converter automaticamente.
     return r;
   });
   return { linhas: saida, existentesNoPeriodo: existentes.length };

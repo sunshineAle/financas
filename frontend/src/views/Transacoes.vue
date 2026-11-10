@@ -1,4 +1,5 @@
 <script setup>
+import ConferirOrigemModal from '../components/ConferirOrigemModal.vue';
 import { excluirComAviso, ehTransferenciaMov, podeExcluirEmLote } from '../services/excluirTransacoes.js';
 import { confirmar as confirmarApp } from '../services/confirmar.js';
 import { useSelecao } from '../services/selecao.js';
@@ -123,8 +124,15 @@ async function confirmarEstorno() {
 }
 const podeEstornar = (t) => !t.tipo_mov && !t.ignorada && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
 const ehReserva = (t) => /^reserva_|^transferencia_corretora$/.test(String(t.tipo_mov || ''));
+const ehExterno = t => t?.tipo_mov === 'saldo_proprio_externo';
+const podeConferirOrigem = t => t && !t.cartao && t.ignorada !== 1 && (!t.tipo_mov || ehExterno(t)) && Number(t.valor) !== 0;
+const origemConferidaId = ref(null);
+let voltarDepoisDaOrigem = false;
+function conferirOrigem(t) { fecharMenu(); voltarDepoisDaOrigem = voltarAoFechar; voltarAoFechar = false; editando.value = null; origemConferidaId.value = t.id; }
+function fecharOrigem() { origemConferidaId.value = null; if (voltarDepoisDaOrigem) { voltarDepoisDaOrigem = false; router.back(); } }
+async function origemFoiSalva() { await Promise.all([carregar(), carregarApoio()]); }
 const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia') && !ehReserva(t);
-const rotuloMov = { reserva_aporte: 'aporte em investimento', reserva_resgate_inv: 'resgate de investimento', reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
+const rotuloMov = { saldo_proprio_externo: 'saldo próprio fora do Dagda', reserva_aporte: 'aporte em investimento', reserva_resgate_inv: 'resgate de investimento', reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
   // anotação 61: créditos na fatura do cartão
   estorno_avulso: 'estorno a revisar', estornada_parcial: 'estornada em parte', pagamento: 'pagamento adiantado', cashback: 'cashback', pagamento_cartao: 'pagamento adiantado do cartão', pagamento_cartao_criado: 'pagamento adiantado do cartão' };
 // Créditos do cartão que CONTAM nos totais (cashback é entrada; estorno avulso e estorno parcial mexem no gasto da categoria)
@@ -470,6 +478,7 @@ const sobra = computed(() => {
 const REGEX_FATURA = /pagamento\s+(de\s+)?fatura|pgto\.?\s+fatura/i;
 const REGEX_TRANSF = /transfer[eê]ncia\s+(entre\s+contas|interna|propria|própria)/i;
 function infoDe(t) {
+  if (ehExterno(t)) return { chave: 'neutra-externo', nome: 'Saldo próprio fora do Dagda', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (ehTransf(t)) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   // Anotação 38: Guardar/Resgatar (Caixinha, Porquinho, CDB) e transferência para corretora: dinheiro do usuário mudando de lugar.
   if (ehReserva(t)) return { chave: 'neutra-reserva', nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
@@ -516,7 +525,7 @@ function rotuloDia(iso) {
   if (iso === ontemISO) return `Ontem · ${base}`;
   return base;
 }
-const liquido = (lista) => lista.filter((t) => !t.ignorada && !t.cartao).reduce((s, t) => s + t.valor, 0);
+const liquido = (lista) => lista.filter((t) => t.ignorada !== 1 && !t.cartao).reduce((s, t) => s + t.valor, 0);
 
 const gruposPorDia = computed(() => {
   const mapa = new Map();
@@ -528,7 +537,7 @@ const gruposPorMes = computed(() => {
   const mapa = new Map();
   ordenadas.value.forEach((t) => { const k = Number(diaDe(t.data).slice(5, 7)); if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(t); });
   return [...mapa].sort((a, b) => b[0] - a[0]).map(([m, itens]) => {
-    const v = itens.filter((t) => !t.ignorada && !t.cartao);
+    const v = itens.filter((t) => t.ignorada !== 1 && !t.cartao);
     const entradas = v.filter((t) => t.valor > 0).reduce((s, t) => s + t.valor, 0);
     const saidas = v.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0);
     return { m, nome: MESES[m - 1], itens, entradas, saidas, resultado: entradas - saidas, pct: entradas > 0 ? Math.max(0, ((entradas - saidas) / entradas) * 100) : 0 };
@@ -878,10 +887,12 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
       <button type="button" @click="abrirEdicao(menu.t)">Editar</button>
       <button v-if="!menu.t.cartao && !menu.t.tipo_mov" type="button" @click="alternarIgnorar(menu.t)">{{ menu.t.ignorada ? 'Reativar' : 'Ignorar' }}</button>
       <button v-if="podeEstornar(menu.t)" type="button" @click="abrirEstorno(menu.t)">Estornar / devolver</button>
-      <button v-if="menu.t.tipo_mov && !ehReserva(menu.t)" type="button" class="perigo" @click="desfazerMov(menu.t)">{{ ehTransf(menu.t) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
-      <button v-else-if="menu.t.origem === 'manual'" type="button" class="perigo" @click="fecharMenu(); apagar(menu.t)">Apagar</button>
+      <button v-if="podeConferirOrigem(menu.t)" type="button" @click="conferirOrigem(menu.t)">Conferir origem</button>
+      <button v-if="menu.t.tipo_mov && !ehReserva(menu.t) && !ehExterno(menu.t)" type="button" class="perigo" @click="desfazerMov(menu.t)">{{ ehTransf(menu.t) ? 'Desfazer transferência' : 'Desfazer estorno' }}</button>
+      <button v-else-if="ehExterno(menu.t) || menu.t.origem === 'manual'" type="button" class="perigo" @click="fecharMenu(); excluirTx(menu.t)">Apagar</button>
     </div>
 
+    <ConferirOrigemModal :aberto="!!origemConferidaId" :transacao-id="origemConferidaId" manual @fechar="fecharOrigem" @salvo="origemFoiSalva" />
     <!-- Detalhes / edição -->
     <BarraSelecao v-if="sel.ativa.value" :quantidade="sel.quantidade.value" :total="sel.total.value" :ocupado="sel.ocupado.value" @todas="sel.todas" @excluir="sel.excluir" @sair="sel.sair" />
     <FormularioModal :aberto="!!editando" titulo="Detalhes da transação" ajuda="transacoes.editar" :tema="edicaoEhSaida ? 'saida' : 'entrada'" :erro="erroEdicao" rotulo-cancelar="Fechar" @salvar="salvarEdicao" @fechar="editando = null">
@@ -895,6 +906,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
         </p>
         <!-- Homologação 1.0, seção 6: ações que saíram do menu ⋮ ficam aqui, no detalhe -->
         <div class="acoes-detalhe" data-acoes-detalhe>
+          <button v-if="podeConferirOrigem(editando)" type="button" class="acao-det" data-conferir-origem-manual @click="conferirOrigem(editando)">Conferir origem</button>
           <button v-if="podeEstornar(editando)" type="button" class="acao-det" @click="abrirEstorno(editando); editando = null">Estornar</button>
           <button v-if="!editando.cartao && !editando.tipo_mov" type="button" class="acao-det" @click="alternarIgnorar(editando); editando = null">{{ editando.ignorada ? 'Reativar' : 'Ignorar' }}</button>
           <button v-if="trechoRegra(editando.cartao ? editando.descricao_base : editando.descricao)" type="button" class="acao-det" @click="criarRegraDaTx(editando)">Criar regra</button>
@@ -943,9 +955,9 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <div><dt>Data</dt><dd>{{ dataCurta(editando.data) }}</dd></div>
           <div><dt>Conta</dt><dd>{{ editando.conta_nome }}</dd></div>
         </dl>
-        <CampoCategoria v-if="edicaoEhSaida || (ehCreditoCartao && credito.tipo === 'estorno')" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
-        <CampoCategoria v-else-if="!editando.cartao" :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
-        <CampoSubcategoria v-model="formEdicao.subcategoria" :sugestoes="sugestoesSub" :tema="edicaoEhSaida ? 'saida' : 'entrada'" />
+        <CampoCategoria v-if="!ehExterno(editando) && (edicaoEhSaida || (ehCreditoCartao && credito.tipo === 'estorno'))" :key="'ed-s' + editando.id" v-model="formEdicao.categoriaId" tipo="saida" tema="saida" rotulo="Categoria de despesa" :categorias="categorias" @criada="carregarApoio" />
+        <CampoCategoria v-else-if="!editando.cartao && !ehExterno(editando)" :key="'ed-e' + editando.id" v-model="formEdicao.categoriaReceita" tipo="entrada" tema="entrada" rotulo="Categoria de entrada" @criada="carregarApoio" />
+        <CampoSubcategoria v-if="!ehExterno(editando)" v-model="formEdicao.subcategoria" :sugestoes="sugestoesSub" :tema="edicaoEhSaida ? 'saida' : 'entrada'" />
         <CampoIconeItem v-if="!editando.cartao" v-model="formEdicao.icone" :tipo="formEdicao.tipo" :descricao="formEdicao.descricao" />
       </template>
     </FormularioModal>

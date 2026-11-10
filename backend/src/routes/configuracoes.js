@@ -13,15 +13,22 @@ function buscarOuCriarConfiguracoes(usuarioId) {
   return config;
 }
 
+const apresentar = config => ({ ...config, nomeTitular: config.nome_titular || '' });
+
 router.get('/', (req, res) => {
-  res.json(buscarOuCriarConfiguracoes(req.usuario.id));
+  res.json(apresentar(buscarOuCriarConfiguracoes(req.usuario.id)));
 });
 
 router.put('/', (req, res) => {
-  const config = buscarOuCriarConfiguracoes(req.usuario.id);
-  const { notificarCategoriaEstourada, notificarFaturaProxima, inicioMes } = req.body || {};
+  const { notificarCategoriaEstourada, notificarFaturaProxima, inicioMes, nomeTitular } = req.body || {};
   // Só grava o que veio (antes, faltar um campo zerava o outro).
   const mud = {};
+  if (nomeTitular !== undefined) {
+    if (nomeTitular !== null && typeof nomeTitular !== 'string') return res.status(400).json({ erro: 'Informe o nome do titular como texto.' });
+    const nome = String(nomeTitular || '').replace(/\s+/g, ' ').trim();
+    if (nome.length > 150 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(nome)) return res.status(400).json({ erro: 'O nome do titular deve ter até 150 caracteres, sem caracteres de controle.' });
+    mud.nome_titular = nome || null;
+  }
   if (notificarCategoriaEstourada !== undefined) mud.notificar_categoria_estourada = notificarCategoriaEstourada ? 1 : 0;
   if (notificarFaturaProxima !== undefined) mud.notificar_fatura_proxima = notificarFaturaProxima ? 1 : 0;
   if (inicioMes !== undefined) {
@@ -31,7 +38,8 @@ router.put('/', (req, res) => {
     if (!ok) return res.status(400).json({ erro: 'Início do mês inválido.' });
     mud.inicio_mes = JSON.stringify(c.tipo === 'util' ? { tipo: 'util', n: Number(c.n) } : { tipo: 'dia', dia: c.dia === 'ultimo' ? 'ultimo' : Number(c.dia) });
   }
-  res.json(Object.keys(mud).length ? dados.atualizar('configuracoes', config.id, mud) : config);
+  const config = buscarOuCriarConfiguracoes(req.usuario.id);
+  res.json(apresentar(Object.keys(mud).length ? dados.atualizar('configuracoes', config.id, mud) : config));
 });
 
 // Backup completo em um único JSON (o mesmo formato do /api/backup/exportar, que o app guarda

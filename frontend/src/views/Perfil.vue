@@ -29,6 +29,7 @@ import Backup from './Backup.vue';
 import { destino } from '../config/destino.js';
 import { perfil, nomeExibido, inicialDe, trocarSenha } from '../services/perfil.js';
 import { avisar } from '../services/avisos.js';
+import { lancamentoFoiSalvo } from '../services/lancamento.js';
 import { minutosAutoBloqueio, definirAutoBloqueio, definirApelido, bloquear, conferirSenha, gerarNovoCodigo, confirmarCodigoGuardado, codigoRecuperacaoPendente, verCodigoAtual, temCodigoVisivel } from '../services/acesso.js';
 import { atualizacaoBacen, atualizacaoInvestimentos } from '../services/atualizacoes.js';
 import { atualizar as atualizarBacen, estadoBacen } from '../services/bacen.js';
@@ -52,6 +53,36 @@ const tituloSecao = computed(() => (SECOES.find((x) => x.id === secao.value) || 
 const conta = ref({ nome: '', email: '' });
 const nome = ref('');
 const email = ref('');
+// Nome bancário independente do apelido; a configuração vai no backup cifrado.
+const titularSalvo = ref(''), titularEdicao = ref(''), erroTitular = ref('');
+const titularAberto = ref(false), carregandoTitular = ref(false), salvandoTitular = ref(false);
+async function carregarTitular() {
+  carregandoTitular.value = true; erroTitular.value = '';
+  try {
+    const r = await fetch('/api/configuracoes');
+    if (!r.ok) throw new Error('Não foi possível carregar o nome do titular.');
+    titularSalvo.value = String((await r.json()).nome_titular || '');
+  } catch (e) { erroTitular.value = e.message; }
+  finally { carregandoTitular.value = false; }
+}
+async function editarTitular() {
+  await carregarTitular();
+  titularEdicao.value = titularSalvo.value; titularAberto.value = true;
+}
+async function salvarTitular() {
+  if (salvandoTitular.value || carregandoTitular.value) return;
+  salvandoTitular.value = true; erroTitular.value = '';
+  try {
+    const r = await fetch('/api/configuracoes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nomeTitular: titularEdicao.value.trim() }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.erro || 'Não foi possível salvar o nome do titular.');
+    titularSalvo.value = String(j.nome_titular || ''); titularAberto.value = false;
+    avisar('Nome do titular salvo.', { tipo: 'ok' });
+    lancamentoFoiSalvo();
+  } catch (e) { erroTitular.value = e.message; }
+  finally { salvandoTitular.value = false; }
+}
+onMounted(carregarTitular);
 onMounted(async () => {
   try {
     const r = await fetch('/api/auth/me', { credentials: 'include' });
@@ -256,6 +287,11 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
       <CardPadrao>
         <div class="linhas">
           <div class="linha fixa"><span class="quadro"><User :size="20" :stroke-width="1.8" /></span><span class="texto"><b>{{ ehPwa ? 'Apelido' : 'Nome' }}</b><small>{{ nomeTopo }}</small></span></div>
+          <button type="button" class="linha atalho" data-nome-titular :disabled="carregandoTitular" @click="editarTitular">
+            <span class="quadro"><User :size="20" :stroke-width="1.8" /></span>
+            <span class="texto"><b>Nome completo do titular</b><small>{{ carregandoTitular ? 'Carregando…' : erroTitular ? 'Toque para tentar novamente' : titularSalvo || 'Para reconhecer transferências entre suas contas' }}</small></span>
+            <ChevronRight :size="18" :stroke-width="1.8" class="seta" />
+          </button>
           <div v-if="!ehPwa" class="linha fixa"><span class="quadro"><Info :size="20" :stroke-width="1.8" /></span><span class="texto"><b>E-mail</b><small>{{ emailAtual || 'não informado' }}</small></span></div>
           <button type="button" class="linha atalho" @click="abrirSenha">
             <span class="quadro"><KeyRound :size="20" :stroke-width="1.8" /></span>
@@ -455,6 +491,9 @@ async function recGuardado() { await confirmarCodigoGuardado(); recPendente.valu
       </CardPadrao>
     </section>
 
+    <FormularioModal :aberto="titularAberto" titulo="Nome do titular" rotulo-salvar="Salvar" :erro="erroTitular" :carregando="salvandoTitular || carregandoTitular" @salvar="salvarTitular" @fechar="titularAberto = false">
+      <CampoTexto v-model="titularEdicao" rotulo="Nome completo do titular" placeholder="Como aparece no banco" maxlength="150" autocomplete="name" dica="Usado para sugerir transferências. Seu apelido continua igual." :disabled="salvandoTitular" />
+    </FormularioModal>
     <FormularioModal :aberto="editando" titulo="Editar dados" rotulo-salvar="Salvar" :erro="erroDados" @salvar="salvarDados" @fechar="editando = false">
       <CampoTexto v-model="nome" :rotulo="ehPwa ? 'Apelido' : 'Nome'" :placeholder="ehPwa ? 'Como quer ser chamado' : 'Seu nome'" maxlength="60" autocomplete="name" />
       <CampoTexto v-if="!ehPwa" v-model="email" rotulo="E-mail" type="email" placeholder="voce@email.com" maxlength="120" autocomplete="email" :erro="emailInvalido ? 'Confira o e-mail digitado.' : ''" />

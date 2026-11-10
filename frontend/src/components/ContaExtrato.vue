@@ -42,7 +42,7 @@ const grupos = computed(() => {
   return [...mapa.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([chave, itens]) => ({
     chave, itens,
     rotulo: props.porMes ? MES_LONGO[Number(chave.slice(5, 7)) - 1] : rotuloDia(chave),
-    total: itens.filter((t) => !t.ignorada).reduce((s, t) => s + t.valor, 0),
+    total: itens.filter((t) => t.ignorada !== 1).reduce((s, t) => s + t.valor, 0),
   }));
 });
 const infoDe = (t) => infoTransacao(t, { categorias: props.categorias });

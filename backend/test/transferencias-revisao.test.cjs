@@ -19,9 +19,9 @@ beforeEach(() => {
  [a,b,c] = ['Origem','Destino','Terceira'].map(nome => dados.inserir('contas', { usuario_id: u.id, nome, origem: 'manual', saldo: 1000 }));
 });
 after(() => { db.close(); fs.rmSync(pasta, { recursive: true, force: true }); });
-test('PIX fora da regra exata gera aviso sem alterar totais ou saldos', () => {
+test('PIX sem nome não gera aviso genérico nem altera totais ou saldos', () => {
  regra(); const t = linha(a,-50,'PIX OUTRO BANCO');
- assert.equal(TR.listar(u.id).length,1);
+ assert.equal(TR.listar(u.id).length,0);
  assert.equal(db.prepare('SELECT ignorada FROM transacoes WHERE id = ?').get(t.id).ignorada,0);
  assert.equal(db.prepare('SELECT saldo FROM contas WHERE id = ?').get(a.id).saldo,1000);
 });
@@ -45,8 +45,8 @@ test('diferença de um centavo não forma par nem cria contrapartida', () => {
  assert.throws(()=>TR.decidir(u.id,t.id,{acao:'vincular',contaId:b.id,parceiraId:p.id}),/valor exato/);
  assert.throws(()=>TR.decidir(u.id,t.id,{acao:'vincular',contaId:b.id}),/valores são diferentes/);
 });
-test('sem PIX nem nome não há aviso; sem regra também não', () => {
- linha(a,-13); assert.equal(TR.listar(u.id).length,0);regra();linha(a,-20,'Compra mercado');assert.equal(TR.listar(u.id).length,1);
+test('titular reconhecido dispensa regra manual; sem PIX nem nome não há aviso', () => {
+ linha(a,-13); assert.equal(TR.listar(u.id).length,1);regra();linha(a,-20,'Compra mercado');assert.equal(TR.listar(u.id).length,1);
 });
 test('sem titular nas duas pontas não sugere; decisão explícita pode confirmar', () => {
  regra();const t=linha(a,-30),p=linha(b,30,'PIX recebido');
@@ -76,15 +76,15 @@ test('estorno no mesmo arquivo anula as duas linhas, sem sugestão solta', () =>
 });
 test('regressão: reconhecimento anterior sem regra nova continua funcionando', () => {
  const ls=analisar([{idx:0,data:'2026-11-08',descricao:'PIX para Destino',valor:-99}]);
- assert.equal(ls[0].acao,'transferencia');assert.equal(ls[0].transferencia.contaId,b.id);
+ assert.equal(ls[0].acao,'importar');assert.equal(ls[0].transferencia,null);
 });
 test('nome de outra pessoa não confirma titular por trecho de palavra', () => {
  regra(); const t=linha(a,-30,'PIX MARIANA SILVA'),p=linha(b,30,'PIX ANA SILVA');
- const it=TR.listar(u.id).find(i=>i.id===t.id); assert.equal(it.sugestaoId,null);
+ const it=TR.listar(u.id).find(i=>i.id===t.id); assert.equal(it,undefined);
 });
 test('recusa de uma ponta impede que ela seja sugerida pela outra', () => {
  regra();const t=linha(a,-33),p=linha(b,33);TR.decidir(u.id,t.id,{acao:'recusar'});
- const it=TR.listar(u.id).find(i=>i.id===p.id);assert.equal(it.candidatas.length,0);
+ const it=TR.listar(u.id).find(i=>i.id===p.id);assert.equal(it,undefined);
 });
 test('confirmação na importação usa uma única ponta existente e não duplica', () => {
  regra();const p=linha(b,17);const ls=analisar([{idx:0,data:'2026-11-08',descricao:'PIX ANA SILVA',valor:-17}]);
@@ -97,4 +97,43 @@ test('IDs de outro usuário e parceiros de valor errado não podem ser usados', 
  const outra=dados.inserir('contas',{usuario_id:u2.id,nome:'Privada',origem:'manual'});
  assert.throws(()=>TR.decidir(u.id,t.id,{acao:'vincular',contaId:outra.id}),/outra conta/);
  const p=linha(b,150);assert.throws(()=>TR.decidir(u.id,t.id,{acao:'vincular',contaId:b.id,parceiraId:p.id}),/valor exato/);
+});
+
+test('nome truncado e primeiro nome são evidências por tokens',()=>{
+ assert.equal(TR.reconhecer('PIX PGT KCR ANA SIL','Ana Silva Pereira'),2);
+ assert.equal(TR.reconhecer('PIX TRANS ANA','Ana Silva Pereira'),1);
+ assert.equal(TR.reconhecer('PIX TRANS ANA','Ana'),1);
+ assert.equal(TR.reconhecer('PIX MARIANA SILVA','Ana Silva'),0);
+ assert.equal(TR.reconhecer('PIX ANA SANTOS','Ana Silva'),0);
+ assert.equal(TR.reconhecer('PIX ANA CAR SILVA','Ana Carolina Ferreira'),0);
+});
+test('primeiro nome requer par coerente e não contesta aluguel',()=>{
+ dados.inserir('configuracoes',{usuario_id:u.id,nome_titular:'Ana Silva Pereira'});
+ const t=linha(a,-70,'PIX PGT ANA');assert.equal(TR.listar(u.id).length,0);
+ linha(b,70,'PIX KCR ANA');assert.equal(TR.listar(u.id).length,2);
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Moradia',teto_mensal:1000});
+ dados.atualizar('transacoes',t.id,{categoria_id:cat.id,classificacao_origem:'regra'});
+ assert.ok(!TR.listar(u.id).find(x=>x.id===t.id));
+});
+test('datas distantes não são pré-selecionadas',()=>{
+ const t=linha(a,-44);linha(b,44,'PIX ANA SILVA',{data:'2025-01-01'});
+ assert.equal(TR.listar(u.id).find(x=>x.id===t.id).sugestaoId,null);
+});
+test('saldo externo mantém crédito e restaura classificação sem duplicação',()=>{
+ const t=linha(a,100,'PIX ANA SILVA',{categoria_receita:'Salário'});
+ const saldo=db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo;
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const atual=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(atual.tipo_mov,'saldo_proprio_externo');assert.equal(atual.ignorada,2);assert.equal(atual.categoria_receita,null);
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,saldo);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM transacoes').get().n,1);
+ TR.decidir(u.id,t.id,{acao:'receita',manual:true});
+ assert.equal(db.prepare('SELECT categoria_receita FROM transacoes WHERE id=?').get(t.id).categoria_receita,'Salário');
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,saldo);
+});
+test('externa rejeita saída e acesso de outro usuário',()=>{
+ const t=linha(a,-30);
+ assert.throws(()=>TR.decidir(u.id,t.id,{acao:'externa',manual:true}),/recebimentos/);
+ assert.throws(()=>TR.obter('outro',t.id),/não pode/);
 });

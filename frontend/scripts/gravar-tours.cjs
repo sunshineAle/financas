@@ -46,7 +46,7 @@ const ROTEIRO = {
     { sel: '.chips-sub, [data-detalhe-categoria] .chip', rolar: true },
   ] },
   revisar: { rota: '/revisar', preparar: prepararExemplos, passos: [
-    { sel: '[data-revisar-transferencias] .item-transferencia:first-of-type', rolar: true },
+    { sel: '[data-revisar-transferencias] [data-tour-transferencia]', rolar: true, antes: async p => { await p.locator('[data-revisar-transferencias] .item-transferencia').filter({hasText:'PIX TRANS ANA SILVA'}).first().evaluate(el => el.setAttribute('data-tour-transferencia','')); } },
     { sel: '[data-revisar-categorias] .item[data-tour-mercado]', rolar: true, antes: marcarExemplos },
     { sel: '[data-revisar-categorias] .item[data-tour-parcela]', rolar: true, antes: marcarExemplos },
     { sel: '[data-reservas-auto] .item:first-child', rolar: true },
@@ -108,6 +108,7 @@ async function prepararExemplos(p) {
       const r = await fetch(url, { method: metodo, headers: {'Content-Type':'application/json'}, body: corpo ? JSON.stringify(corpo) : undefined });
       const j = await r.json(); if (!r.ok) throw Error(JSON.stringify(j)); return j;
     };
+    await api('PUT','/api/configuracoes',{nomeTitular:'Ana Silva'});
     const contas = await api('GET','/api/contas');
     const cats = await api('GET','/api/categorias');
     const reserva = await api('GET','/api/reserva');
@@ -119,9 +120,8 @@ async function prepararExemplos(p) {
     if (reserva.metas?.length) await api('POST','/api/regras',{tipo:'reserva',padrao:'Caixinha de viagem',destino:'guardar',metaId:reserva.metas[0].id});
     const data = new Date().toISOString().slice(0,10);
     for (const [tipo,descricao,valor] of [['saida','Mercado do Bairro',85],['saida','Pagamento de empréstimo',250],['saida','Aplicação Caixinha',100],['entrada','Resgate Caixinha',110]]) await api('POST','/api/transacoes',{contaId:contas[0].id,tipo,descricao,valor,data});
-    // O par PIX precisa de contas distintas; a prévia já tem um par, a demo antiga não.
-    const pendentes = await api('GET','/api/transacoes/transferencias-pendentes');
-    if (!pendentes.itens.length) for (const [i,tipo] of [[0,'saida'],[1,'entrada']]) await api('POST','/api/transacoes',{contaId:contas[i].id,tipo,descricao:'PIX ANA SILVA',valor:73.42,data});
+    // Duas descrições diferentes e o mesmo valor exato, em contas próprias distintas.
+    for (const [i,tipo,descricao] of [[0,'saida','PIX TRANS ANA SILVA'],[1,'entrada','PIX PGT ANA SIL 10/11']]) await api('POST','/api/transacoes',{contaId:contas[i].id,tipo,descricao,valor:120,data});
   });
   // Força remount dos blocos após semear: não grava no banco de nenhum usuário.
   await navegar(p, '/'); await navegar(p, '/revisar');

@@ -15,7 +15,7 @@ const passo = ref(0);
 // os tempos de tempos.json. Tocar num passo ou em "Próximo" passa a controlar à mão.
 const BASE = (import.meta.env && import.meta.env.BASE_URL) || './';
 const tempos = ref(TEMPOS || {}); // vem no próprio app (gerado junto com as animações)
-const srcAnim = computed(() => (tourAberto.value ? `${BASE}tours/${tourAberto.value}.webp${['regras', 'revisar'].includes(tourAberto.value) ? '?v=20261110-gravado' : ''}` : ''));
+const srcAnim = computed(() => (tourAberto.value ? `${BASE}tours/${tourAberto.value}.webp${tourAberto.value === 'revisar' ? '?v=20261110-14' : tourAberto.value === 'regras' ? '?v=20261110-gravado' : ''}` : ''));
 const animOk = ref(true);
 let relogio = null; let inicioAnim = 0; let manual = false;
 function pararRelogio() { if (relogio) { clearInterval(relogio); relogio = null; } }

@@ -13,6 +13,7 @@ export const ehEstornoMov = (t) => /^estorn/.test(mov(t));
 
 export function podeExcluirEmLote(t) {
   if (!t) return false;
+  if (mov(t) === 'saldo_proprio_externo') return !t.cartao;
   if (t.cartao) return t.cartao_origem === 'manual';
   return t.origem === 'manual';
 }
@@ -22,6 +23,7 @@ export function textoExclusao(t) {
   const nome = `"${t.descricao_base || t.descricao}"`;
   if (mov(t) === 'reserva_pendente') return { titulo: 'Excluir transação?', texto: `${nome} estava em "A revisar" (Guardar ou Resgatar sem meta). Sai do extrato e o saldo da conta volta ao que era.` };
   if (ehReservaMov(t)) return { titulo: 'Excluir Guardar/Resgatar?', texto: `${nome} sai do extrato e o valor também sai da meta ou do investimento. O saldo da conta volta ao que era.` };
+  if (mov(t) === 'saldo_proprio_externo') return { titulo: 'Excluir entrada de saldo próprio?', texto: `${nome} sai do extrato e seu valor é retirado apenas do saldo desta conta. Não há outra conta cadastrada para alterar.` };
   if (ehTransferenciaMov(t)) return { titulo: 'Excluir transferência?', texto: `${nome} sai das duas contas, a de origem e a de destino, e os saldos voltam ao que eram.` };
   if (ehEstornoMov(t)) return { titulo: 'Excluir estorno?', texto: `${nome} sai e a despesa original volta a contar nos totais.` };
   if (mov(t) === 'saldo_inicial') return { titulo: 'Excluir saldo inicial?', texto: 'O saldo da conta deixa de ter esse ponto de partida. Você pode lançar outro em Ajustar saldo.' };

@@ -180,10 +180,16 @@ function gravarConta(ctx, conta, linhas, corpo) {
       if (db.prepare('SELECT 1 FROM transacoes WHERE usuario_id = ? AND id_externo = ? AND excluido_em IS NULL').get(usuarioId, idExterno)) { resultado.ignoradas++; continue; }
     }
     const categoriaId = valor < 0 && l.categoriaId && categoriasOk.has(String(l.categoriaId)) && l.status !== 'reserva' && l.status !== 'pagamento_fatura' ? String(l.categoriaId) : null;
+    const catHelpers = require('../utils/categorizacao');
+    const catsAtuais = db.prepare('SELECT id,nome FROM categorias_orcamento WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId);
+    const prova = valor < 0 && l.categoriaAuto ? catHelpers.categorizarDetalhado(l.descricao, catsAtuais, {usuarioId,valor,contaId:conta.id}) : null;
+    let procedencia = prova && prova.categoriaId === categoriaId ? catHelpers.dadosDaClassificacao(prova) : catHelpers.classificacaoManual();
+    let receitaAplicada = null;
+    if(valor > 0 && !l.categoriaReceita) { const R=require('../utils/regras'); const regra=R.acharRegra(usuarioId,'entrada',{descricao:l.descricao,valor,contaId:conta.id}); if(regra && receitasOk.has(regra.categoria_receita)){receitaAplicada=regra.categoria_receita;procedencia=R.provenienciaRegra(regra);R.registrarUso(regra);} }
     const t = dados.inserir('transacoes', {
       conta_id: conta.id, usuario_id: usuarioId, categoria_id: categoriaId, descricao: String(l.descricao).trim().slice(0, 200), valor, data: l.data,
-      categorizacao_automatica: categoriaId && l.categoriaAuto ? 1 : 0, origem: 'manual', id_externo: idExterno,
-      categoria_receita: valor > 0 && l.categoriaReceita && receitasOk.has(String(l.categoriaReceita)) ? String(l.categoriaReceita) : null,
+      ...procedencia, categorizacao_automatica: categoriaId && l.categoriaAuto ? 1 : 0, origem: 'manual', id_externo: idExterno,
+      categoria_receita: valor > 0 && l.categoriaReceita && receitasOk.has(String(l.categoriaReceita)) ? String(l.categoriaReceita) : receitaAplicada,
     });
     somarSaldo(conta, valor);
     if (categoriaId) dados.somar('categorias_orcamento', categoriaId, 'gasto_atual', Math.abs(valor));
