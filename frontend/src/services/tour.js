@@ -83,7 +83,7 @@ export const TOURS = {
     { icone: ChartPie, titulo: 'Detalhes', texto: 'Toque numa parte do gráfico para ver o que tem nela.' },
   ] },
   regras: { titulo: 'Como usar Regras', passos: [
-    { icone: WandSparkles, titulo: 'Blocos com exemplos', texto: 'Despesas, entradas, transferências e metas ficam em blocos. Cada um mostra até três regras adicionadas mais recentemente.' },
+    { icone: WandSparkles, titulo: 'Regras por tipo', texto: 'Despesas, entradas, transferências e metas ficam em blocos. Cada um mostra até três regras adicionadas mais recentemente.' },
     { icone: Plus, titulo: 'Adicionar no +', texto: 'O + no cabeçalho já escolhe o tipo do bloco. Informe o nome que vem no extrato e o destino da regra.' },
     { icone: ListOrdered, titulo: 'Ver todas as regras', texto: 'A lista completa abre numa janela da própria página. Editar uma regra antiga não muda sua data de criação.' },
     { icone: Hand, titulo: 'Editar, pausar ou excluir', texto: 'Toque na regra para editar. Arrastar à esquerda pausa; à direita exclui. Pausar não apaga a regra nem as transações.' },

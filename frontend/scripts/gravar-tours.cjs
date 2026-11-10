@@ -8,7 +8,11 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const DEMO = 'file://' + path.resolve(__dirname, '../dist-demo/index.html');
+const DEMO = process.env.DAGDA_TOUR_URL || 'file://' + path.resolve(__dirname, '../dist-demo/index.html');
+if (process.env.DAGDA_TOUR_URL) {
+  const url = new URL(DEMO);
+  if (!['127.0.0.1','localhost','[::1]'].includes(url.hostname) || url.searchParams.get('modo') !== 'demo') throw Error('Gravação exige prévia local com ?modo=demo; não usar ambiente de produção.');
+}
 const SAIDA = path.resolve(__dirname, '../public-pwa/tours');
 const TMP = '/tmp/gravar-tours';
 const FPS = 8;
@@ -41,7 +45,12 @@ const ROTEIRO = {
     { sel: '[data-detalhe-categoria]', rolar: true },
     { sel: '.chips-sub, [data-detalhe-categoria] .chip', rolar: true },
   ] },
-  revisar: { rota: '/revisar', passos: [{ sel: '[data-reservas-auto], [data-revisar-vazio]' }, { sel: '.campos, [data-revisar-vazio]' }, { sel: '.botoes, [data-revisar-vazio]' }] },
+  revisar: { rota: '/revisar', preparar: prepararExemplos, passos: [
+    { sel: '[data-revisar-transferencias] .item-transferencia:first-of-type', rolar: true },
+    { sel: '[data-revisar-categorias] .item[data-tour-mercado]', rolar: true, antes: marcarExemplos },
+    { sel: '[data-revisar-categorias] .item[data-tour-parcela]', rolar: true, antes: marcarExemplos },
+    { sel: '[data-reservas-auto] .item:first-child', rolar: true },
+  ] },
   compromissos: { rota: '/compromissos', passos: [
     { sel: '.topo-valor' },
     { sel: '[data-bloco-credito]', rolar: true },
@@ -76,7 +85,12 @@ const ROTEIRO = {
     { sel: '[data-lancamentos-importacao] .linha .icone', gesto: 'tocar', rolar: true },
   ] },
   relatorios: { rota: '/relatorios', passos: [{ sel: '[data-alterna], .alterna' }, { sel: '[data-relacao]', gesto: 'tocar' }, { sel: '[data-resumo]', rolar: true }] },
-  regras: { rota: '/regras', passos: [{ sel: '.pagina > section.card-padrao:nth-of-type(1)' }, { sel: '.pagina > section.card-padrao:nth-of-type(1) .regra-item, .pagina > section.card-padrao:nth-of-type(2)', gesto: 'arrastar-esq', rolar: true }, { sel: '.pagina > section.card-padrao:nth-of-type(3)', rolar: true }] },
+  regras: { rota: '/regras', preparar: prepararExemplos, passos: [
+    { sel: '[data-bloco-regras="saida"]', rolar: true },
+    { sel: '[role="dialog"]', antes: async p => { await p.locator('[data-bloco-regras="saida"] .mais-regra').click(); await p.getByPlaceholder('Ex: Padaria do José').fill('Padaria do Bairro'); await p.locator('[data-categoria-escolhida]').click(); await p.getByRole('radio', {name:'Alimentação',exact:true}).click(); }, depois: fecharModal },
+    { sel: '[role="dialog"]', antes: async p => { await p.locator('[data-bloco-regras="saida"]').getByRole('button', { name: /Ver todas as regras/ }).click(); }, depois: fecharModal },
+    { sel: '[data-bloco-regras="saida"] .regra-item:first-child', gesto: 'arrastar-esq', rolar: true },
+  ] },
   'custos-fixos': { rota: '/custos-fixos', passos: [{ sel: '.topo-valor' }, { sel: '[data-essenciais], .lista-fixos', rolar: true }, { sel: '[data-sugestoes], .quanto-guardar', rolar: true }] },
   backup: { rota: '/mais/dados-backup', passos: [{ sel: '[data-backup]' }, { sel: '[data-origem-backup], [data-prov]', rolar: true }, { sel: '.chave-recuperacao, [data-chave]', rolar: true }] },
   'o-que-mudou': { rota: '/', passos: [
@@ -87,12 +101,51 @@ const ROTEIRO = {
   ] },
 };
 
+// As rotas e os componentes são reais. Os exemplos existem somente neste contexto descartável.
+async function prepararExemplos(p) {
+  await p.evaluate(async () => {
+    const api = async (metodo, url, corpo) => {
+      const r = await fetch(url, { method: metodo, headers: {'Content-Type':'application/json'}, body: corpo ? JSON.stringify(corpo) : undefined });
+      const j = await r.json(); if (!r.ok) throw Error(JSON.stringify(j)); return j;
+    };
+    const contas = await api('GET','/api/contas');
+    const cats = await api('GET','/api/categorias');
+    const reserva = await api('GET','/api/reserva');
+    const categoria = cats.find(c => /Alimenta/.test(c.nome)) || cats[0];
+    for (const padrao of ['Padaria do Bairro','Mercado da Esquina','Restaurante','Lanchonete']) await api('POST','/api/regras',{tipo:'saida',padrao,categoriaId:categoria.id});
+    await api('POST','/api/regras',{tipo:'entrada',padrao:'Salário',categoriaReceita:'Salário'});
+    const regras = await api('GET','/api/regras');
+    if (!(regras.regras || regras).some(r => r.tipo === 'transferencia' && r.padrao === 'ANA SILVA')) await api('POST','/api/regras',{tipo:'transferencia',padrao:'ANA SILVA'});
+    if (reserva.metas?.length) await api('POST','/api/regras',{tipo:'reserva',padrao:'Caixinha de viagem',destino:'guardar',metaId:reserva.metas[0].id});
+    const data = new Date().toISOString().slice(0,10);
+    for (const [tipo,descricao,valor] of [['saida','Mercado do Bairro',85],['saida','Pagamento de empréstimo',250],['saida','Aplicação Caixinha',100],['entrada','Resgate Caixinha',110]]) await api('POST','/api/transacoes',{contaId:contas[0].id,tipo,descricao,valor,data});
+    // O par PIX precisa de contas distintas; a prévia já tem um par, a demo antiga não.
+    const pendentes = await api('GET','/api/transacoes/transferencias-pendentes');
+    if (!pendentes.itens.length) for (const [i,tipo] of [[0,'saida'],[1,'entrada']]) await api('POST','/api/transacoes',{contaId:contas[i].id,tipo,descricao:'PIX ANA SILVA',valor:73.42,data});
+  });
+  // Força remount dos blocos após semear: não grava no banco de nenhum usuário.
+  await navegar(p, '/'); await navegar(p, '/revisar');
+}
+async function marcarExemplos(p) {
+  await p.evaluate(() => {
+    for (const el of document.querySelectorAll('[data-revisar-categorias] .item')) {
+      if (el.textContent.includes('Mercado do Bairro')) el.setAttribute('data-tour-mercado','');
+      if (el.textContent.includes('Pagamento de empréstimo')) el.setAttribute('data-tour-parcela','');
+    }
+  });
+}
+async function fecharModal(p) { await p.getByRole('dialog').getByRole('button', {name:'Fechar',exact:true}).click(); await p.waitForTimeout(700); }
+async function navegar(p, rota) {
+  await p.evaluate(x => { if (window.__router) return window.__router.push(x); location.hash = '#' + x; }, rota);
+  await p.waitForTimeout(1200);
+}
+
 const CSS = `
 #tour-anel { position: fixed; z-index: 99999; pointer-events: none; border-radius: 16px; border: 3px solid #8E9CF5;
   box-shadow: 0 0 0 9999px rgba(5, 6, 12, .58), 0 0 24px 4px rgba(142, 156, 245, .55); transition: none; }
 #tour-dedo { position: fixed; z-index: 100000; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; pointer-events: none;
   background: rgba(255, 255, 255, .88); box-shadow: 0 0 0 6px rgba(255, 255, 255, .25), 0 6px 16px rgba(0, 0, 0, .45); }
-.faixa-demo { display: none !important; }
+.faixa-demo, #faixa-previa { display: none !important; }
 `;
 
 async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4, '0') + '.png'); await p.screenshot({ path: f }); return n + 1; }
@@ -102,14 +155,16 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
   const chaves = pedidos.length ? pedidos : Object.keys(ROTEIRO);
   fs.mkdirSync(SAIDA, { recursive: true });
   const tempos = fs.existsSync(path.join(SAIDA, 'tempos.json')) ? JSON.parse(fs.readFileSync(path.join(SAIDA, 'tempos.json'), 'utf8')) : {};
-  const b = await chromium.launch();
+  const b = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? {executablePath:process.env.CHROMIUM_PATH} : {}), args: ['--no-sandbox'] });
   for (const chave of chaves) {
     const r = ROTEIRO[chave];
     const ctx = await b.newContext({ viewport: { width: L, height: A }, colorScheme: 'dark', deviceScaleFactor: 1 });
     // tours já vistos: não abrem por cima durante a gravação
-    await ctx.addInitScript(() => { try { localStorage.setItem('sf:tours', JSON.stringify({ vistos: ['importar-conferir', 'geral', 'inicio', 'patrimonio', 'transacoes', 'transacoes-cat', 'revisar', 'compromissos', 'contas', 'objetivos', 'cartoes', 'dividas', 'importar', 'relatorios', 'regras', 'custos-fixos', 'backup', 'o-que-mudou'], ligado: true })); } catch (e) { /* */ } });
+    await ctx.addInitScript(() => { try { localStorage.setItem('dagda-previa-demo-79-81:sf:tours', JSON.stringify({ vistos: ['importar-conferir', 'geral', 'inicio', 'patrimonio', 'transacoes', 'transacoes-cat', 'revisar', 'compromissos', 'contas', 'objetivos', 'cartoes', 'dividas', 'importar', 'relatorios', 'regras', 'custos-fixos', 'backup', 'o-que-mudou'], ligado: false })); } catch (e) { /* */ } });
     const p = await ctx.newPage();
     await p.goto(DEMO); await p.waitForTimeout(2500);
+    await p.evaluate(() => localStorage.setItem('sf:tours', JSON.stringify({ligado:false,vistos:['geral','o-que-mudou']})));
+    if (await p.locator('[data-tour-pular]').isVisible()) await p.locator('[data-tour-pular]').click();
     await p.addStyleTag({ content: CSS });
     const dir = path.join(TMP, chave);
     fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
@@ -118,11 +173,13 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
     for (const passo of r.passos) {
       const rota = passo.rota || r.rota;
       if (rota !== rotaAtual) {
-        await p.evaluate((x) => window.__router.push(x), rota); await p.waitForTimeout(1800);
+        await navegar(p, rota);
         await p.addStyleTag({ content: CSS }).catch(() => {});
-        if (r.preparar && rotaAtual === null) await r.preparar(p);
+        if (r.preparar && rotaAtual === null) { await r.preparar(p); await navegar(p, rota); }
         rotaAtual = rota;
       }
+      if (passo.antes) await passo.antes(p);
+      await p.waitForTimeout(500);
       inicios.push(n / FPS);
       const caixa = await p.evaluate(({ sel, rolar }) => {
         const el = sel.split(',').map((s) => document.querySelector(s.trim())).find(Boolean);
@@ -131,6 +188,7 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
         return true;
       }, { sel: passo.sel, rolar: !!passo.rolar });
       await p.waitForTimeout(500);
+      if (!caixa && ['regras','revisar'].includes(chave)) throw Error(`Tour ${chave} sem exemplo visível: ${passo.sel}`);
       const box = caixa ? await p.evaluate((sel) => { const el = sel.split(',').map((s) => document.querySelector(s.trim())).find(Boolean); const b = el.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; }, passo.sel) : null;
       // 1) página parada
       for (let i = 0; i < 4; i++) n = await quadro(p, dir, n);
@@ -170,11 +228,13 @@ async function quadro(p, dir, n) { const f = path.join(dir, String(n).padStart(4
       } else {
         for (let i = 0; i < 12; i++) n = await quadro(p, dir, n);
       }
+      if (passo.depois) await passo.depois(p);
     }
     const total = n / FPS;
     await ctx.close();
     const destino = path.join(SAIDA, chave + '.webp');
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(dir, '%04d.png'), '-vf', 'scale=300:-1:flags=lanczos', '-c:v', 'libwebp_anim', '-loop', '0', '-q:v', '62', '-compression_level', '6', destino]);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(dir, '%04d.png'), '-vf', 'scale=300:-1:flags=lanczos', '-c:v', 'libwebp_anim', '-loop', '0', '-q:v', '62', '-compression_level', '6', destino + '.tmp.webp']);
+    fs.renameSync(destino + '.tmp.webp', destino);
     tempos[chave] = { passos: inicios.map((t) => Math.round(t * 100) / 100), total: Math.round(total * 100) / 100 };
     console.log(chave, '→', (fs.statSync(destino).size / 1024).toFixed(0) + ' KB', tempos[chave]);
   }
