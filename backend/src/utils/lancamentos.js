@@ -147,7 +147,13 @@ function desfazerPar(usuarioId, vinculo) {
       } else {
         // Original (ou lançamento importado): volta a contar como antes
         let anterior = {};
-        if(t.tipo_mov === 'transferencia_vinculada') { try { anterior=JSON.parse(t.classificacao_anterior||'{}'); } catch {} }
+        if(t.tipo_mov === 'transferencia_vinculada' || t.tipo_mov === 'estornada') { try { anterior=JSON.parse(t.classificacao_anterior||'{}'); } catch {} }
+        // 1.4.2: era movimentação própria antes do estorno ou da transferência → volta a ser própria (fora do orçamento).
+        if (anterior && anterior.era_propria) {
+          dados.atualizar('transacoes', t.id, { tipo_mov: 'saldo_proprio_externo', vinculo: null, ignorada: 2, categoria_id: null, categoria_receita: null, classificacao_anterior: anterior.anterior_propria || null, revisao: 'origem_confirmada' });
+          return;
+        }
+        if (t.tipo_mov === 'estornada') anterior = {};
         dados.atualizar('transacoes', t.id, { ...anterior, tipo_mov: null, vinculo: null, ignorada: 0, classificacao_anterior:null, revisao:'transferencia_recusada' });
         if(t.tipo_mov === 'transferencia_vinculada' && anterior.categoria_id && t.valor<0) devolverAosTotais({...t,...anterior});
         if (t.tipo_mov === 'estornada') devolverAosTotais(t);
@@ -176,9 +182,12 @@ function vincularEstorno(usuarioId, estornoId, originalId, { criado = false } = 
   }
   const vinculo = dados.novoId();
   dados.transacao(() => {
-    if (eraPropria) { voltarDaMovimentacaoPropria(ori); ori = buscar(originalId); }
-    tirarDosTotais(ori);
-    dados.atualizar('transacoes', ori.id, { tipo_mov: 'estornada', vinculo, ignorada: 2 });
+    // Própria já está fora do orçamento: vira 'estornada' guardando a marca, para o desfazer voltar a ser própria.
+    if (eraPropria) dados.atualizar('transacoes', ori.id, { tipo_mov: 'estornada', vinculo, ignorada: 2, classificacao_anterior: JSON.stringify({ era_propria: true, anterior_propria: ori.classificacao_anterior || null }) });
+    else {
+      tirarDosTotais(ori);
+      dados.atualizar('transacoes', ori.id, { tipo_mov: 'estornada', vinculo, ignorada: 2 });
+    }
     dados.atualizar('transacoes', est.id, { tipo_mov: criado ? 'estorno' : 'estorno_vinculado', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null });
   });
   return { vinculo };

@@ -53,7 +53,9 @@ function itemPara(t,ctx,manual=false) {
   if(!externa && !valido(t)) return null;
   if(!manual && (externa || t.revisao==='transferencia_recusada')) return null;
   const oposta=p=>p.id!==t.id && p.conta_id!==t.conta_id && centavos(p.valor)===-centavos(t.valor);
-  const propriasPar=externa?[]:(ctx.proprias||[]).filter(oposta);
+  const perto=p=>Math.abs(Date.parse(String(p.data).slice(0,10))-Date.parse(String(t.data).slice(0,10)))<=7*86400000;
+  // Aviso automático só até 7 dias de diferença (evita ruído com valores que se repetem todo mês); na conferência manual, todas.
+  const propriasPar=externa?[]:(ctx.proprias||[]).filter(p=>oposta(p)&&(manual||perto(p)));
   const e=evidencia(t,ctx), todas=[...ctx.linhas.filter(oposta),...propriasPar];
   const coerentes=todas.filter(p=>evidencia(p,ctx)>0 && pix(p));
   const mesmaData=coerentes.filter(p=>String(p.data).slice(0,10)===String(t.data).slice(0,10));
@@ -104,8 +106,13 @@ function decidir(u,id,corpo){
     if(!parceiraId&&item.diferencaCentavos)throw new L.ErroLancamento('Os valores são diferentes. Confira antes de vincular.');
     if(t.tipo_mov==='saldo_proprio_externo')restaurar(t);
     // A outra ponta era uma movimentação própria: volta à classificação de antes e as duas viram transferência.
-    if(parceiraId&&item.candidatas.some(p=>p.id===parceiraId&&p.propria))restaurar(db.prepare('SELECT * FROM transacoes WHERE id = ?').get(parceiraId));
-    return L.converterEmTransferencia(u,id,contaId,{parceiraId,buscarParceira:false});
+    const propria=parceiraId&&item.candidatas.some(p=>p.id===parceiraId&&p.propria)?db.prepare('SELECT * FROM transacoes WHERE id = ?').get(parceiraId):null;
+    if(propria)restaurar(propria);
+    const r=L.converterEmTransferencia(u,id,contaId,{parceiraId,buscarParceira:false});
+    // Guarda que a ponta era própria: desfazer a transferência devolve a movimentação própria, não uma despesa comum.
+    if(propria){const atual=db.prepare('SELECT classificacao_anterior FROM transacoes WHERE id = ?').get(propria.id);let ant={};try{ant=JSON.parse(atual.classificacao_anterior||'{}');}catch{}
+      dados.atualizar('transacoes',propria.id,{classificacao_anterior:JSON.stringify({...ant,era_propria:true,anterior_propria:propria.classificacao_anterior||null})});}
+    return r;
   });
 }
 module.exports={contexto,sugerir,listar,decidir,obter,centavos,reconhecer};

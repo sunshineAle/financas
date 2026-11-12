@@ -520,12 +520,13 @@ const gruposPorDia = computed(() => {
 });
 
 const gruposPorMes = computed(() => meses.value
-  .filter((g) => g.itens.length)
   .map((g) => {
     const m = Number(g.chave.slice(5, 7));
     const entradas = Number(g.resumo?.entradas) || 0, saidas = Number(g.resumo?.saidas) || 0;
-    return { m, nome: MESES[m - 1], itens: g.itens, entradas, saidas, resultado: Number(g.resumo?.resultado ?? entradas - saidas), pct: entradas > 0 ? Math.max(0, ((entradas - saidas) / entradas) * 100) : 0 };
+    const ids = new Set(g.itens.map((t) => t.id)); // mantém busca e ordenação da lista
+    return { m, nome: MESES[m - 1], itens: ordenadas.value.filter((t) => ids.has(t.id)), entradas, saidas, resultado: Number(g.resumo?.resultado ?? entradas - saidas), pct: entradas > 0 ? Math.max(0, ((entradas - saidas) / entradas) * 100) : 0 };
   })
+  .filter((g) => g.itens.length)
   .sort((a, b) => b.m - a.m));
 
 const gruposPorCategoria = computed(() => {

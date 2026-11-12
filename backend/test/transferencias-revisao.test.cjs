@@ -263,3 +263,48 @@ test('105: movimentação própria volta igual do backup e continua reversível'
  TR.decidir(u.id,t.id,{acao:'manter',manual:true});
  assert.equal(db.prepare('SELECT categoria_id FROM transacoes WHERE id=?').get(t.id).categoria_id,cat.id);
 });
+test('105: desfazer o estorno devolve a movimentação própria, sem voltar ao orçamento',()=>{
+ const L=require('../src/utils/lancamentos');
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:80});
+ const t=linha(a,-80,'PIX ANA SILVA',{categoria_id:cat.id});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const s0=db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo;
+ const r=L.estornarTransacao(u.id,t.id,{data:'2026-11-09'});
+ L.desfazerPar(u.id,r.vinculo);
+ const v=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(v.tipo_mov,'saldo_proprio_externo'); assert.equal(v.ignorada,2); assert.equal(v.categoria_id,null);
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,0);
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,s0,'saldo como antes do estorno');
+ // e ainda dá para voltar à categoria de antes
+ TR.decidir(u.id,t.id,{acao:'manter',manual:true});
+ assert.equal(db.prepare('SELECT categoria_id FROM transacoes WHERE id=?').get(t.id).categoria_id,cat.id);
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,80);
+});
+test('105: desfazer a transferência criada pela duplicidade devolve a movimentação própria',()=>{
+ const L=require('../src/utils/lancamentos');
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:250});
+ const t=linha(a,-250,'PIX ANA SILVA',{categoria_id:cat.id});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const novo=linha(b,250,'PIX RECEBIDO');
+ const r=TR.decidir(u.id,novo.id,{acao:'vincular',contaId:a.id,parceiraId:t.id});
+ L.desfazerPar(u.id,r.vinculo);
+ const v=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(v.tipo_mov,'saldo_proprio_externo'); assert.equal(v.ignorada,2);
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,0);
+ TR.decidir(u.id,t.id,{acao:'manter',manual:true});
+ assert.equal(db.prepare('SELECT categoria_id FROM transacoes WHERE id=?').get(t.id).categoria_id,cat.id,'categoria original preservada');
+});
+test('105: própria de muitos dias antes não gera aviso automático; na conferência manual aparece',()=>{
+ const t=linha(a,-100,'PIX ANA SILVA',{data:'2026-09-01'});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const novo=linha(b,100,'PIX RECEBIDO');
+ assert.ok(!TR.listar(u.id).some(i=>i.id===novo.id));
+ assert.ok(TR.obter(u.id,novo.id).candidatas.some(c=>c.id===t.id&&c.propria));
+});
+test('105: duas próprias de mesmo valor não sugerem uma ao acaso',()=>{
+ for(const c of [a,c3()]){const t=linha(c,-70,'PIX ANA SILVA');TR.decidir(u.id,t.id,{acao:'externa',manual:true});}
+ const novo=linha(b,70,'PIX RECEBIDO');
+ const it=TR.listar(u.id).find(i=>i.id===novo.id);
+ assert.ok(it); assert.equal(it.sugestaoId,null);
+});
+function c3(){return c;}
