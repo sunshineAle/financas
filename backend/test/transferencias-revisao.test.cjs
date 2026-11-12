@@ -107,9 +107,10 @@ test('nome truncado e primeiro nome são evidências por tokens',()=>{
  assert.equal(TR.reconhecer('PIX ANA SANTOS','Ana Silva'),0);
  assert.equal(TR.reconhecer('PIX ANA CAR SILVA','Ana Carolina Ferreira'),0);
 });
-test('primeiro nome requer par coerente e não contesta aluguel',()=>{
+test('primeiro nome sozinho aparece para decidir (1.4.3) e não contesta aluguel',()=>{
  dados.inserir('configuracoes',{usuario_id:u.id,nome_titular:'Ana Silva Pereira'});
- const t=linha(a,-70,'PIX PGT ANA');assert.equal(TR.listar(u.id).length,0);
+ const t=linha(a,-70,'PIX PGT ANA');assert.equal(TR.listar(u.id).length,1);
+ const so=TR.listar(u.id)[0];assert.equal(so.sugestaoId,null);assert.match(so.motivo,/primeiro nome/);
  linha(b,70,'PIX KCR ANA');assert.equal(TR.listar(u.id).length,2);
  const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Moradia',teto_mensal:1000});
  dados.atualizar('transacoes',t.id,{categoria_id:cat.id,classificacao_origem:'regra'});
@@ -308,3 +309,10 @@ test('105: duas próprias de mesmo valor não sugerem uma ao acaso',()=>{
  assert.ok(it); assert.equal(it.sugestaoId,null);
 });
 function c3(){return c;}
+test('1.4.3: "PIX TRANSF" com o primeiro nome aparece sem outra ponta; outro nome não',()=>{
+ dados.inserir('configuracoes',{usuario_id:u.id,nome_titular:'Ana Silva Pereira'});
+ const t=linha(a,-150,'PIX TRANSF ANA'), x=linha(a,-40,'PIX TRANSF MARIA');
+ const ids=TR.listar(u.id).map(i=>i.id);
+ assert.ok(ids.includes(t.id)); assert.ok(!ids.includes(x.id));
+ assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(t.id).tipo_mov,null,'só aviso, nada muda');
+});

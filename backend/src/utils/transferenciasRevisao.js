@@ -62,8 +62,8 @@ function itemPara(t,ctx,manual=false) {
   const cl=classificacao(t), resolvida=t.classificacao_origem==='regra' || (cl.categoriaNome && !/^(geral|sem categoria)$/i.test(cl.categoriaNome));
   if(!manual && !(propriasPar.length && (pix(t) || e))) {
     if(!pix(t) || !e) return null;
-    // Primeiro nome só é suficiente para uma possibilidade com outra ponta coerente no mesmo dia.
-    if(e===1 && !mesmaData.length) return null;
+    // 1.4.3 (pedido do dono, 12/11): primeiro nome sozinho também aparece, para a pessoa decidir.
+    // Continua valendo: lançamento já classificado (categoria ou regra) não é contestado por indício fraco (abaixo).
     if(resolvida && (e<2 || !mesmaData.length)) return null;
   }
   // Datas distintas continuam disponíveis para revisão manual; nunca preferir um par remoto automaticamente.
@@ -73,7 +73,7 @@ function itemPara(t,ctx,manual=false) {
   const candidatas=todas.map(p=>{const c=ctx.contas.find(c=>c.id===p.conta_id);return {propria:p.tipo_mov==='saldo_proprio_externo',id:p.id,contaId:p.conta_id,contaNome:c?.nome,contaIcone:c?.icone,contaCor:c?.cor,contaTipo:c?.tipo,descricao:p.descricao,data:p.data,valor:p.valor};});
   const proximas=ctx.linhas.some(p=>p.conta_id!==t.conta_id && Math.sign(p.valor)!==Math.sign(t.valor) && Math.abs(centavos(p.valor)+centavos(t.valor))===1 && evidencia(p,ctx)>0);
   const contaPropria=propriasPar.length===1?ctx.contas.find(c=>c.id===propriasPar[0].conta_id):null;
-  const motivo=propriasPar.length?`Pode ser o mesmo dinheiro da movimentação própria já marcada${contaPropria?` em ${contaPropria.nome}`:''}. Confira para não contar duas vezes.`:resolvida?'Confira a classificação deste lançamento.':todas.length>1?'Há mais de uma possibilidade.':e===1?'Nome incompleto: confira as duas pontas.':todas.length&&!mesmaData.length?'Confira as datas dos lançamentos.':'Confira se é dinheiro entre suas contas.';
+  const motivo=propriasPar.length?`Pode ser o mesmo dinheiro da movimentação própria já marcada${contaPropria?` em ${contaPropria.nome}`:''}. Confira para não contar duas vezes.`:resolvida?'Confira a classificação deste lançamento.':todas.length>1?'Há mais de uma possibilidade.':e===1?(todas.length?'Nome incompleto: confira as duas pontas.':'Só o primeiro nome aparece. Confira se o dinheiro é seu.'):todas.length&&!mesmaData.length?'Confira as datas dos lançamentos.':'Confira se é dinheiro entre suas contas.';
   return {id:t.id,descricao:t.descricao,valor:t.valor,data:t.data,contaId:t.conta_id,contaNome:conta?.nome,contaIcone:conta?.icone,contaCor:conta?.cor,contaTipo:conta?.tipo,externa,classificacao:cl,conflito:!!resolvida,evidencia:e===3?'Nome completo':e===2?'Nome cortado':e===1?'Primeiro nome':'Conferência manual',motivo,sugestaoId:sugestao?.id||null,sugestaoContaId:sugestao?.conta_id||null,candidatas,contas:ctx.contas.filter(c=>c.id!==t.conta_id),diferencaCentavos:proximas&&!todas.length,duplicidadePropria:propriasPar.length>0};
 }
 function sugerir(t,ctx){return itemPara(t,ctx);}

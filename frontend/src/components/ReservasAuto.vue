@@ -75,7 +75,7 @@ async function decidir(p, acao) {
   <CardPadrao v-if="pendentes.length" tema="meta" class="auto tema-meta" titulo="Guardar e resgatar" data-reservas-auto>
     <ul class="lista">
       <li v-for="p in pendentes" :key="p.transacao.id" class="item">
-        <LinhaTransacao class="linha-revisar" :t="{ ...p.transacao, a_revisar: true }" :info="{ nome: p.deteccao.rotulo, neutra: true, tipoNeutro: 'reserva' }" :clicavel="false" />
+        <LinhaTransacao class="linha-revisar" :t="{ ...p.transacao, a_revisar: false }" :info="{ nome: p.deteccao.rotulo, neutra: true, tipoNeutro: 'reserva' }" :clicavel="false" />
         <div class="campos" :class="{ dois: p.deteccao.sentido === 'resgatar' }">
           <label class="campo">
             <span>{{ p.deteccao.sentido === 'guardar' ? 'Guardar em' : 'Resgatar de' }}</span>

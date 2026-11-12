@@ -37,7 +37,7 @@ async function carregar() {
 }
 onMounted(carregar);
 
-const linha = (it) => ({ id: it.id, descricao: it.descricao, valor: it.valor, data: it.data, conta_nome: it.onde, icone: it.icone, a_revisar: true });
+const linha = (it) => ({ id: it.id, descricao: it.descricao, valor: it.valor, data: it.data, conta_nome: it.onde, icone: it.icone });
 function tirar(it) {
   itens.value = itens.value.filter((x) => x.id !== it.id);
   emit('quantidade', itens.value.length);
