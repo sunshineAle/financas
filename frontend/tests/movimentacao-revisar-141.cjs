@@ -26,12 +26,12 @@ const DIA = '2026-11-10';
   await p.getByRole('checkbox', { name: 'Guardei a chave em local seguro', exact: true }).check({ timeout: 20000 });
   await p.getByRole('button', { name: 'Entrar no app', exact: true }).click();
   await p.locator('main').waitFor({ timeout: 25000 });
-  await api('/api/configuracoes', { nome_titular: 'Ana Carolina Ferreira' }, 'PUT').catch(() => {});
+  await api('/api/configuracoes', { nome_titular: 'Titular Ficticio Teste' }, 'PUT').catch(() => {});
 
   // ---------- 103 ----------
   const a = await api('/api/contas', { nome: 'Conta A fictícia', tipo: 'corrente', saldo: 2000 });
   const lazer = await api('/api/categorias', { nome: 'Lazer fictício', tetoMensal: 1000 });
-  const saida = await api('/api/transacoes', { contaId: a.id, tipo: 'saida', descricao: 'TED ANA CAROLINA FERREIRA', valor: 500, data: DIA, categoriaId: lazer.id });
+  const saida = await api('/api/transacoes', { contaId: a.id, tipo: 'saida', descricao: 'TED TITULAR FICTICIO TESTE', valor: 500, data: DIA, categoriaId: lazer.id });
   const s0 = await saldo(a.id), r0 = await resumo();
   const gasto = async () => ((await api('/api/dashboard?mes=2026-11')).categoriasMes || (await api('/api/dashboard?mes=2026-11')).categorias || []).find?.((x) => x.id === lazer.id)?.gasto_atual;
   const g0 = await gasto();

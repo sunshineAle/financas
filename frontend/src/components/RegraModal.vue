@@ -18,8 +18,9 @@ import CampoCategoria from './CampoCategoria.vue';
 import CampoIconeItem from './CampoIconeItem.vue';
 import CampoSubcategoria from './CampoSubcategoria.vue';
 
-const props = defineProps({ aberto: Boolean, inicial: { type: Object, default: () => ({}) }, tipoFixo: Boolean });
-const emit = defineEmits(['fechar', 'salvo', 'excluir', 'alternar']);
+// `rascunho` (1.4.1, anotação 104): não grava; devolve o pedido em `rascunho(corpo)` para quem chamou gravar junto com o resto.
+const props = defineProps({ aberto: Boolean, inicial: { type: Object, default: () => ({}) }, tipoFixo: Boolean, rascunho: Boolean });
+const emit = defineEmits(['fechar', 'salvo', 'excluir', 'alternar', 'rascunho']);
 
 const f = ref({ tipo: 'saida', padrao: '', categoriaId: '', categoriaReceita: '', subcategoria: '', icone: '', contaId: '', usarValor: false, valorMin: 0, valorMax: 0, aplicar: true, destino: 'guardar', metaId: '', ativoId: '' });
 const contas = ref([]);
@@ -106,6 +107,7 @@ async function salvar() {
       if (body.valorMin === '') body.valorMin = null;
       if (body.valorMax === '') body.valorMax = null;
     }
+    if (props.rascunho && !editando.value) { emit('rascunho', body); return; }
     const url = editando.value ? `/api/regras/${props.inicial.id}` : '/api/regras';
     const r = await fetch(url, { method: editando.value ? 'PUT' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const d = await r.json();

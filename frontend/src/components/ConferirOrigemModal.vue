@@ -61,7 +61,7 @@ const infoLinha = t => ({ nome: nomeDaConta(t) });
         <p v-if="item.classificacao?.regra" class="regra" data-regra-origem>Regra “{{ item.classificacao.regra.padrao }}”<template v-if="item.classificacao.regra.categoriaNome"> → {{ item.classificacao.regra.categoriaNome }}</template></p>
         <p v-else-if="item.classificacao?.categoriaNome && !item.externa" class="nota">Classificado em {{ item.classificacao.categoriaNome }}</p>
         <p v-else-if="item.externa" class="nota">Classificação atual: movimentação própria, com conta fora do Dagda.</p>
-        <div class="pergunta"><b>{{ entrada ? 'Como este valor entrou?' : 'Como tratar este lançamento?' }}</b><AjudaSecao titulo="Origem do dinheiro" :texto="['Receita e despesa mudam o seu resultado. Dinheiro seu indo ou vindo de uma conta fora do Dagda é só movimentação própria: entra no fluxo do mês, mas não nas receitas, nas despesas nem no orçamento.', 'PIX e o nome no extrato são indícios. A classificação só muda depois de confirmar. A decisão vale para este lançamento e não altera suas regras.']" /></div>
+        <div class="pergunta"><b>{{ entrada ? 'Como este valor entrou?' : 'Como tratar este lançamento?' }}</b><AjudaSecao titulo="Origem do dinheiro" :texto="['Receita e despesa mudam o seu resultado. Dinheiro seu indo ou vindo de uma conta fora do Dagda é só movimentação própria: conta nas entradas ou saídas do mês, mas não nas receitas, nas despesas nem no orçamento.', 'PIX e o nome no extrato são indícios. A classificação só muda depois de confirmar. A decisão vale para este lançamento e não altera suas regras.']" /></div>
         <div class="origens" role="radiogroup" aria-label="Origem do dinheiro">
           <button v-for="o in opcoes" :key="o.valor" type="button" role="radio" :aria-checked="escolha === o.valor" :aria-label="o.titulo" :disabled="salvando" :class="['opcao-origem', { selecionada: escolha === o.valor }]" @click="escolha = o.valor"><span class="radio" aria-hidden="true" /><span><b>{{ o.titulo }}</b><small>{{ o.texto }}</small></span></button>
         </div>
@@ -76,8 +76,8 @@ const infoLinha = t => ({ nome: nomeDaConta(t) });
           </template>
           <p v-if="item.diferencaCentavos" class="consequencia">Os valores são diferentes. Confira os lançamentos antes de vincular.</p>
         </template>
-        <p v-if="escolha === 'externa'" class="consequencia" data-consequencia-externa>O saldo de {{ nomeDaConta(item) }} não muda. O valor conta {{ entrada ? 'nas entradas' : 'nas saídas' }} do mês, mas fica fora {{ entrada ? 'das receitas' : 'das despesas e do orçamento' }}. Nenhuma outra conta será criada.</p>
-        <p v-if="escolha === 'atual' && item.externa" class="consequencia">Este valor volta a contar {{ entrada ? 'nas receitas' : 'nas despesas, com a categoria que tinha antes' }}. O saldo da conta não muda.</p>
+        <p v-if="escolha === 'externa'" class="consequencia" data-consequencia-externa>Este valor já {{ entrada ? 'entrou no' : 'saiu do' }} saldo de {{ nomeDaConta(item) }} e continua assim. Ele aparece como Movimentação própria, {{ entrada ? 'vinda de' : 'para' }} uma conta fora do Dagda: conta {{ entrada ? 'nas entradas' : 'nas saídas' }} do mês, mas não {{ entrada ? 'como receita' : 'como despesa nem no orçamento' }}. Nenhuma outra conta será criada.</p>
+        <p v-if="escolha === 'atual' && item.externa" class="consequencia">Este valor volta a contar {{ entrada ? 'nas receitas' : 'nas despesas, com a categoria que tinha antes' }}. O saldo da conta continua o mesmo.</p>
       </template>
       <p v-if="erro" class="sf-erro" role="alert">{{ erro }}</p>
     </div>

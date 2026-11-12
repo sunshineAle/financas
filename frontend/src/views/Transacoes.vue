@@ -884,7 +884,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <span :class="['tag-tipo', edicaoEhSaida ? 'saida' : 'entrada']">{{ edicaoEhSaida ? 'Saída' : 'Entrada' }}</span>
           <span class="nota" v-if="editando.cartao">{{ `Cartão ${editando.conta_nome}${editando.total_parcelas > 1 ? ` · ${editando.total_parcelas}x` : ''}${editando.cartao_origem === 'manual' ? '' : ' · do banco'}` }}</span>
           <span class="nota" v-else>{{ editando.origem === 'manual' ? 'Lançada à mão' : 'Do banco (Open Finance)' }}</span>
-          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ ehExterno(editando) ? ' · fora do orçamento' : foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
+          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ ehExterno(editando) ? (editando.valor < 0 ? ' · fora do orçamento' : ' · fora das receitas') : foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
           <span v-else-if="editando.ignorada" class="selo-ignorada">ignorada</span>
         </p>
         <!-- Homologação 1.0, seção 6: ações que saíram do menu ⋮ ficam aqui, no detalhe -->

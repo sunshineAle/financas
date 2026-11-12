@@ -89,6 +89,7 @@ router.get('/detalhamento-categoria', (req, res) => {
 });
 
 // Projeção simples do próximo mês = média dos últimos 3 meses com dados.
+// Projeção pela média: sem a movimentação própria (anotação 103), igual à previsão do Início.
 router.get('/projecao', (req, res) => {
   const linhas = db
     .prepare(
@@ -96,7 +97,7 @@ router.get('/projecao', (req, res) => {
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes
-       WHERE usuario_id = ? AND excluido_em IS NULL AND ${noFluxo()} AND ${semPagamentoDeFatura()}
+       WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND ${semPagamentoDeFatura()}
        GROUP BY chave
        ORDER BY chave DESC`
     )

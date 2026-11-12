@@ -5,6 +5,9 @@
 //  - transacoes.ignorada: 0 = vale nos totais; 1 = ignorada pelo usuário (sai de tudo, inclusive do saldo);
 //    2 = "fora dos totais" (transferência / estorno): o SALDO da conta continua valendo, mas Saldo do mês,
 //    categorias, relatórios e dashboard não contam (todas as consultas já filtram `ignorada = 0`).
+//    Exceção (1.4.1, anotação 103): tipo_mov 'saldo_proprio_externo' (Movimentação própria) tem ignorada = 2, mas ENTRA no
+//    fluxo de caixa e no Saldo do mês via noFluxo(). Toda consulta nova de totais decide: noFluxo() (fluxo real) ou
+//    ignorada = 0 (receitas, despesas, categorias, orçamento e projeções pela média).
 //  - tipo_mov: transferência = 'transferencia_interna' (par criado pelo app) | 'transferencia_vinculada' (lançamento que já existia/veio
 //    de importação e foi ligado); estorno = 'estorno' (lançamento criado pelo app) | 'estorno_vinculado' (lançamento que já existia e foi ligado)
 //    | 'estornada' (a despesa original). Ao desfazer, os "criados" são apagados e os "vinculados" só voltam ao normal.
