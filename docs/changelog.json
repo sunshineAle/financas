@@ -5,7 +5,7 @@
     "resumo": "PIX ou transferência com o seu primeiro nome agora aparece em Possíveis transferências para você decidir. A revisar ficou mais limpo.",
     "itens": [
       "PIX, TED, DOC ou boleto com o seu primeiro nome aparece em Possíveis transferências, mesmo sem a outra conta. Nada muda até você decidir. Lançamentos que já têm categoria ou regra continuam como estão.",
-      "Dica: preencha o nome completo do titular em Perfil. Assim o Dagda reconhece também nomes cortados no extrato.",
+      "A revisar avisa quando falta o nome completo do titular no Perfil. Com ele, o Dagda reconhece também nomes cortados no extrato. O nome vai junto no backup.",
       "A página A revisar não mostra mais a marquinha vermelha em cada item."
     ]
   },
