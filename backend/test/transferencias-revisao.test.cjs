@@ -316,3 +316,11 @@ test('1.4.3: "PIX TRANSF" com o primeiro nome aparece sem outra ponta; outro nom
  assert.ok(ids.includes(t.id)); assert.ok(!ids.includes(x.id));
  assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(t.id).tipo_mov,null,'só aviso, nada muda');
 });
+test('1.4.3: na importação, PIX com só o primeiro nome e categoria dada por regra não é contestado',()=>{
+ dados.inserir('configuracoes',{usuario_id:u.id,nome_titular:'Ana Silva Pereira'});
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Moradia',teto_mensal:1000});
+ dados.inserir('regras_categorias',{usuario_id:u.id,tipo:'saida',padrao:'PIX PGT ANA',categoria_id:cat.id,ativa:1});
+ const [l1,l2]=analisar([{idx:0,data:'2026-11-08',descricao:'PIX PGT ANA',valor:-900},{idx:1,data:'2026-11-08',descricao:'PIX TRANSF ANA',valor:-60}]);
+ assert.ok(!l1.suspeitaTransferencia,'regra manda'); assert.equal(l1.categoriaId,cat.id);
+ assert.ok(l2.suspeitaTransferencia,'sem categoria: aparece para decidir');
+});

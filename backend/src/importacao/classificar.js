@@ -267,7 +267,8 @@ function classificarConta(usuarioId, conta, linhas, periodo, opcoes = {}) {
       r.observacao = `${rv.rotulo}: depois de importar, você pode vincular a uma meta.`;
       return r;
     }
-    const suspeita = TR.sugerir({ ...l, conta_id: conta.id }, ctxTR);
+    // 1.4.3: a categoria que a regra já deu nesta prévia conta como "já classificado" (indício fraco não contesta).
+    const suspeita = TR.sugerir({ ...l, conta_id: conta.id, categoria_id: r.categoriaId || null, categoria_receita: r.categoriaReceita || null }, ctxTR);
     if (suspeita) {
       r.suspeitaTransferencia = suspeita;
       r.revisar = true;
