@@ -78,8 +78,16 @@ const DIA = '2026-11-10';
   assert.equal(await cr.getAttribute('aria-checked'), 'false', 'Criar regra começa desmarcada');
 
   await ed.getByRole('radio', { name: /Lazer fictício/ }).first().click();
-  await ed.getByText(/outra transação|outras \d/).waitFor({ timeout: 10000 });
-  await cr.click(); assert.equal(await cr.getAttribute('aria-checked'), 'true');
+  await ed.getByText(/Também muda 1 transação parecida/).waitFor({ timeout: 10000 });
+  assert.equal(await ed.getByRole('radio', { name: /^Geral/ }).count(), 0, 'Geral não aparece como escolha');
+  // Ajustar só edita o rascunho: nada é gravado antes do Salvar
+  const antesRegras = (await api('/api/regras')).length;
+  await ed.getByRole('button', { name: 'Ajustar' }).click();
+  const rm = p.getByRole('dialog').last(); await rm.getByRole('button', { name: 'Usar estes ajustes' }).last().click();
+  await ed.waitFor();
+  assert.equal((await api('/api/regras')).length, antesRegras, 'Ajustar não grava a regra');
+  await ed.getByText('Regra ajustada. Ela é criada ao salvar.').waitFor();
+  assert.equal(await cr.getAttribute('aria-checked'), 'true');
   await p.screenshot({ path: `${SHOTS}/104-editar.png` });
   await p.locator('[data-salvar-categoria]').click();
   await ed.waitFor({ state: 'hidden' });

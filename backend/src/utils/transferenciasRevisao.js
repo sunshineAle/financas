@@ -35,7 +35,9 @@ function contexto(usuarioId) {
   const linhas = db.prepare('SELECT * FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId).filter(t=>valido(t) && t.revisao !== 'transferencia_recusada' && contas.some(c=>c.id===t.conta_id));
   return { regras, nomes, contas, linhas };
 }
-const evidencia = (t,ctx) => Math.max(0,...ctx.nomes.map(n=>reconhecer(t.descricao,n)));
+// Boleto (anotação 103): o nome que vem depois de "pagador" é de quem pagou, não de quem recebeu. Só o beneficiário vale como indício.
+const semPagador = d => String(d||'').replace(/\bpagador\b.*$/i,'');
+const evidencia = (t,ctx) => Math.max(0,...ctx.nomes.map(n=>reconhecer(semPagador(t.descricao),n)));
 function classificacao(t) {
   let regra = null;
   try { if(t.classificacao_origem==='regra' && t.regra_snapshot) regra=JSON.parse(t.regra_snapshot); } catch {}
@@ -80,6 +82,7 @@ function decidir(u,id,corpo){
       if(t.tipo_mov==='saldo_proprio_externo')return {ok:true};
       if(t.cartao)throw new L.ErroLancamento('Movimentação própria vale só para lançamentos de conta.');
       if(t.valor<0&&db.prepare('SELECT 1 FROM faturas_pagas WHERE transacao_id = ? AND excluido_em IS NULL').get(t.id))throw new L.ErroLancamento('Esta saída é o pagamento de uma fatura de cartão.');
+      if(db.prepare('SELECT 1 FROM historico_pagamentos WHERE transacao_id = ? AND excluido_em IS NULL').get(t.id))throw new L.ErroLancamento('Esta saída pagou uma dívida. Desfaça o pagamento antes de mudar a classificação.');
       // Saída: deixa de pesar no orçamento da categoria. Entrada ou saída: o saldo da conta continua igual.
       L.tirarDosTotais(t);
       dados.atualizar('transacoes',id,{classificacao_anterior:snapshot(t),tipo_mov:'saldo_proprio_externo',ignorada:2,revisao:'origem_confirmada',categoria_id:null,categoria_receita:null});return {ok:true};

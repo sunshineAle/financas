@@ -118,7 +118,7 @@ async function salvar() {
 </script>
 
 <template>
-  <FormularioModal :aberto="aberto" ajuda="regras" :titulo="editando ? 'Editar regra' : ehTransferencia ? 'Nova regra de transferência' : ehReserva ? 'Nova regra de meta ou investimento' : 'Nova regra de categoria'" :tema="temaForm" :rotulo-salvar="editando ? 'Salvar' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
+  <FormularioModal :aberto="aberto" ajuda="regras" :titulo="editando ? 'Editar regra' : ehTransferencia ? 'Nova regra de transferência' : ehReserva ? 'Nova regra de meta ou investimento' : 'Nova regra de categoria'" :tema="temaForm" :rotulo-salvar="editando ? 'Salvar' : rascunho ? 'Usar estes ajustes' : 'Criar regra'" :sem-cancelar="editando" :carregando="salvando" :erro="erro" @salvar="salvar" @fechar="emit('fechar')">
     <div v-if="editando" class="estado" :class="{ pausada: !ativa }">
       <span><b>{{ ativa ? 'Regra ativa' : 'Regra pausada' }}</b><small>{{ ativa ? 'Categoriza os próximos lançamentos.' : 'Não categoriza nada até ser ativada.' }}</small></span>
       <button type="button" class="alternar" @click="emit('alternar', inicial)">

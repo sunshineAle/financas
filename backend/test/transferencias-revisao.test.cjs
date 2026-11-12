@@ -188,3 +188,16 @@ test('103: pagamento de fatura não vira movimentação própria',()=>{
  dados.inserir('faturas_pagas',{cartao_id:cartao.id,fatura:'2026-11',conta_id:a.id,transacao_id:t.id,valor:150,data:'2026-11-08'});
  assert.throws(()=>TR.decidir(u.id,t.id,{acao:'externa',manual:true}),/fatura/);
 });
+test('103: saída que pagou dívida não vira movimentação própria',()=>{
+ const t=linha(a,-200,'PIX ANA SILVA');
+ const d=dados.inserir('dividas',{usuario_id:u.id,nome:'Dívida fictícia',saldo:800,saldo_original:1000});
+ dados.inserir('historico_pagamentos',{divida_id:d.id,valor:200,transacao_id:t.id});
+ assert.throws(()=>TR.decidir(u.id,t.id,{acao:'externa',manual:true}),/dívida/);
+ assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(t.id).tipo_mov,null);
+});
+test('103: em boleto, o nome depois de "pagador" não é indício de movimentação própria',()=>{
+ const conta=linha(a,-150,'PAGTO BOLETO ENERGIA PAGADOR ANA SILVA');
+ const propria=linha(a,-300,'PAGTO BOLETO ANA SILVA');
+ const ids=TR.listar(u.id).map(i=>i.id);
+ assert.ok(!ids.includes(conta.id)); assert.ok(ids.includes(propria.id));
+});

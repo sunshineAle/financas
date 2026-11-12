@@ -4,7 +4,7 @@
     "data": "2026-11-12",
     "resumo": "Movimentação própria para dinheiro seu que entra ou sai de uma conta fora do Dagda. Em A revisar, a categoria é escolhida na janela do sistema, com a opção de criar a regra ali mesmo.",
     "itens": [
-      "Movimentação própria: entrada ou saída de uma conta sua que não está no Dagda. O saldo da conta não muda; o valor conta nas entradas e saídas do mês, mas fica fora de receitas, despesas e orçamento.",
+      "Movimentação própria: dinheiro seu que entra ou sai de uma conta que não está no Dagda. O valor mexe no saldo da sua conta e aparece nas entradas e saídas do mês com essa categoria, mas não conta como receita, despesa nem orçamento.",
       "Conferir origem agora vale também para saídas, inclusive TED, DOC e boleto. Dá para voltar à categoria de antes a qualquer momento.",
       "A revisar: Editar e Ignorar lado a lado. Categorias e subcategorias em botões, e a opção Criar regra no topo, desmarcada, antes de salvar."
     ]

@@ -114,17 +114,19 @@ async function salvar() {
   const it = editando.value; const v = form.value.categoria;
   if (!it || !v || ocupado.value) return;
   erro.value = ''; ocupado.value = it.id;
+  const saida = ehSaida.value, tipo = tipoRegra.value, rg = { ...regra.value };
   try {
     const sub = form.value.subcategoria || '';
     const r = it.origem === 'cartao'
       ? await pedir('PATCH', `/api/cartoes/${it.cartaoId}/lancamentos/${it.compraId}/categoria`, { categoriaId: v, subcategoria: sub })
       : await pedir('PUT', `/api/transacoes/${it.id}`, it.valor < 0 ? { categoriaId: v, subcategoria: sub } : { categoriaReceita: v, subcategoria: sub });
     if (!r.ok) { erro.value = r.json.erro || 'Não foi possível salvar.'; return; }
+    editando.value = null; // a categoria está salva: a janela fecha mesmo se a regra falhar depois
     // A categoria já está salva: o item sai da lista, aconteça o que acontecer com a regra.
     tirar(it);
-    if (regra.value.disponivel && regra.value.marcada) {
-      const corpo = regra.value.ajustada || { tipo: tipoRegra.value, padrao: regra.value.trecho, subcategoria: sub, icone: '', aplicarAntigas: regra.value.outras > 0, ...(ehSaida.value ? { categoriaId: v } : { categoriaReceita: v }) };
-      const rr = await pedir('POST', '/api/regras', corpo);
+    if (rg.disponivel && rg.marcada) {
+      const corpo = rg.ajustada || { tipo, padrao: rg.trecho, subcategoria: sub, icone: '', aplicarAntigas: rg.outras > 0, ...(saida ? { categoriaId: v } : { categoriaReceita: v }) };
+      const rr = await pedir('POST', '/api/regras', corpo).catch(() => ({ ok: false, json: {} }));
       if (!rr.ok) {
         avisar('Categoria salva, mas a regra não foi criada.', { tipo: 'alerta', grupo: 'sugestao-regra', detalhe: rr.json.erro || 'Você pode criar a regra depois em Transações.' });
       } else {
@@ -135,7 +137,8 @@ async function salvar() {
     } else {
       avisar('Categoria salva.', { tipo: 'ok' });
     }
-    editando.value = null;
+  } catch {
+    erro.value = 'Não foi possível salvar. Confira e tente de novo.';
   } finally { ocupado.value = ''; }
 }
 
