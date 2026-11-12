@@ -613,7 +613,11 @@ router.patch('/:id/lancamentos/:compraId/categoria', (req, res) => {
     return res.status(400).json({ erro: 'Categoria não encontrada.' });
   }
   const alteradas = dados.atualizarOnde('lancamentos_cartao', 'cartao_id = ? AND compra_id = ? AND usuario_id = ? AND tipo_mov IS NULL',
-    [cartao.id, req.params.compraId, req.usuario.id], { categoria_id: catId });
+    [cartao.id, req.params.compraId, req.usuario.id], {
+      categoria_id: catId,
+      // 1.4.1 (anotação 104): A revisar também escolhe a subcategoria. Sem o campo no pedido, a subcategoria fica como está.
+      ...(req.body?.subcategoria !== undefined ? { subcategoria: catId ? (String(req.body.subcategoria || '').trim().slice(0, 80) || null) : null } : {}),
+    });
   if (alteradas === 0) return res.status(404).json({ erro: 'Compra não encontrada.' });
   res.json({ ok: true });
 });

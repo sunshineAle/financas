@@ -284,7 +284,7 @@ router.get('/', (req, res) => {
          COALESCE(SUM(CASE WHEN t.valor < 0 THEN -t.valor END), 0) AS saidas,
          COUNT(*) AS quantidade
        FROM transacoes t JOIN contas c ON c.id = t.conta_id
-       WHERE ${filtro} AND t.ignorada = 0 AND ${semPagamentoDeFatura('t.')}`
+       WHERE ${filtro} AND ${lanc.noFluxo('t.')} AND ${semPagamentoDeFatura('t.')}`
     )
     .get(...params);
 

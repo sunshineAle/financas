@@ -21,6 +21,7 @@ import CampoValor from '../components/CampoValor.vue';
 import CampoTexto from '../components/CampoTexto.vue';
 import CampoData from '../components/CampoData.vue';
 import CampoDataPilula from '../components/CampoDataPilula.vue';
+import { normRegra, trechoRegra, jaTemRegra } from '../services/regraSugestao.js';
 import CampoSubcategoria from '../components/CampoSubcategoria.vue';
 import CampoConta from '../components/CampoConta.vue';
 import CampoSelecao from '../components/CampoSelecao.vue';
@@ -132,7 +133,7 @@ function conferirOrigem(t) { fecharMenu(); voltarDepoisDaOrigem = voltarAoFechar
 function fecharOrigem() { origemConferidaId.value = null; if (voltarDepoisDaOrigem) { voltarDepoisDaOrigem = false; router.back(); } }
 async function origemFoiSalva() { await Promise.all([carregar(), carregarApoio()]); }
 const ehTransf = (t) => String(t.tipo_mov || '').startsWith('transferencia') && !ehReserva(t);
-const rotuloMov = { saldo_proprio_externo: 'saldo próprio fora do Dagda', reserva_aporte: 'aporte em investimento', reserva_resgate_inv: 'resgate de investimento', reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
+const rotuloMov = { saldo_proprio_externo: 'movimentação própria · conta fora do Dagda', reserva_aporte: 'aporte em investimento', reserva_resgate_inv: 'resgate de investimento', reserva_vinculada: 'guardar/resgatar', reserva_recusada: 'reserva', transferencia_corretora: 'investimento', transferencia_interna: 'transferência', transferencia_vinculada: 'transferência', estorno: 'estorno', estorno_vinculado: 'estorno', estornada: 'estornada',
   // anotação 61: créditos na fatura do cartão
   estorno_avulso: 'estorno a revisar', estornada_parcial: 'estornada em parte', pagamento: 'pagamento adiantado', cashback: 'cashback', pagamento_cartao: 'pagamento adiantado do cartão', pagamento_cartao_criado: 'pagamento adiantado do cartão' };
 // Créditos do cartão que CONTAM nos totais (cashback é entrada; estorno avulso e estorno parcial mexem no gasto da categoria)
@@ -274,26 +275,9 @@ function abrirEdicao(t) {
 const sugestaoRegra = ref(null); // { inicial } — usado quando o texto do aviso abre a janela
 const regraAberta = ref(false);
 const CHAVE_RECUSAS = 'dagda.regras.recusas';
-const normRegra = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 function lerRecusas() { try { return JSON.parse(localStorage.getItem(CHAVE_RECUSAS) || '{}') || {}; } catch { return {}; } }
 function recusar(trecho) {
   try { const r = lerRecusas(); const k = normRegra(trecho); r[k] = (r[k] || 0) + 1; localStorage.setItem(CHAVE_RECUSAS, JSON.stringify(r)); } catch { /* sem armazenamento: só não lembra */ }
-}
-// Nome do estabelecimento sem números, datas e códigos: "IFD*BRASIL 1234" → "IFD*", "UBER *TRIP 1234" → "UBER", "PADARIA DO JOSE 0012" → "PADARIA DO JOSE".
-function trechoRegra(nome) {
-  const limpo = String(nome || '').replace(/\s*\(\d+\/\d+\)\s*$/, '').trim();
-  const pal = [];
-  for (const tok of limpo.split(/\s+/)) {
-    if (!tok) continue;
-    const estrela = tok.indexOf('*');
-    if (estrela > 0) { const base = tok.slice(0, estrela + 1); if (!/\d/.test(base)) pal.push(base); break; } // "IFD*BRASIL" → "IFD*"
-    if (estrela === 0) break; // "*TRIP": código do adquirente
-    if (/\d/.test(tok) || /^[-–·|:#/.]+$/.test(tok)) break; // número, data, código
-    pal.push(tok.replace(/[-–·|:,;.]+$/, ''));
-    if (pal.length >= 3) break;
-  }
-  const t = pal.join(' ').trim();
-  return t.replace(/\*/g, '').length >= 2 ? t : '';
 }
 async function sugerirRegra(t, f) {
   const ehSaida = t.cartao ? true : (t.origem === 'manual' ? f.tipo === 'saida' : t.valor < 0);
@@ -309,8 +293,7 @@ async function sugerirRegra(t, f) {
   try {
     const rr = await pedir('/api/regras');
     const regras = rr.ok ? await rr.json() : [];
-    const nome = normRegra(nomeTx);
-    if (regras.some((r) => r.tipo === tipo && (normRegra(r.padrao) === normRegra(trecho) || nome.includes(normRegra(r.padrao))))) return;
+    if (jaTemRegra(regras, tipo, nomeTx, trecho)) return;
     const q = new URLSearchParams({ tipo, padrao: trecho, ...(ehSaida ? { categoriaId: depois } : { categoriaReceita: depois }) });
     const rp = await pedir(`/api/regras/previa?${q}`);
     if (rp.ok) n = (await rp.json()).quantidade || 0;
@@ -478,7 +461,7 @@ const sobra = computed(() => {
 const REGEX_FATURA = /pagamento\s+(de\s+)?fatura|pgto\.?\s+fatura/i;
 const REGEX_TRANSF = /transfer[eê]ncia\s+(entre\s+contas|interna|propria|própria)/i;
 function infoDe(t) {
-  if (ehExterno(t)) return { chave: 'neutra-externo', nome: 'Saldo próprio fora do Dagda', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  if (ehExterno(t)) return { chave: 'neutra-externo', nome: 'Movimentação própria', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (ehTransf(t)) return { chave: 'neutra-transf', nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   // Anotação 38: Guardar/Resgatar (Caixinha, Porquinho, CDB) e transferência para corretora: dinheiro do usuário mudando de lugar.
   if (ehReserva(t)) return { chave: 'neutra-reserva', nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
@@ -901,7 +884,7 @@ const semFiltros = computed(() => !filtroConta.value && !filtroTipo.value && !fi
           <span :class="['tag-tipo', edicaoEhSaida ? 'saida' : 'entrada']">{{ edicaoEhSaida ? 'Saída' : 'Entrada' }}</span>
           <span class="nota" v-if="editando.cartao">{{ `Cartão ${editando.conta_nome}${editando.total_parcelas > 1 ? ` · ${editando.total_parcelas}x` : ''}${editando.cartao_origem === 'manual' ? '' : ' · do banco'}` }}</span>
           <span class="nota" v-else>{{ editando.origem === 'manual' ? 'Lançada à mão' : 'Do banco (Open Finance)' }}</span>
-          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
+          <span v-if="editando.tipo_mov" class="selo-ignorada">{{ rotuloMov[editando.tipo_mov] }}{{ ehExterno(editando) ? ' · fora do orçamento' : foraDosTotais(editando) ? ' · fora dos totais' : '' }}</span>
           <span v-else-if="editando.ignorada" class="selo-ignorada">ignorada</span>
         </p>
         <!-- Homologação 1.0, seção 6: ações que saíram do menu ⋮ ficam aqui, no detalhe -->

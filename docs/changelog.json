@@ -1,5 +1,15 @@
 [
   {
+    "versao": "1.4.1",
+    "data": "2026-11-12",
+    "resumo": "Movimentação própria para dinheiro seu que entra ou sai de uma conta fora do Dagda. Em A revisar, a categoria é escolhida na janela do sistema, com a opção de criar a regra ali mesmo.",
+    "itens": [
+      "Movimentação própria: entrada ou saída de uma conta sua que não está no Dagda. O saldo da conta não muda; o valor conta nas entradas e saídas do mês, mas fica fora de receitas, despesas e orçamento.",
+      "Conferir origem agora vale também para saídas, inclusive TED, DOC e boleto. Dá para voltar à categoria de antes a qualquer momento.",
+      "A revisar: Editar e Ignorar lado a lado. Categorias e subcategorias em botões, e a opção Criar regra no topo, desmarcada, antes de salvar."
+    ]
+  },
+  {
     "versao": "1.4",
     "data": "2026-11-10",
     "resumo": "Reconhecimento de transferências com nome do titular e revisão mais clara. Confira conflitos com regras e valores que vieram de um saldo seu fora do Dagda, sem cadastrar todas as suas contas.",
@@ -9,19 +19,6 @@
       "PIX já classificado por regra só gera conflito quando há indícios relevantes; você escolhe manter a classificação ou revisar a transferência.",
       "Conferir origem permite distinguir receita, outra conta cadastrada e saldo próprio fora do Dagda. O dinheiro já registrado não é somado novamente.",
       "Decisões preservadas no backup; confirmação explícita para mudar a classificação."
-    ]
-  },
-  {
-    "versao": "1.3",
-    "data": "2026-11-10",
-    "resumo": "Restaure seu Dagda pelo Google Drive ou por arquivo, sem criar outro perfil. Backup com menos cliques e proteção das cópias recuperáveis. Regras, instalação e tours mais claros.",
-    "itens": [
-      "Primeiro acesso com restauração direta; desbloqueio diário por senha ou PIN, sem repetir a opção Google.",
-      "Google Drive: cópias ocultas, reutilização da sessão quando possível e até quatro cópias recentes após verificar a recuperação.",
-      "Senha do backup conferida automaticamente; conteúdo validado antes de Restaurar e continuar. Nome e código de recuperação preservados quando presentes.",
-      "A revisar avisa sobre possíveis transferências entre contas próprias e aguarda sua confirmação.",
-      "Regras: três recentes por bloco, lista completa em janela e botão de adicionar na extremidade do cabeçalho.",
-      "Instalação adaptada ao navegador e orientações para Apple; tours com exemplos preenchidos e destaque animado, disponíveis offline."
     ]
   }
 ]

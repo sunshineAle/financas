@@ -471,7 +471,13 @@ function detectarDestino(descricao, { nomeTitular, contas, contaAtualId }) {
   return { tipo: evidencia > 0 ? 'propria' : null, contaId: null, contaNome: null };
 }
 
+// Movimentação própria (anotação 103, 1.4.1): dinheiro seu que entra ou sai de uma conta fora do Dagda.
+// Fica com ignorada = 2 (fora de receitas, despesas, orçamento e categorias), mas conta nas entradas/saídas
+// do fluxo de caixa e no Saldo do mês (decisão do dono, 12/11/2026).
+const noFluxo = (p = '') => `(${p}ignorada = 0 OR ${p}tipo_mov = 'saldo_proprio_externo')`;
+
 module.exports = {
+  noFluxo,
   ErroLancamento, ehTransferencia, ehLinhaDeEstorno, criarTransferencia, converterEmTransferencia, desfazerPar, vincularEstorno, estornarTransacao,
   estornarCompraCartao, desfazerEstornoCartao, procurarOriginalDoEstorno, ehEstorno, pagarDividaComTransacao,
   desfazerPagamentoDaTransacao, listarVinculaveis, detectarDestino, tirarDosTotais, devolverAosTotais, somarSaldo,

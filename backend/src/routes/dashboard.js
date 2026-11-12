@@ -1,4 +1,5 @@
 const express = require('express');
+const { noFluxo } = require('../utils/lancamentos');
 const { listarCategoriasReceita } = require('../utils/categoriasReceita');
 const db = require('../db');
 const { exigirAutenticacao } = require('../middleware/auth');
@@ -87,7 +88,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
       `SELECT mes_fin(data) AS chave,
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
-       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND ${semPagamentoDeFatura()} GROUP BY chave`
+       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ${noFluxo()} AND ${semPagamentoDeFatura()} GROUP BY chave`
     )
     .all(usuarioId);
   const porChave = Object.fromEntries(linhasFluxo.map((l) => [l.chave, l]));
@@ -226,7 +227,7 @@ router.get('/', exigirAutenticacao, (req, res) => {
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END), 0) AS entradas,
               COALESCE(SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END), 0) AS saidas
-       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND substr(mes_fin(data), 1, ?) = ?
+       FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL AND ${noFluxo()} AND substr(mes_fin(data), 1, ?) = ?
          AND ${semPagamentoDeFatura()}`
     )
     .get(usuarioId, tamChave, chaveAtual);

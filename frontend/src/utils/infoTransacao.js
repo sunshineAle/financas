@@ -12,7 +12,7 @@ export const ehReservaMov = (t) => /^reserva_|^transferencia_corretora$/.test(St
 export function infoTransacao(t, { categorias = [], receitas = [] } = {}) {
   const mov = String(t.tipo_mov || '');
   if (ehReservaMov(t)) return { nome: t.rotulo_mov || (t.valor > 0 ? 'Resgate' : 'Guardar'), cor: null, icone: null, neutra: true, tipoNeutro: 'reserva' };
-  if (mov === 'saldo_proprio_externo') return { nome: 'Saldo próprio fora do Dagda', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
+  if (mov === 'saldo_proprio_externo') return { nome: 'Movimentação própria', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (mov.startsWith('transferencia')) return { nome: 'Transferência', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (mov === 'saldo_inicial' || mov === 'ajuste_saldo') return { nome: t.rotulo_mov || (mov === 'saldo_inicial' ? 'Saldo inicial' : 'Ajuste de saldo'), cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };
   if (mov) return { nome: 'Estornos', cor: null, icone: null, neutra: true, tipoNeutro: 'transf' };

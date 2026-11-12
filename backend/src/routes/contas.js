@@ -1,4 +1,5 @@
 const express = require('express');
+const { noFluxo } = require('../utils/lancamentos');
 const db = require('../db');
 const dados = require('../dados');
 const { exigirAutenticacao } = require('../middleware/auth');
@@ -30,9 +31,9 @@ router.get('/', (req, res) => {
       `SELECT contas.*, conexoes_pluggy.ultima_sincronizacao, conexoes_pluggy.status AS status_conexao,
          (SELECT MAX(data) FROM transacoes WHERE conta_id = contas.id AND excluido_em IS NULL) AS ultima_transacao,
          (SELECT COALESCE(SUM(valor), 0) FROM transacoes WHERE conta_id = contas.id AND valor > 0 AND excluido_em IS NULL
-            AND ignorada = 0 AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS entradas_mes,
+            AND ${noFluxo()} AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS entradas_mes,
          (SELECT COALESCE(-SUM(valor), 0) FROM transacoes WHERE conta_id = contas.id AND valor < 0 AND excluido_em IS NULL
-            AND ignorada = 0 AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS saidas_mes,
+            AND ${noFluxo()} AND mes_fin(data) = mes_fin(date('now', 'localtime'))) AS saidas_mes,
          (SELECT valor FROM transacoes WHERE conta_id = contas.id AND tipo_mov = 'saldo_inicial' AND excluido_em IS NULL ORDER BY rowid DESC LIMIT 1) AS saldo_inicial_valor,
          (SELECT substr(data, 1, 10) FROM transacoes WHERE conta_id = contas.id AND tipo_mov = 'saldo_inicial' AND excluido_em IS NULL ORDER BY rowid DESC LIMIT 1) AS saldo_inicial_data
        FROM contas

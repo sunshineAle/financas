@@ -132,8 +132,59 @@ test('saldo externo mantém crédito e restaura classificação sem duplicação
  assert.equal(db.prepare('SELECT categoria_receita FROM transacoes WHERE id=?').get(t.id).categoria_receita,'Salário');
  assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,saldo);
 });
-test('externa rejeita saída e acesso de outro usuário',()=>{
+test('externa bloqueia acesso de outro usuário',()=>{
  const t=linha(a,-30);
- assert.throws(()=>TR.decidir(u.id,t.id,{acao:'externa',manual:true}),/recebimentos/);
  assert.throws(()=>TR.obter('outro',t.id),/não pode/);
+});
+// Anotação 103 (1.4.1): movimentação própria também para saídas.
+const L = require('../src/utils/lancamentos');
+const fluxo = () => db.prepare(`SELECT COALESCE(SUM(CASE WHEN valor>0 THEN valor END),0) e, COALESCE(SUM(CASE WHEN valor<0 THEN -valor END),0) s FROM transacoes WHERE usuario_id=? AND excluido_em IS NULL AND ${L.noFluxo()}`).get(u.id);
+const despesas = () => db.prepare('SELECT COALESCE(SUM(-valor),0) s FROM transacoes WHERE usuario_id=? AND excluido_em IS NULL AND ignorada=0 AND valor<0 AND categoria_id IS NOT NULL').get(u.id).s;
+test('103: saída para conta fora do Dagda sai do orçamento, fica no fluxo e não muda o saldo',()=>{
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:500});
+ const t=linha(a,-500,'PIX ANA SILVA',{categoria_id:cat.id});
+ const saldo=db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo;
+ assert.equal(fluxo().s,500); assert.equal(despesas(),500);
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true}); // repetir não duplica
+ const atual=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(atual.tipo_mov,'saldo_proprio_externo'); assert.equal(atual.categoria_id,null);
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,0);
+ assert.equal(fluxo().s,500,'continua nas saídas do fluxo'); assert.equal(despesas(),0,'fora das despesas');
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,saldo);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM transacoes').get().n,1,'nenhuma conta ou contraparte criada');
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM contas').get().n,3);
+ // Reverter: volta a ser despesa com a categoria e o orçamento de antes
+ TR.decidir(u.id,t.id,{acao:'manter',manual:true});
+ const volta=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(volta.tipo_mov,null); assert.equal(volta.categoria_id,cat.id); assert.equal(volta.ignorada,0);
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,500);
+ assert.equal(despesas(),500); assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,saldo);
+});
+test('103: entrada de fora conta no fluxo, mas não nas receitas',()=>{
+ const t=linha(a,200,'TED ANA SILVA',{categoria_receita:'Salário'});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ assert.equal(fluxo().e,200);
+ assert.equal(db.prepare("SELECT COUNT(*) n FROM transacoes WHERE ignorada=0 AND valor>0").get().n,0);
+});
+test('103: movimentação própria pode virar transferência sem contar o orçamento duas vezes',()=>{
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:80});
+ const t=linha(a,-80,'PIX ANA SILVA',{categoria_id:cat.id});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ TR.decidir(u.id,t.id,{acao:'vincular',manual:true,contaId:b.id});
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,0);
+ assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(t.id).tipo_mov,'transferencia_vinculada');
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(b.id).saldo,1080);
+});
+test('103: boleto com o nome do titular entra na conferência; PIX sem nome continua fora',()=>{
+ const t=linha(a,-300,'PAGTO BOLETO ANA SILVA'), o=linha(a,-40,'PIX PADARIA');
+ regra(); const p=linha(b,300,'BOLETO ANA SILVA');
+ const ids=TR.listar(u.id).map(i=>i.id);
+ assert.ok(ids.includes(t.id)); assert.ok(!ids.includes(o.id));
+});
+test('103: pagamento de fatura não vira movimentação própria',()=>{
+ const t=linha(a,-150,'PIX ANA SILVA');
+ const cartao=dados.inserir('cartoes',{usuario_id:u.id,nome:'Cartão',limite:1000,dia_fechamento:1,dia_vencimento:10});
+ dados.inserir('faturas_pagas',{cartao_id:cartao.id,fatura:'2026-11',conta_id:a.id,transacao_id:t.id,valor:150,data:'2026-11-08'});
+ assert.throws(()=>TR.decidir(u.id,t.id,{acao:'externa',manual:true}),/fatura/);
 });

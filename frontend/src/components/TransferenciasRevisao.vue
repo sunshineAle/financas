@@ -29,7 +29,7 @@ onMounted(() => carregar().catch(e => { erro.value = e.message; }));
 <template>
   <p v-if="erro" role="alert">{{ erro }} <button type="button" @click="carregar().catch(e => erro = e.message)">Tentar novamente</button></p>
   <CardPadrao v-if="itens.length" titulo="Possíveis transferências" data-revisar-transferencias>
-    <template #acoes><AjudaSecao titulo="Conferir transferências" :texto="['Compare contas, datas e valores antes de confirmar. As descrições podem ser diferentes.', 'PIX e nomes parecidos são indícios. A classificação só muda depois da sua decisão. Escolher saldo próprio de fora não exige outra conta cadastrada.']" /></template>
+    <template #acoes><AjudaSecao titulo="Conferir transferências" :texto="['Compare contas, datas e valores antes de confirmar. As descrições podem ser diferentes.', 'PIX e nomes parecidos são indícios. A classificação só muda depois da sua decisão. Movimentação própria não exige cadastrar a outra conta.']" /></template>
     <article v-for="t in itens" :key="t.id" class="item-transferencia">
       <LinhaTransacao :t="linhaDaOrigem(t)" :info="info(t)" :clicavel="false" />
       <LinhaTransacao v-if="par(t)" :t="linhaDaOrigem(par(t))" :info="info(par(t))" :clicavel="false" data-outra-ponta />

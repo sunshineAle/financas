@@ -6,7 +6,8 @@ const L = require('./lancamentos');
 const normalizar = t => R.normalizar(t).replace(/[^a-z0-9]+/g, ' ').trim();
 const centavos = v => Math.round(Number(v) * 100);
 const valido = t => !t.tipo_mov && !t.vinculo && !t.ignorada && Number(t.valor) !== 0;
-const pix = t => /\b(pix|ted|doc|transf|transferencia|trans)\b/.test(normalizar(t.descricao));
+// Meios que podem esconder dinheiro próprio (anotação 103): PIX, TED, DOC, transferência e boleto. Nenhum deles, sozinho, prova nada.
+const pix = t => /\b(pix|ted|doc|transf|transferencia|trans|boleto|bol)\b/.test(normalizar(t.descricao));
 function reconhecer(descricao, nome) {
   const d = normalizar(descricao).split(' '), n = normalizar(nome).split(' ').filter(Boolean);
   if (!n.length) return 0;
@@ -67,16 +68,20 @@ function sugerir(t,ctx){return itemPara(t,ctx);}
 function listar(u){const ctx=contexto(u);return ctx.linhas.map(t=>sugerir(t,ctx)).filter(Boolean);}
 function obter(u,id){const t=db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(id),u);const item=t&&itemPara(t,contexto(u),true);if(!item)throw new L.ErroLancamento('Este lançamento não pode ter a origem revisada.',404);return item;}
 function snapshot(t){return JSON.stringify({categoria_id:t.categoria_id,categoria_receita:t.categoria_receita,subcategoria:t.subcategoria,classificacao_origem:t.classificacao_origem,regra_id:t.regra_id,regra_snapshot:t.regra_snapshot,categorizacao_automatica:t.categorizacao_automatica});}
-function restaurar(t){let anterior={};try{anterior=JSON.parse(t.classificacao_anterior||'{}');}catch{};dados.atualizar('transacoes',t.id,{...anterior,tipo_mov:null,ignorada:0,classificacao_anterior:null,revisao:'transferencia_recusada'});}
+// Volta à classificação anterior. Saída com categoria volta a pesar no orçamento (o saldo da conta nunca muda aqui).
+function restaurar(t){let anterior={};try{anterior=JSON.parse(t.classificacao_anterior||'{}');}catch{};dados.atualizar('transacoes',t.id,{...anterior,tipo_mov:null,ignorada:0,classificacao_anterior:null,revisao:'transferencia_recusada'});if(anterior.categoria_id&&t.valor<0)L.devolverAosTotais({...t,...anterior});}
 function decidir(u,id,corpo){
   const item=corpo.manual?obter(u,id):listar(u).find(t=>t.id===id);
   if(!item)throw new L.ErroLancamento('A sugestão não está mais disponível. Atualize a revisão.',409);
   const t=db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(id,u);
   return dados.transacao(()=>{
-    if(['recusar','manter'].includes(corpo.acao)){if(t.tipo_mov==='saldo_proprio_externo')throw new L.ErroLancamento('Escolha É receita para mudar esta classificação.');dados.atualizar('transacoes',id,{revisao:'transferencia_recusada'}); if(item.sugestaoId) dados.atualizar('transacoes',item.sugestaoId,{revisao:'transferencia_recusada'}); return {ok:true};}
+    if(['recusar','manter'].includes(corpo.acao)){if(t.tipo_mov==='saldo_proprio_externo'){restaurar(t);return {ok:true};}dados.atualizar('transacoes',id,{revisao:'transferencia_recusada'}); if(item.sugestaoId) dados.atualizar('transacoes',item.sugestaoId,{revisao:'transferencia_recusada'}); return {ok:true};}
     if(corpo.acao==='externa'){
-      if(t.valor<=0)throw new L.ErroLancamento('Saldo próprio externo está disponível para recebimentos.');
       if(t.tipo_mov==='saldo_proprio_externo')return {ok:true};
+      if(t.cartao)throw new L.ErroLancamento('Movimentação própria vale só para lançamentos de conta.');
+      if(t.valor<0&&db.prepare('SELECT 1 FROM faturas_pagas WHERE transacao_id = ? AND excluido_em IS NULL').get(t.id))throw new L.ErroLancamento('Esta saída é o pagamento de uma fatura de cartão.');
+      // Saída: deixa de pesar no orçamento da categoria. Entrada ou saída: o saldo da conta continua igual.
+      L.tirarDosTotais(t);
       dados.atualizar('transacoes',id,{classificacao_anterior:snapshot(t),tipo_mov:'saldo_proprio_externo',ignorada:2,revisao:'origem_confirmada',categoria_id:null,categoria_receita:null});return {ok:true};
     }
     if(corpo.acao==='receita'){if(t.tipo_mov==='saldo_proprio_externo')restaurar(t);else dados.atualizar('transacoes',id,{revisao:'transferencia_recusada'});return {ok:true};}

@@ -33,9 +33,9 @@ const conta = computed(() => contas.value.find(c => String(c.id) === String(cont
 const candidatas = computed(() => (item.value?.candidatas || []).filter(c => String(c.contaId) === String(contaId.value)));
 const parceira = computed(() => candidatas.value.find(c => String(c.id) === String(parceiraId.value)));
 const opcoes = computed(() => [
-  { valor: 'atual', titulo: entrada.value ? 'É receita' : 'Manter como despesa', texto: entrada.value ? 'Um recebimento novo.' : 'Preservar a classificação deste lançamento.' },
+  { valor: 'atual', titulo: entrada.value ? 'É receita' : item.value?.externa ? 'É despesa' : 'Manter como despesa', texto: entrada.value ? 'Um recebimento novo.' : item.value?.externa ? 'Um gasto de verdade, com a categoria de antes.' : 'Preservar a classificação deste lançamento.' },
   { valor: 'vincular', titulo: 'Outra conta cadastrada', texto: 'Dinheiro movido entre suas contas.' },
-  ...(entrada.value ? [{ valor: 'externa', titulo: 'Saldo próprio fora do Dagda', texto: 'Dinheiro que já era seu, sem cadastrar outra conta.' }] : []),
+  { valor: 'externa', titulo: 'Movimentação própria', texto: entrada.value ? 'Dinheiro seu vindo de uma conta fora do Dagda.' : 'Dinheiro seu indo para uma conta fora do Dagda.' },
 ]);
 const podeConfirmar = computed(() => item.value && escolha.value && !carregando.value && !salvando.value && (escolha.value !== 'vincular' || (conta.value && !item.value.diferencaCentavos && (!candidatas.value.length || parceira.value))));
 function escolherConta(c) { contaId.value = c.id; parceiraId.value = ''; seletor.value = ''; }
@@ -60,8 +60,8 @@ const infoLinha = t => ({ nome: nomeDaConta(t) });
         <LinhaTransacao :t="linhaDaOrigem(item)" :info="infoLinha(item)" :clicavel="false" />
         <p v-if="item.classificacao?.regra" class="regra" data-regra-origem>Regra “{{ item.classificacao.regra.padrao }}”<template v-if="item.classificacao.regra.categoriaNome"> → {{ item.classificacao.regra.categoriaNome }}</template></p>
         <p v-else-if="item.classificacao?.categoriaNome && !item.externa" class="nota">Classificado em {{ item.classificacao.categoriaNome }}</p>
-        <p v-else-if="item.externa" class="nota">Classificação atual: saldo próprio de fora.</p>
-        <div class="pergunta"><b>{{ entrada ? 'Como este valor entrou?' : 'Como tratar este lançamento?' }}</b><AjudaSecao titulo="Origem do dinheiro" :texto="['Receita é um recebimento novo. Um valor que já estava em um saldo seu pode ser apenas dinheiro mudando de lugar.', 'PIX e o nome no extrato são indícios. A classificação só muda depois de confirmar. A decisão vale para este lançamento e não altera suas regras.']" /></div>
+        <p v-else-if="item.externa" class="nota">Classificação atual: movimentação própria, com conta fora do Dagda.</p>
+        <div class="pergunta"><b>{{ entrada ? 'Como este valor entrou?' : 'Como tratar este lançamento?' }}</b><AjudaSecao titulo="Origem do dinheiro" :texto="['Receita e despesa mudam o seu resultado. Dinheiro seu indo ou vindo de uma conta fora do Dagda é só movimentação própria: entra no fluxo do mês, mas não nas receitas, nas despesas nem no orçamento.', 'PIX e o nome no extrato são indícios. A classificação só muda depois de confirmar. A decisão vale para este lançamento e não altera suas regras.']" /></div>
         <div class="origens" role="radiogroup" aria-label="Origem do dinheiro">
           <button v-for="o in opcoes" :key="o.valor" type="button" role="radio" :aria-checked="escolha === o.valor" :aria-label="o.titulo" :disabled="salvando" :class="['opcao-origem', { selecionada: escolha === o.valor }]" @click="escolha = o.valor"><span class="radio" aria-hidden="true" /><span><b>{{ o.titulo }}</b><small>{{ o.texto }}</small></span></button>
         </div>
@@ -76,8 +76,8 @@ const infoLinha = t => ({ nome: nomeDaConta(t) });
           </template>
           <p v-if="item.diferencaCentavos" class="consequencia">Os valores são diferentes. Confira os lançamentos antes de vincular.</p>
         </template>
-        <p v-if="escolha === 'externa'" class="consequencia" data-consequencia-externa>O saldo de {{ nomeDaConta(item) }} permanece com este valor, sem contar como nova receita. Nenhuma outra conta será criada.</p>
-        <p v-if="escolha === 'atual' && item.externa" class="consequencia">Este valor volta a contar nas receitas. O saldo da conta não muda.</p>
+        <p v-if="escolha === 'externa'" class="consequencia" data-consequencia-externa>O saldo de {{ nomeDaConta(item) }} não muda. O valor conta {{ entrada ? 'nas entradas' : 'nas saídas' }} do mês, mas fica fora {{ entrada ? 'das receitas' : 'das despesas e do orçamento' }}. Nenhuma outra conta será criada.</p>
+        <p v-if="escolha === 'atual' && item.externa" class="consequencia">Este valor volta a contar {{ entrada ? 'nas receitas' : 'nas despesas, com a categoria que tinha antes' }}. O saldo da conta não muda.</p>
       </template>
       <p v-if="erro" class="sf-erro" role="alert">{{ erro }}</p>
     </div>

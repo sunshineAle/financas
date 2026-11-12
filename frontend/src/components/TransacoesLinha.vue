@@ -46,7 +46,7 @@ const sub = computed(() => props.t.subcategoria);
         <span v-else-if="t.origem === 'conectada'" class="chip-mini">banco</span>
         <span v-if="mostrarData" class="ponto">·</span><span v-if="mostrarData">{{ dataCurta }}</span>
         <span v-if="info.tipoNeutro === 'reserva'" class="chip-mini">{{ t.valor > 0 ? 'resgate' : 'guardar' }}</span>
-        <span v-else-if="t.tipo_mov" class="chip-mini">{{ t.tipo_mov === 'saldo_proprio_externo' ? 'saldo próprio externo' : String(t.tipo_mov).startsWith('transferencia') ? 'transferência' : t.tipo_mov === 'estornada' ? 'estornada' : 'estorno' }}</span>
+        <span v-else-if="t.tipo_mov" class="chip-mini">{{ t.tipo_mov === 'saldo_proprio_externo' ? 'movimentação própria' : String(t.tipo_mov).startsWith('transferencia') ? 'transferência' : t.tipo_mov === 'estornada' ? 'estornada' : 'estorno' }}</span>
         <span v-else-if="t.ignorada" class="chip-mini">ignorada</span>
       </span>
     </span>

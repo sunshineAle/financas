@@ -1,4 +1,5 @@
 const express = require('express');
+const { noFluxo } = require('../utils/lancamentos');
 const db = require('../db');
 const { semPagamentoDeFatura, parcelasCartao, chaveHoje, entradasCartao } = require('../utils/cartaoMeses');
 const { exigirAutenticacao } = require('../middleware/auth');
@@ -44,7 +45,7 @@ router.get('/fluxo-caixa', (req, res) => {
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes
-       WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND ${semPagamentoDeFatura()}
+       WHERE usuario_id = ? AND excluido_em IS NULL AND ${noFluxo()} AND ${semPagamentoDeFatura()}
        GROUP BY chave`
     )
     .all(req.usuario.id);
@@ -95,7 +96,7 @@ router.get('/projecao', (req, res) => {
               SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END) AS entradas,
               SUM(CASE WHEN valor < 0 THEN -valor ELSE 0 END) AS saidas
        FROM transacoes
-       WHERE usuario_id = ? AND excluido_em IS NULL AND ignorada = 0 AND ${semPagamentoDeFatura()}
+       WHERE usuario_id = ? AND excluido_em IS NULL AND ${noFluxo()} AND ${semPagamentoDeFatura()}
        GROUP BY chave
        ORDER BY chave DESC`
     )
