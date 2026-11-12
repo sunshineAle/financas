@@ -36,10 +36,11 @@ onMounted(() => carregar().catch(e => { erro.value = e.message; }));
       <small v-if="t.classificacao?.regra" data-regra-origem>Regra “{{ t.classificacao.regra.padrao }}”<template v-if="t.classificacao.regra.categoriaNome"> → {{ t.classificacao.regra.categoriaNome }}</template></small>
       <small v-else-if="t.conflito && t.classificacao?.categoriaNome">Classificado em {{ t.classificacao.categoriaNome }}</small>
       <small v-if="par(t) && t.data.slice(0,10) !== par(t).data.slice(0,10)">Datas diferentes: {{ dataDaOrigem(t.data) }} e {{ dataDaOrigem(par(t).data) }}.</small>
-      <small v-if="!par(t)">{{ (t.candidatas || []).length > 1 ? 'Há mais de uma possibilidade.' : 'Confira a origem deste movimento.' }}</small>
+      <small v-if="t.duplicidadePropria" data-duplicidade-propria>{{ t.motivo }}</small>
+      <small v-else-if="!par(t)">{{ (t.candidatas || []).length > 1 ? 'Há mais de uma possibilidade.' : 'Confira a origem deste movimento.' }}</small>
       <div class="botoes tema-neutro">
-        <button type="button" class="sf-botao secundario" :disabled="ocupado" @click="decidir(t, 'manter')">{{ t.conflito ? (t.valor < 0 ? 'Manter como despesa' : 'Manter como receita') : 'Não é transferência' }}</button>
-        <button v-if="par(t) && !t.diferencaCentavos" type="button" class="sf-botao primario" :disabled="ocupado" @click="decidir(t, 'vincular')">Confirmar transferência</button>
+        <button type="button" class="sf-botao secundario" :disabled="ocupado" @click="decidir(t, 'manter')">{{ t.duplicidadePropria ? 'Não é o mesmo dinheiro' : t.conflito ? (t.valor < 0 ? 'Manter como despesa' : 'Manter como receita') : 'Não é transferência' }}</button>
+        <button v-if="par(t) && !t.diferencaCentavos" type="button" class="sf-botao primario" :disabled="ocupado" @click="decidir(t, 'vincular')">{{ t.duplicidadePropria ? 'É o mesmo dinheiro' : 'Confirmar transferência' }}</button>
         <button v-else type="button" class="sf-botao primario" :disabled="ocupado" @click="origemId = t.id">{{ t.conflito ? 'Revisar transferência' : 'Conferir origem' }}</button>
       </div>
       <button v-if="par(t)" type="button" class="outra-origem" :disabled="ocupado" @click="origemId = t.id">Conferir outra origem</button>

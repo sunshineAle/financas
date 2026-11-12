@@ -123,7 +123,7 @@ async function confirmarEstorno() {
   aviso.value = { texto: `"${t.cartao ? t.descricao_base : t.descricao}" foi estornada: a despesa e o estorno ficam fora dos totais.`, desfazer: { url: t.cartao ? `/api/transacoes/estorno-cartao/${d.vinculo}` : `/api/transacoes/estorno/${d.vinculo}` } };
   await Promise.all([carregar(), carregarApoio()]);
 }
-const podeEstornar = (t) => !t.tipo_mov && !t.ignorada && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
+const podeEstornar = (t) => (ehExterno(t) || (!t.tipo_mov && !t.ignorada)) && (t.cartao ? t.cartao_origem === 'manual' : t.valor !== 0);
 const ehReserva = (t) => /^reserva_|^transferencia_corretora$/.test(String(t.tipo_mov || ''));
 const ehExterno = t => t?.tipo_mov === 'saldo_proprio_externo';
 const podeConferirOrigem = t => t && !t.cartao && t.ignorada !== 1 && (!t.tipo_mov || ehExterno(t)) && Number(t.valor) !== 0;
@@ -165,6 +165,7 @@ function paramsDe(mesChave) {
   if (filtroReceita.value) params.set('categoriaReceita', filtroReceita.value);
   return params;
 }
+const meses = ref([]); // visão anual: um item por mês financeiro, com o resumo do servidor
 async function carregar() {
   const minha = ++seqCarga;
   // Visão anual: busca os 12 meses e junta (o servidor já filtra por mês)
@@ -174,6 +175,8 @@ async function carregar() {
   const respostas = await Promise.all(chaves.map((c) => pedir(`/api/transacoes?${paramsDe(c)}`).then((r) => r.json())));
   if (minha !== seqCarga) return; // chegou uma resposta mais nova
   transacoes.value = respostas.flatMap((d) => d.transacoes);
+  // 1.4.2 (anotação 105): o resumo de cada mês do ano vem do servidor, pelo mês financeiro (mesma conta do card do mês).
+  meses.value = chaves.map((c, i) => ({ chave: c, itens: respostas[i].transacoes || [], resumo: respostas[i].resumo }));
   resumo.value = respostas.reduce((acc, d) => ({
     entradas: acc.entradas + d.resumo.entradas,
     saidas: acc.saidas + d.resumo.saidas,
@@ -516,16 +519,14 @@ const gruposPorDia = computed(() => {
   return [...mapa].map(([iso, itens]) => ({ iso, rotulo: rotuloDia(iso), itens, total: liquido(itens) }));
 });
 
-const gruposPorMes = computed(() => {
-  const mapa = new Map();
-  ordenadas.value.forEach((t) => { const k = Number(diaDe(t.data).slice(5, 7)); if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(t); });
-  return [...mapa].sort((a, b) => b[0] - a[0]).map(([m, itens]) => {
-    const v = itens.filter((t) => t.ignorada !== 1 && !t.cartao);
-    const entradas = v.filter((t) => t.valor > 0).reduce((s, t) => s + t.valor, 0);
-    const saidas = v.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0);
-    return { m, nome: MESES[m - 1], itens, entradas, saidas, resultado: entradas - saidas, pct: entradas > 0 ? Math.max(0, ((entradas - saidas) / entradas) * 100) : 0 };
-  });
-});
+const gruposPorMes = computed(() => meses.value
+  .filter((g) => g.itens.length)
+  .map((g) => {
+    const m = Number(g.chave.slice(5, 7));
+    const entradas = Number(g.resumo?.entradas) || 0, saidas = Number(g.resumo?.saidas) || 0;
+    return { m, nome: MESES[m - 1], itens: g.itens, entradas, saidas, resultado: Number(g.resumo?.resultado ?? entradas - saidas), pct: entradas > 0 ? Math.max(0, ((entradas - saidas) / entradas) * 100) : 0 };
+  })
+  .sort((a, b) => b.m - a.m));
 
 const gruposPorCategoria = computed(() => {
   const mapa = new Map();

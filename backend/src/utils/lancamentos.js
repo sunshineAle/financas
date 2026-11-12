@@ -117,6 +117,14 @@ function converterEmTransferencia(usuarioId, transacaoId, contaOutraId, { parcei
   return { vinculo, casouComExistente: !!parceira };
 }
 
+// Movimentação própria volta à classificação anterior (o saldo da conta não muda; saída volta ao orçamento).
+function voltarDaMovimentacaoPropria(t) {
+  let anterior = {};
+  try { anterior = JSON.parse(t.classificacao_anterior || '{}'); } catch { /* sem retrato: volta sem categoria */ }
+  dados.atualizar('transacoes', t.id, { ...anterior, tipo_mov: null, ignorada: 0, classificacao_anterior: null });
+  if (anterior.categoria_id && t.valor < 0) devolverAosTotais({ ...t, ...anterior });
+}
+
 // Retira o efeito do lançamento sobre o gasto da categoria (ele deixa de contar nos totais).
 function tirarDosTotais(t) {
   if (t.ignorada === 0 && t.categoria_id && t.valor < 0) dados.somar('categorias_orcamento', t.categoria_id, 'gasto_atual', -Math.abs(t.valor));
@@ -154,10 +162,13 @@ function desfazerPar(usuarioId, vinculo) {
 function vincularEstorno(usuarioId, estornoId, originalId, { criado = false } = {}) {
   const buscar = (id) => db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(id), usuarioId);
   const est = buscar(estornoId);
-  const ori = buscar(originalId);
+  let ori = buscar(originalId);
   if (!est || !ori) falha('Transação não encontrada.', 404);
+  // 1.4.2 (anotação 105): estorno de uma movimentação própria. A original volta à classificação de antes e o par
+  // estornado sai de tudo, como qualquer estorno (sem sobrar entrada solta como receita).
+  const eraPropria = ori.tipo_mov === 'saldo_proprio_externo';
   if (est.id === ori.id) falha('O estorno e a despesa original precisam ser lançamentos diferentes.');
-  if (est.tipo_mov || ori.tipo_mov) falha('Algum dos lançamentos já está ligado a uma transferência ou estorno.');
+  if (est.tipo_mov || (ori.tipo_mov && !eraPropria)) falha('Algum dos lançamentos já está ligado a uma transferência ou estorno.');
   if (est.ignorada === 1 || ori.ignorada === 1) falha('Reative os lançamentos ignorados antes de estornar.');
   if (est.conta_id !== ori.conta_id) falha('O estorno precisa estar na mesma conta da despesa original.');
   if (Math.sign(est.valor) === Math.sign(ori.valor) || Math.abs(Math.abs(est.valor) - Math.abs(ori.valor)) > 0.005) {
@@ -165,6 +176,7 @@ function vincularEstorno(usuarioId, estornoId, originalId, { criado = false } = 
   }
   const vinculo = dados.novoId();
   dados.transacao(() => {
+    if (eraPropria) { voltarDaMovimentacaoPropria(ori); ori = buscar(originalId); }
     tirarDosTotais(ori);
     dados.atualizar('transacoes', ori.id, { tipo_mov: 'estornada', vinculo, ignorada: 2 });
     dados.atualizar('transacoes', est.id, { tipo_mov: criado ? 'estorno' : 'estorno_vinculado', vinculo, ignorada: 2, categoria_id: null, categoria_receita: null });
@@ -174,9 +186,9 @@ function vincularEstorno(usuarioId, estornoId, originalId, { criado = false } = 
 
 // Cria o lançamento de estorno (valor oposto, mesma conta) e liga à original: ambas saem dos totais, o saldo volta.
 function estornarTransacao(usuarioId, transacaoId, { data, descricao } = {}) {
-  const t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(transacaoId), usuarioId);
+  let t = db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(String(transacaoId), usuarioId);
   if (!t) falha('Transação não encontrada.', 404);
-  if (t.tipo_mov) falha(ehTransferencia(t.tipo_mov) ? 'Transferências não se estornam: desfaça a transferência.' : 'Este lançamento já foi estornado.');
+  if (t.tipo_mov && t.tipo_mov !== 'saldo_proprio_externo') falha(ehTransferencia(t.tipo_mov) ? 'Transferências não se estornam: desfaça a transferência.' : 'Este lançamento já foi estornado.');
   if (t.ignorada === 1) falha('Reative o lançamento antes de estornar.');
   const dia = data || hoje();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dia))) falha('Data inválida.');
@@ -373,7 +385,7 @@ function marcarCreditoCartao(usuarioId, compraId, { tipo, originalCompraId = nul
 function procurarOriginalDoEstorno(usuarioId, { contaId, valor, descricao, data }) {
   const v = Number(valor);
   const candidatas = db
-    .prepare('SELECT * FROM transacoes WHERE usuario_id = ? AND conta_id = ? AND excluido_em IS NULL AND tipo_mov IS NULL AND ignorada = 0 AND valor * ? < 0')
+    .prepare("SELECT * FROM transacoes WHERE usuario_id = ? AND conta_id = ? AND excluido_em IS NULL AND ((tipo_mov IS NULL AND ignorada = 0) OR tipo_mov = 'saldo_proprio_externo') AND valor * ? < 0")
     .all(usuarioId, String(contaId), v)
     .filter((t) => Math.abs(Math.abs(t.valor) - Math.abs(v)) < 0.005 && (!data || String(t.data).slice(0, 10) <= String(data).slice(0, 10)));
   const limpar = (s) => new Set(semAcento(s).replace(/\b(estorno|devolucao|cancelamento|cancelada|reembolso|cred|credito)\b/g, ' ').split(/[^a-z0-9]+/).filter((p) => p.length >= 3));
@@ -480,7 +492,7 @@ function detectarDestino(descricao, { nomeTitular, contas, contaAtualId }) {
 const noFluxo = (p = '') => `(${p}ignorada = 0 OR ${p}tipo_mov = 'saldo_proprio_externo')`;
 
 module.exports = {
-  noFluxo,
+  noFluxo, voltarDaMovimentacaoPropria,
   ErroLancamento, ehTransferencia, ehLinhaDeEstorno, criarTransferencia, converterEmTransferencia, desfazerPar, vincularEstorno, estornarTransacao,
   estornarCompraCartao, desfazerEstornoCartao, procurarOriginalDoEstorno, ehEstorno, pagarDividaComTransacao,
   desfazerPagamentoDaTransacao, listarVinculaveis, detectarDestino, tirarDosTotais, devolverAosTotais, somarSaldo,

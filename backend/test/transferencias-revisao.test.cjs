@@ -201,3 +201,65 @@ test('103: em boleto, o nome depois de "pagador" não é indício de movimentaç
  const ids=TR.listar(u.id).map(i=>i.id);
  assert.ok(!ids.includes(conta.id)); assert.ok(ids.includes(propria.id));
 });
+// Anotação 105 (1.4.2)
+test('105: estornar uma movimentação própria anula as duas pontas, sem virar receita',()=>{
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:300});
+ const t=linha(a,-300,'PIX ANA SILVA',{categoria_id:cat.id});
+ dados.atualizar('contas',a.id,{saldo:700});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const L=require('../src/utils/lancamentos');
+ const r=L.estornarTransacao(u.id,t.id,{data:'2026-11-09'});
+ const ori=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id), est=db.prepare('SELECT * FROM transacoes WHERE id=?').get(r.estornoId);
+ assert.equal(ori.tipo_mov,'estornada'); assert.equal(est.tipo_mov,'estorno'); assert.equal(ori.ignorada,2); assert.equal(est.ignorada,2);
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,1000,'saldo volta');
+ assert.equal(db.prepare('SELECT gasto_atual g FROM categorias_orcamento WHERE id=?').get(cat.id).g,0,'orçamento sem a despesa');
+ assert.equal(db.prepare(`SELECT COUNT(*) n FROM transacoes WHERE ${L.noFluxo()} AND usuario_id=?`).get(u.id).n,0,'nada solto no fluxo');
+});
+test('105: devolução importada liga à movimentação própria original',()=>{
+ const t=linha(a,-120,'PIX ANA SILVA');
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const L=require('../src/utils/lancamentos');
+ const ori=L.procurarOriginalDoEstorno(u.id,{contaId:a.id,valor:120,descricao:'ESTORNO PIX ANA SILVA',data:'2026-11-08'});
+ assert.equal(ori&&ori.id,t.id);
+});
+test('105: extrato da outra conta chegando depois avisa da movimentação própria já marcada',()=>{
+ const t=linha(a,-250,'PIX ANA SILVA');
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const novo=linha(b,250,'PIX RECEBIDO');
+ const it=TR.listar(u.id).find(i=>i.id===novo.id);
+ assert.ok(it,'aparece em A revisar'); assert.ok(it.duplicidadePropria); assert.equal(it.sugestaoId,t.id); assert.match(it.motivo,/movimentação própria/);
+ const sa=db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo, sb=db.prepare('SELECT saldo FROM contas WHERE id=?').get(b.id).saldo;
+ TR.decidir(u.id,novo.id,{acao:'vincular',contaId:a.id,parceiraId:t.id});
+ assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(t.id).tipo_mov,'transferencia_vinculada');
+ assert.equal(db.prepare('SELECT tipo_mov FROM transacoes WHERE id=?').get(novo.id).tipo_mov,'transferencia_vinculada');
+ assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(a.id).saldo,sa); assert.equal(db.prepare('SELECT saldo FROM contas WHERE id=?').get(b.id).saldo,sb);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM transacoes').get().n,2,'sem lançamento criado');
+});
+test('105: "não é o mesmo dinheiro" mantém a movimentação própria como estava',()=>{
+ const t=linha(a,-90,'PIX ANA SILVA');
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const novo=linha(b,90,'PIX RECEBIDO');
+ TR.decidir(u.id,novo.id,{acao:'recusar'});
+ const p=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(p.tipo_mov,'saldo_proprio_externo'); assert.equal(p.revisao,'origem_confirmada');
+ assert.ok(!TR.listar(u.id).some(i=>i.id===novo.id));
+});
+test('105: valor diferente não forma aviso de duplicidade',()=>{
+ const t=linha(a,-90,'PIX ANA SILVA');
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const novo=linha(b,89.99,'PIX RECEBIDO');
+ assert.ok(!TR.listar(u.id).some(i=>i.id===novo.id));
+});
+test('105: movimentação própria volta igual do backup e continua reversível',()=>{
+ const { exportarEstado, importarEstado } = require('../src/dados/exportacao');
+ const cat=dados.inserir('categorias_orcamento',{usuario_id:u.id,nome:'Outros',teto_mensal:0,gasto_atual:60});
+ const t=linha(a,-60,'PIX ANA SILVA',{categoria_id:cat.id});
+ TR.decidir(u.id,t.id,{acao:'externa',manual:true});
+ const arquivo=exportarEstado();
+ db.prepare('DELETE FROM transacoes').run();
+ importarEstado(arquivo,{modo:'substituir',usuarioId:u.id});
+ const r=db.prepare('SELECT * FROM transacoes WHERE id=?').get(t.id);
+ assert.equal(r.tipo_mov,'saldo_proprio_externo'); assert.equal(r.ignorada,2); assert.ok(r.classificacao_anterior);
+ TR.decidir(u.id,t.id,{acao:'manter',manual:true});
+ assert.equal(db.prepare('SELECT categoria_id FROM transacoes WHERE id=?').get(t.id).categoria_id,cat.id);
+});

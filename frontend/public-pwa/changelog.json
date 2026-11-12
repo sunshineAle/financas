@@ -1,5 +1,14 @@
 [
   {
+    "versao": "1.4.2",
+    "data": "2026-11-12",
+    "resumo": "Estorno de movimentação própria e aviso quando o extrato da outra conta mostra o mesmo dinheiro.",
+    "itens": [
+      "Movimentação própria pode ser estornada: a devolução anula a saída, sem virar receita.",
+      "Ao importar o extrato de uma conta nova, o Dagda avisa quando um valor parece ser o mesmo dinheiro de uma movimentação própria já marcada. Você confirma se é o mesmo dinheiro ou não."
+    ]
+  },
+  {
     "versao": "1.4.1",
     "data": "2026-11-12",
     "resumo": "Movimentação própria para dinheiro seu que entra ou sai de uma conta fora do Dagda. Em A revisar, a categoria é escolhida na janela do sistema, com a opção de criar a regra ali mesmo.",
@@ -7,18 +16,6 @@
       "Movimentação própria: dinheiro seu que entra ou sai de uma conta que não está no Dagda. O valor mexe no saldo da sua conta e aparece nas entradas e saídas do mês com essa categoria, mas não conta como receita, despesa nem orçamento.",
       "Conferir origem agora vale também para saídas, inclusive TED, DOC e boleto. Dá para voltar à categoria de antes a qualquer momento.",
       "A revisar: Editar e Ignorar lado a lado. Categorias e subcategorias em botões, e a opção Criar regra no topo, desmarcada, antes de salvar."
-    ]
-  },
-  {
-    "versao": "1.4",
-    "data": "2026-11-10",
-    "resumo": "Reconhecimento de transferências com nome do titular e revisão mais clara. Confira conflitos com regras e valores que vieram de um saldo seu fora do Dagda, sem cadastrar todas as suas contas.",
-    "itens": [
-      "Perfil: nome completo do titular separado do apelido, para sugerir transferências mesmo com nomes cortados no extrato.",
-      "A revisar mostra as contas, datas e valores de cada ponta no padrão do sistema, com menos texto.",
-      "PIX já classificado por regra só gera conflito quando há indícios relevantes; você escolhe manter a classificação ou revisar a transferência.",
-      "Conferir origem permite distinguir receita, outra conta cadastrada e saldo próprio fora do Dagda. O dinheiro já registrado não é somado novamente.",
-      "Decisões preservadas no backup; confirmação explícita para mudar a classificação."
     ]
   }
 ]

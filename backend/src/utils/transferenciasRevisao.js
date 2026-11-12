@@ -32,8 +32,12 @@ function contexto(usuarioId) {
   const cfg = db.prepare('SELECT nome_titular FROM configuracoes WHERE usuario_id = ? AND excluido_em IS NULL').get(usuarioId);
   const usuario = db.prepare('SELECT nome FROM usuarios WHERE id = ?').get(usuarioId);
   const nomes = [...new Set([cfg?.nome_titular, ...regras.map(r=>r.padrao), ...(cfg?.nome_titular ? [] : [usuario?.nome])].map(normalizar).filter(n=>n && !/^(pix|ted|transferencia|eu)$/.test(n)))];
-  const linhas = db.prepare('SELECT * FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId).filter(t=>valido(t) && t.revisao !== 'transferencia_recusada' && contas.some(c=>c.id===t.conta_id));
-  return { regras, nomes, contas, linhas };
+  const todas = db.prepare('SELECT * FROM transacoes WHERE usuario_id = ? AND excluido_em IS NULL').all(usuarioId).filter(t=>contas.some(c=>c.id===t.conta_id));
+  const linhas = todas.filter(t=>valido(t) && t.revisao !== 'transferencia_recusada');
+  // 1.4.2 (anotação 105): movimentações próprias já confirmadas. Se o extrato da outra conta chegar depois, a ponta nova
+  // pode ser o mesmo dinheiro: avisar em vez de contar duas vezes.
+  const proprias = todas.filter(t=>t.tipo_mov==='saldo_proprio_externo');
+  return { regras, nomes, contas, linhas, proprias };
 }
 // Boleto (anotação 103): o nome que vem depois de "pagador" é de quem pagou, não de quem recebeu. Só o beneficiário vale como indício.
 const semPagador = d => String(d||'').replace(/\bpagador\b.*$/i,'');
@@ -48,23 +52,27 @@ function itemPara(t,ctx,manual=false) {
   const externa=t.tipo_mov==='saldo_proprio_externo';
   if(!externa && !valido(t)) return null;
   if(!manual && (externa || t.revisao==='transferencia_recusada')) return null;
-  const e=evidencia(t,ctx), todas=ctx.linhas.filter(p=>p.id!==t.id && p.conta_id!==t.conta_id && centavos(p.valor)===-centavos(t.valor));
+  const oposta=p=>p.id!==t.id && p.conta_id!==t.conta_id && centavos(p.valor)===-centavos(t.valor);
+  const propriasPar=externa?[]:(ctx.proprias||[]).filter(oposta);
+  const e=evidencia(t,ctx), todas=[...ctx.linhas.filter(oposta),...propriasPar];
   const coerentes=todas.filter(p=>evidencia(p,ctx)>0 && pix(p));
   const mesmaData=coerentes.filter(p=>String(p.data).slice(0,10)===String(t.data).slice(0,10));
   const cl=classificacao(t), resolvida=t.classificacao_origem==='regra' || (cl.categoriaNome && !/^(geral|sem categoria)$/i.test(cl.categoriaNome));
-  if(!manual) {
+  if(!manual && !(propriasPar.length && (pix(t) || e))) {
     if(!pix(t) || !e) return null;
     // Primeiro nome só é suficiente para uma possibilidade com outra ponta coerente no mesmo dia.
     if(e===1 && !mesmaData.length) return null;
     if(resolvida && (e<2 || !mesmaData.length)) return null;
   }
   // Datas distintas continuam disponíveis para revisão manual; nunca preferir um par remoto automaticamente.
-  const sugestao=todas.length===1 && mesmaData.length===1 && e>0 ? mesmaData[0] : null;
+  const dias=(a,b)=>Math.abs(Date.parse(String(a).slice(0,10))-Date.parse(String(b).slice(0,10)))/86400000;
+  const sugestao=todas.length===1 && mesmaData.length===1 && e>0 ? mesmaData[0] : todas.length===1 && propriasPar.length===1 && dias(propriasPar[0].data,t.data)<=3 ? propriasPar[0] : null;
   const conta=ctx.contas.find(c=>c.id===t.conta_id);
-  const candidatas=todas.map(p=>{const c=ctx.contas.find(c=>c.id===p.conta_id);return {id:p.id,contaId:p.conta_id,contaNome:c?.nome,contaIcone:c?.icone,contaCor:c?.cor,contaTipo:c?.tipo,descricao:p.descricao,data:p.data,valor:p.valor};});
+  const candidatas=todas.map(p=>{const c=ctx.contas.find(c=>c.id===p.conta_id);return {propria:p.tipo_mov==='saldo_proprio_externo',id:p.id,contaId:p.conta_id,contaNome:c?.nome,contaIcone:c?.icone,contaCor:c?.cor,contaTipo:c?.tipo,descricao:p.descricao,data:p.data,valor:p.valor};});
   const proximas=ctx.linhas.some(p=>p.conta_id!==t.conta_id && Math.sign(p.valor)!==Math.sign(t.valor) && Math.abs(centavos(p.valor)+centavos(t.valor))===1 && evidencia(p,ctx)>0);
-  const motivo=resolvida?'Confira a classificação deste lançamento.':todas.length>1?'Há mais de uma possibilidade.':e===1?'Nome incompleto: confira as duas pontas.':todas.length&&!mesmaData.length?'Confira as datas dos lançamentos.':'Confira se é dinheiro entre suas contas.';
-  return {id:t.id,descricao:t.descricao,valor:t.valor,data:t.data,contaId:t.conta_id,contaNome:conta?.nome,contaIcone:conta?.icone,contaCor:conta?.cor,contaTipo:conta?.tipo,externa,classificacao:cl,conflito:!!resolvida,evidencia:e===3?'Nome completo':e===2?'Nome cortado':e===1?'Primeiro nome':'Conferência manual',motivo,sugestaoId:sugestao?.id||null,sugestaoContaId:sugestao?.conta_id||null,candidatas,contas:ctx.contas.filter(c=>c.id!==t.conta_id),diferencaCentavos:proximas&&!todas.length};
+  const contaPropria=propriasPar.length===1?ctx.contas.find(c=>c.id===propriasPar[0].conta_id):null;
+  const motivo=propriasPar.length?`Pode ser o mesmo dinheiro da movimentação própria já marcada${contaPropria?` em ${contaPropria.nome}`:''}. Confira para não contar duas vezes.`:resolvida?'Confira a classificação deste lançamento.':todas.length>1?'Há mais de uma possibilidade.':e===1?'Nome incompleto: confira as duas pontas.':todas.length&&!mesmaData.length?'Confira as datas dos lançamentos.':'Confira se é dinheiro entre suas contas.';
+  return {id:t.id,descricao:t.descricao,valor:t.valor,data:t.data,contaId:t.conta_id,contaNome:conta?.nome,contaIcone:conta?.icone,contaCor:conta?.cor,contaTipo:conta?.tipo,externa,classificacao:cl,conflito:!!resolvida,evidencia:e===3?'Nome completo':e===2?'Nome cortado':e===1?'Primeiro nome':'Conferência manual',motivo,sugestaoId:sugestao?.id||null,sugestaoContaId:sugestao?.conta_id||null,candidatas,contas:ctx.contas.filter(c=>c.id!==t.conta_id),diferencaCentavos:proximas&&!todas.length,duplicidadePropria:propriasPar.length>0};
 }
 function sugerir(t,ctx){return itemPara(t,ctx);}
 function listar(u){const ctx=contexto(u);return ctx.linhas.map(t=>sugerir(t,ctx)).filter(Boolean);}
@@ -77,7 +85,7 @@ function decidir(u,id,corpo){
   if(!item)throw new L.ErroLancamento('A sugestão não está mais disponível. Atualize a revisão.',409);
   const t=db.prepare('SELECT * FROM transacoes WHERE id = ? AND usuario_id = ? AND excluido_em IS NULL').get(id,u);
   return dados.transacao(()=>{
-    if(['recusar','manter'].includes(corpo.acao)){if(t.tipo_mov==='saldo_proprio_externo'){restaurar(t);return {ok:true};}dados.atualizar('transacoes',id,{revisao:'transferencia_recusada'}); if(item.sugestaoId) dados.atualizar('transacoes',item.sugestaoId,{revisao:'transferencia_recusada'}); return {ok:true};}
+    if(['recusar','manter'].includes(corpo.acao)){if(t.tipo_mov==='saldo_proprio_externo'){restaurar(t);return {ok:true};}dados.atualizar('transacoes',id,{revisao:'transferencia_recusada'}); if(item.sugestaoId && !item.candidatas.some(p=>p.id===item.sugestaoId&&p.propria)) dados.atualizar('transacoes',item.sugestaoId,{revisao:'transferencia_recusada'}); return {ok:true};}
     if(corpo.acao==='externa'){
       if(t.tipo_mov==='saldo_proprio_externo')return {ok:true};
       if(t.cartao)throw new L.ErroLancamento('Movimentação própria vale só para lançamentos de conta.');
@@ -95,6 +103,8 @@ function decidir(u,id,corpo){
     if(!parceiraId&&item.candidatas.some(p=>p.contaId===contaId))throw new L.ErroLancamento('Escolha qual lançamento corresponde.');
     if(!parceiraId&&item.diferencaCentavos)throw new L.ErroLancamento('Os valores são diferentes. Confira antes de vincular.');
     if(t.tipo_mov==='saldo_proprio_externo')restaurar(t);
+    // A outra ponta era uma movimentação própria: volta à classificação de antes e as duas viram transferência.
+    if(parceiraId&&item.candidatas.some(p=>p.id===parceiraId&&p.propria))restaurar(db.prepare('SELECT * FROM transacoes WHERE id = ?').get(parceiraId));
     return L.converterEmTransferencia(u,id,contaId,{parceiraId,buscarParceira:false});
   });
 }
