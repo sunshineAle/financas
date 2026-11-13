@@ -47,7 +47,7 @@ const ok = (m) => console.log('PASS', m);
     const { c, p, enviados, erros } = await abrir(b);
     await p.getByRole('button', { name: 'Entrar com Google', exact: true }).click();
     await p.getByText('Sem backup nesta conta Google. Crie seu acesso: o primeiro backup vai para ela.').waitFor({ timeout: 15000 });
-    assert.equal(await p.getByRole('button', { name: 'Voltar' }).count(), 0, 'sem Voltar');
+    assert.equal(await p.getByRole('button', { name: 'Voltar' }).count(), 1, 'com Voltar (clique por engano)');
     assert.equal(await p.getByRole('button', { name: /Restaurar/ }).count(), 0, 'sem restaurar por arquivo');
     assert.equal(await p.getByRole('button', { name: /Entrar com Google|Trocar/ }).count(), 0, 'sem trocar de conta');
     assert.equal(await p.locator('input[type=file]').count(), 0, 'sem campo de arquivo');
@@ -98,6 +98,27 @@ const ok = (m) => console.log('PASS', m);
     await p.getByRole('heading', { name: 'Restaurar backup' }).waitFor({ timeout: 15000 });
     assert.equal(await p.getByLabel('Apelido', { exact: true }).count(), 0);
     ok('conta com backup: segue para Restaurar backup, sem cadastro');
+    await c.close();
+  }
+
+  // 3b) Voltar no cadastro vindo do Google: volta ao início e um cadastro comum depois não envia nada
+  {
+    const { c, p, enviados } = await abrir(b);
+    await p.getByRole('button', { name: 'Entrar com Google', exact: true }).click();
+    await p.getByText('Sem backup nesta conta Google').waitFor({ timeout: 15000 });
+    await p.getByRole('button', { name: 'Voltar' }).click();
+    await p.getByRole('button', { name: 'Entrar com Google', exact: true }).waitFor();
+    await p.getByRole('button', { name: 'Criar acesso novo', exact: true }).click();
+    assert.equal(await p.getByText('Sem backup nesta conta Google').count(), 0);
+    await p.getByLabel('Apelido', { exact: true }).fill('Pessoa fictícia');
+    await p.getByLabel('Senha ou PIN', { exact: true }).fill('1234');
+    await p.getByLabel('Repita a senha ou PIN', { exact: true }).fill('1234');
+    await p.getByRole('button', { name: 'Salvar senha e entrar', exact: true }).click();
+    await p.getByRole('checkbox', { name: 'Guardei a chave em local seguro', exact: true }).check({ timeout: 20000 });
+    await p.getByRole('button', { name: 'Entrar no app', exact: true }).click();
+    await p.locator('main').waitFor({ timeout: 30000 });
+    assert.equal(enviados.length, 0);
+    ok('Voltar no fluxo Google: volta ao início e nada é enviado depois');
     await c.close();
   }
 

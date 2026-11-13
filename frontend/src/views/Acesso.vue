@@ -303,6 +303,7 @@ async function restaurarAgora() {
 }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
 function voltar() {
+  googleSemBackup.value = false; fluxoGoogle.value = false; // saiu do cadastro vindo do Google: nenhum backup é enviado
   senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; backupsEncontrados.value = []; provedorEscolhido.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'escolher'; }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada' };
 const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
@@ -382,7 +383,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         </label>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
-        <button v-if="modo === 'criar' && !fluxoGoogle" type="button" class="link" @click="voltar">Voltar</button>
+        <button v-if="modo === 'criar'" type="button" class="link" @click="voltar">Voltar</button>
         <button v-if="modo === 'nova-senha'" type="button" class="link" @click="voltar">Cancelar</button>
       </form>
 
