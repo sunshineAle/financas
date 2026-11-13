@@ -115,8 +115,8 @@ const subtitulo = computed(() => ({
 const ajudaCadastro = computed(() => [
   ...(fluxoGoogle.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
   fluxoGoogle.value
-    ? 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app e também o backup: prefira uma senha longa.'
-    : 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho.',
+    ? 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app e também o backup: prefira um PIN de 6 números ou mais.'
+    : 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho. Um PIN de 6 números ou mais é mais seguro.',
   fluxoGoogle.value ? 'Seus dados ficam no aparelho e, criptografados, no seu backup.' : 'Seus dados ficam só no aparelho.',
   'Guarde a senha e o código de recuperação em um cofre. Se perder os dois, não será possível recuperar os dados.',
 ]);
