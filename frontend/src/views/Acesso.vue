@@ -8,7 +8,6 @@ import MarcaDagda from '../components/MarcaDagda.vue';
 import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint, Delete, KeyRound } from 'lucide-vue-next';
 import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria,
   adotarMestra, codigoValido, acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
-import AvisoSenha from '../components/AvisoSenha.vue';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import { jaInstalado, instalarApp, ehApple } from '../services/instalacao.js';
 import InstrucoesInstalacao from '../components/InstrucoesInstalacao.vue';
@@ -106,13 +105,19 @@ const subtitulo = computed(() => ({
   escolher: '',
   entrar: ehPinAcesso ? 'Digite seu PIN.' : 'Digite sua senha ou PIN.',
   codigo: 'Digite o código de recuperação que você guardou no cadastro.',
-  'nova-senha': 'Código aceito. Crie a nova senha ou PIN deste aparelho.',
+  'nova-senha': 'Código aceito. Crie a nova senha.',
   chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
-  criar: googleSemBackup.value ? 'Não há backup do Dagda nesta conta Google. Escolha um apelido e uma senha ou PIN. O primeiro backup será guardado nela.' : 'Escolha um apelido e uma senha ou PIN.',
-  redefinir: 'Seu nome e seus dados foram restaurados. Defina apenas uma senha ou PIN para este aparelho.',
+  criar: googleSemBackup.value ? 'Sem backup nesta conta Google. Crie seu acesso.' : '',
+  redefinir: 'Dados restaurados. Crie a senha deste aparelho.',
   restaurar: 'Escolha uma cópia para continuar.',
 }[modo.value]));
-const TEXTO_CADASTRO = 'Este cadastro serve para proteger o acesso ao app no seu aparelho. Seus dados são mantidos protegidos no dispositivo.';
+// Tela enxuta (13/11): as explicações ficam no "?" ao lado do título, no padrão do sistema.
+const ajudaCadastro = computed(() => [
+  ...(googleSemBackup.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
+  'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho.',
+  'Seus dados ficam só no aparelho.',
+  'Guarde a senha e o código de recuperação em um cofre. Se perder os dois, não será possível recuperar os dados.',
+]);
 
 async function enviar() {
   erro.value = '';
@@ -349,23 +354,21 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
       </form>
 
       <!-- Criar / redefinir após restaurar / nova senha pelo código -->
-      <form v-else-if="['criar', 'redefinir', 'nova-senha'].includes(modo) && !oferta" class="formulario" @submit.prevent="enviar">
-        <h1>{{ titulo }}</h1>
+      <form v-else-if="['criar', 'redefinir', 'nova-senha'].includes(modo) && !oferta" class="formulario" data-form-senha @submit.prevent="enviar">
+        <h1 class="titulo-ajuda">{{ titulo }}<AjudaSecao titulo="Sobre a senha" :texto="ajudaCadastro" /></h1>
         <p v-if="subtitulo" class="subtitulo">{{ subtitulo }}</p>
         <label v-if="modo === 'criar'" class="campo">
           <span>Apelido</span>
-          <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Como quer ser chamado" autofocus />
+          <input v-model="apelido" type="text" autocomplete="nickname" maxlength="30" required placeholder="Seu nome no app" autofocus />
         </label>
         <label class="campo">
           <span>Senha ou PIN</span>
-          <input v-model="senha" type="password" autocomplete="new-password" required placeholder="PIN de 4 a 12 números ou senha com 6+ caracteres" />
+          <input v-model="senha" type="password" autocomplete="new-password" required placeholder="4+ números ou 6+ caracteres" />
         </label>
         <label class="campo">
           <span>Repita a senha ou PIN</span>
           <input v-model="confirmacao" type="password" autocomplete="new-password" required placeholder="••••••••" />
         </label>
-        <AvisoSenha compacto />
-        <p v-if="modo === 'criar'" class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
         <button v-if="modo === 'criar' && !googleSemBackup" type="button" class="link" @click="voltar">Voltar</button>
@@ -479,6 +482,7 @@ button.bio { display: flex; align-items: center; justify-content: center; gap: 1
   .beneficios li { font-size: 13.5px; }
   .beneficios { gap: 6px; }
 }
+.titulo-ajuda { display: flex; align-items: center; gap: 6px; }
 .texto-cadastro { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cor-texto-suave); }
 .origem { margin: -6px 0 0; font-size: 13px; color: var(--cor-texto-suave); }
 button.restaurar { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; background: color-mix(in srgb, var(--cor-primaria) 12%, transparent); color: var(--cor-primaria); border: 1.5px solid var(--cor-primaria); font-weight: 700; }

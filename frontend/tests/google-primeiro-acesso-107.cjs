@@ -46,7 +46,7 @@ const ok = (m) => console.log('PASS', m);
   {
     const { c, p, enviados, erros } = await abrir(b);
     await p.getByRole('button', { name: 'Entrar com Google', exact: true }).click();
-    await p.getByText('Não há backup do Dagda nesta conta Google').waitFor({ timeout: 15000 });
+    await p.getByText('Sem backup nesta conta Google').waitFor({ timeout: 15000 });
     assert.equal(await p.getByRole('button', { name: 'Voltar' }).count(), 0, 'sem Voltar');
     assert.equal(await p.getByRole('button', { name: /Restaurar/ }).count(), 0, 'sem restaurar por arquivo');
     assert.equal(await p.getByRole('button', { name: /Entrar com Google|Trocar/ }).count(), 0, 'sem trocar de conta');
