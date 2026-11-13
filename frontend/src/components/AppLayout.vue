@@ -93,6 +93,13 @@ async function atualizarRevisar() {
 }
 const itensMenu = computed(() => MENU_LATERAL.filter((i) => !i.revisar || qtdRevisar.value > 0));
 
+// Anotação 107: resultado do primeiro backup no Google, feito na tela de acesso logo depois do cadastro.
+onMounted(() => {
+  let r = null;
+  try { r = sessionStorage.getItem('sf:primeiro-backup'); sessionStorage.removeItem('sf:primeiro-backup'); } catch { /* sem sessão */ }
+  if (r === 'ok') avisarRegra('Primeiro backup guardado na sua conta Google.', { tipo: 'ok', duracao: 8000 });
+  else if (r === 'falhou') avisarRegra('Não foi possível enviar o primeiro backup agora.', { tipo: 'alerta', duracao: 12000, detalhe: 'Seu acesso foi criado. Faça o backup em Mais › Dados e backup.' });
+});
 onMounted(async () => {
   document.addEventListener('pointerdown', aoApontar, true);
   const resposta = await fetch('/api/auth/me', { credentials: 'include' });

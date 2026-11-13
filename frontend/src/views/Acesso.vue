@@ -13,7 +13,7 @@ import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import { jaInstalado, instalarApp, ehApple } from '../services/instalacao.js';
 import InstrucoesInstalacao from '../components/InstrucoesInstalacao.vue';
 import { perfil } from '../services/perfil.js';
-import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem, guardarMestraParaAdotar, adotarMestraGuardada, descartarMestraGuardada } from '../services/backup.js';
+import { lerArquivo, previa, restaurar, recarregarApp, configBackup, salvarConfig, PROVEDORES, listarBackupsNuvem, abrirBackupNuvem, enviarNuvem, guardarMestraParaAdotar, adotarMestraGuardada, descartarMestraGuardada } from '../services/backup.js';
 import { conectarNuvem } from '../services/nuvem/index.js';
 import AjudaSecao from '../components/AjudaSecao.vue';
 import ListaBackups from '../components/ListaBackups.vue';
@@ -108,7 +108,7 @@ const subtitulo = computed(() => ({
   codigo: 'Digite o código de recuperação que você guardou no cadastro.',
   'nova-senha': 'Código aceito. Crie a nova senha ou PIN deste aparelho.',
   chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
-  criar: 'Escolha um apelido e uma senha ou PIN.',
+  criar: googleSemBackup.value ? 'Não há backup do Dagda nesta conta Google. Escolha um apelido e uma senha ou PIN. O primeiro backup será guardado nela.' : 'Escolha um apelido e uma senha ou PIN.',
   redefinir: 'Seu nome e seus dados foram restaurados. Defina apenas uma senha ou PIN para este aparelho.',
   restaurar: 'Escolha uma cópia para continuar.',
 }[modo.value]));
@@ -153,6 +153,7 @@ async function enviar() {
       }
       // Primeiro cadastro (ou backup antigo sem código): mostra o código de recuperação antes de entrar.
       if (codigoRecuperacaoPendente()) { codigoNovo.value = await gerarNovoCodigo(); modo.value = 'chave'; return; }
+      await primeiroBackupGoogle();
     }
     liberar();
   } catch (e) {
@@ -164,7 +165,7 @@ async function enviar() {
 // Código de recuperação: gerado no cadastro (ou no 1º acesso de quem cadastrou antes dele existir).
 const codigoNovo = ref('');
 const codigoDigitado = ref('');
-async function codigoGuardado() { await confirmarCodigoGuardado(); liberar(); }
+async function codigoGuardado() { await confirmarCodigoGuardado(); await primeiroBackupGoogle(); liberar(); }
 function abrirCodigo() { erro.value = ''; codigoDigitado.value = ''; modo.value = 'codigo'; }
 
 // Depois de restaurar pela nuvem (aparelho novo): oferece biometria e backup automático nessa nuvem.
@@ -194,6 +195,24 @@ const origemRestauro = ref('');
 const COM_LOGIN = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
 const nuvensAbertas = ref(false);
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
+const googleSemBackup = ref(false); // anotação 107
+const enviandoPrimeiro = ref(false);
+// O primeiro backup vai para a conta Google já conectada. Se falhar, a entrada não trava: o destino fica marcado
+// e o lembrete de backup oferece de novo.
+async function primeiroBackupGoogle() {
+  if (!googleSemBackup.value) return;
+  enviandoPrimeiro.value = true; carregando.value = true;
+  let resultado = 'falhou';
+  try {
+    if (!PROVEDORES.google.temToken()) await conectarNuvem('google');
+    await enviarNuvem('google');
+    resultado = 'ok';
+  } catch (e) {
+    configBackup.ultimoDestino = 'google'; salvarConfig();
+  } finally {
+    // O aviso aparece quando o app termina de abrir (AppLayout), para não se perder na troca de tela.
+    try { sessionStorage.setItem('sf:primeiro-backup', resultado); } catch { /* sem sessão: segue sem aviso */ } googleSemBackup.value = false; enviandoPrimeiro.value = false; carregando.value = false; }
+}
 const backupsEncontrados = ref([]);
 const provedorEscolhido = ref(null);
 const nuvemRestauro = ref(null); // { id, nome, data }
@@ -205,6 +224,12 @@ async function entrarNuvem(id) {
   try {
     await conectarNuvem(id, { restaurar: true });
     const itens = await listarBackupsNuvem(id, { restaurar: true });
+    // Anotação 107: primeiro acesso pelo Google sem backup na conta → cadastro de apelido e senha, e o primeiro
+    // backup vai para essa conta. Sem trocar de conta nem restaurar por arquivo nesse momento (decisão do dono).
+    if (!itens.length && id === 'google' && !configurada()) {
+      googleSemBackup.value = true; folha.value = false; senha.value = ''; confirmacao.value = ''; modo.value = 'criar';
+      return;
+    }
     if (!itens.length) throw new Error(`Não encontramos backups do app na sua conta ${p.nome}. Confira se entrou na conta certa.`);
     backupsEncontrados.value = itens; provedorEscolhido.value = id;
     folha.value = false; modo.value = 'restaurar'; origemRestauro.value = p.nome;
@@ -343,7 +368,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="modo === 'criar'" class="texto-cadastro">{{ TEXTO_CADASTRO }}</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
-        <button v-if="modo === 'criar'" type="button" class="link" @click="voltar">Voltar</button>
+        <button v-if="modo === 'criar' && !googleSemBackup" type="button" class="link" @click="voltar">Voltar</button>
         <button v-if="modo === 'nova-senha'" type="button" class="link" @click="voltar">Cancelar</button>
       </form>
 
@@ -370,6 +395,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
       <div v-else-if="modo === 'chave'" class="formulario">
         <h1>{{ titulo }}</h1>
         <ChaveRecuperacao :codigo="codigoNovo" rotulo-continuar="Entrar no app" @guardado="codigoGuardado" />
+        <p v-if="enviandoPrimeiro" class="texto-cadastro" role="status" data-primeiro-backup>Guardando o primeiro backup na sua conta Google…</p>
       </div>
 
       <div v-else-if="oferta" class="formulario" data-oferta>

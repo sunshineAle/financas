@@ -1,5 +1,14 @@
 [
   {
+    "versao": "1.4.4",
+    "data": "2026-11-13",
+    "resumo": "Primeiro acesso pelo Google sem backup: você cria o apelido e a senha, e o primeiro backup já fica guardado na sua conta.",
+    "itens": [
+      "Ao entrar com Google numa conta que ainda não tem backup do Dagda, o app abre direto o cadastro de apelido e senha.",
+      "Depois do cadastro e do código de recuperação, o primeiro backup é enviado para essa conta Google. Os seguintes mantêm até 4 cópias recentes."
+    ]
+  },
+  {
     "versao": "1.4.3",
     "data": "2026-11-12",
     "resumo": "PIX ou transferência com o seu primeiro nome agora aparece em Possíveis transferências para você decidir. A revisar ficou mais limpo.",
@@ -7,15 +16,6 @@
       "PIX, TED, DOC ou boleto com o seu primeiro nome aparece em Possíveis transferências, mesmo sem a outra conta. Nada muda até você decidir. Lançamentos que já têm categoria ou regra continuam como estão.",
       "A revisar avisa quando falta o nome completo do titular no Perfil. Com ele, o Dagda reconhece também nomes cortados no extrato. O nome vai junto no backup.",
       "A página A revisar não mostra mais a marquinha vermelha em cada item."
-    ]
-  },
-  {
-    "versao": "1.4.2",
-    "data": "2026-11-12",
-    "resumo": "Estorno de movimentação própria e aviso quando o extrato da outra conta mostra o mesmo dinheiro.",
-    "itens": [
-      "Movimentação própria pode ser estornada: a devolução anula a saída, sem virar receita.",
-      "Ao importar o extrato de uma conta nova, o Dagda avisa quando um valor parece ser o mesmo dinheiro de uma movimentação própria já marcada. Você confirma se é o mesmo dinheiro ou não."
     ]
   }
 ]
