@@ -107,15 +107,17 @@ const subtitulo = computed(() => ({
   codigo: 'Digite o código de recuperação que você guardou no cadastro.',
   'nova-senha': 'Código aceito. Crie a nova senha.',
   chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
-  criar: googleSemBackup.value ? 'Sem backup nesta conta Google. Crie seu acesso.' : '',
+  criar: fluxoGoogle.value ? 'Sem backup nesta conta Google. Crie seu acesso: o primeiro backup vai para ela.' : '',
   redefinir: 'Dados restaurados. Crie a senha deste aparelho.',
   restaurar: 'Escolha uma cópia para continuar.',
 }[modo.value]));
 // Tela enxuta (13/11): as explicações ficam no "?" ao lado do título, no padrão do sistema.
 const ajudaCadastro = computed(() => [
-  ...(googleSemBackup.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
-  'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho.',
-  'Seus dados ficam só no aparelho.',
+  ...(fluxoGoogle.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
+  fluxoGoogle.value
+    ? 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app e também o backup: prefira uma senha longa.'
+    : 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho.',
+  fluxoGoogle.value ? 'Seus dados ficam no aparelho e, criptografados, no seu backup.' : 'Seus dados ficam só no aparelho.',
   'Guarde a senha e o código de recuperação em um cofre. Se perder os dois, não será possível recuperar os dados.',
 ]);
 
@@ -170,7 +172,12 @@ async function enviar() {
 // Código de recuperação: gerado no cadastro (ou no 1º acesso de quem cadastrou antes dele existir).
 const codigoNovo = ref('');
 const codigoDigitado = ref('');
-async function codigoGuardado() { await confirmarCodigoGuardado(); await primeiroBackupGoogle(); liberar(); }
+let entrando = false;
+async function codigoGuardado() {
+  if (entrando) return; // toque duplo em "Entrar no app"
+  entrando = true;
+  try { await confirmarCodigoGuardado(); await primeiroBackupGoogle(); liberar(); } catch (e) { entrando = false; throw e; }
+}
 function abrirCodigo() { erro.value = ''; codigoDigitado.value = ''; modo.value = 'codigo'; }
 
 // Depois de restaurar pela nuvem (aparelho novo): oferece biometria e backup automático nessa nuvem.
@@ -200,17 +207,21 @@ const origemRestauro = ref('');
 const COM_LOGIN = computed(() => Object.keys(PROVEDORES).filter((id) => PROVEDORES[id].configurado()));
 const nuvensAbertas = ref(false);
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
-const googleSemBackup = ref(false); // anotação 107
+const googleSemBackup = ref(false); // anotação 107: falta enviar o primeiro backup
+const fluxoGoogle = ref(false);     // textos e botões do cadastro vindo do Google sem backup
 const enviandoPrimeiro = ref(false);
 // O primeiro backup vai para a conta Google já conectada. Se falhar, a entrada não trava: o destino fica marcado
 // e o lembrete de backup oferece de novo.
 async function primeiroBackupGoogle() {
-  if (!googleSemBackup.value) return;
+  if (!googleSemBackup.value || enviandoPrimeiro.value) return;
+  googleSemBackup.value = false; // um envio só, mesmo com toque duplo
   enviandoPrimeiro.value = true; carregando.value = true;
   let resultado = 'falhou';
   try {
-    if (!PROVEDORES.google.temToken()) await conectarNuvem('google');
-    await enviarNuvem('google');
+    // Sem sessão Google válida, não abre janela de conta neste momento: fica para Dados e backup.
+    if (!PROVEDORES.google.temToken()) throw new Error('sessão Google expirada');
+    // Rede que não responde não pode prender a pessoa na tela: limite de 45 s.
+    await Promise.race([enviarNuvem('google'), new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 45000))]);
     resultado = 'ok';
   } catch (e) {
     configBackup.ultimoDestino = 'google'; salvarConfig();
@@ -232,7 +243,7 @@ async function entrarNuvem(id) {
     // Anotação 107: primeiro acesso pelo Google sem backup na conta → cadastro de apelido e senha, e o primeiro
     // backup vai para essa conta. Sem trocar de conta nem restaurar por arquivo nesse momento (decisão do dono).
     if (!itens.length && id === 'google' && !configurada()) {
-      googleSemBackup.value = true; folha.value = false; senha.value = ''; confirmacao.value = ''; modo.value = 'criar';
+      googleSemBackup.value = true; fluxoGoogle.value = true; folha.value = false; senha.value = ''; confirmacao.value = ''; modo.value = 'criar';
       return;
     }
     if (!itens.length) throw new Error(`Não encontramos backups do app na sua conta ${p.nome}. Confira se entrou na conta certa.`);
@@ -371,7 +382,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         </label>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando">{{ carregando ? 'Aguarde…' : 'Salvar senha e entrar' }}</button>
-        <button v-if="modo === 'criar' && !googleSemBackup" type="button" class="link" @click="voltar">Voltar</button>
+        <button v-if="modo === 'criar' && !fluxoGoogle" type="button" class="link" @click="voltar">Voltar</button>
         <button v-if="modo === 'nova-senha'" type="button" class="link" @click="voltar">Cancelar</button>
       </form>
 
