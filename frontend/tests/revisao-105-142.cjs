@@ -9,7 +9,7 @@ const hoje = new Date(); const DIA = hoje.toLocaleDateString('sv-SE');
 (async () => {
   const b = await chromium.launch();
   const c = await b.newContext({ viewport: { width: 360, height: 780 }, colorScheme: 'dark' });
-  await c.addInitScript("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}));localStorage.setItem('sf:novidades-vista','1.4.4');localStorage.setItem('sf:tema','escuro')");
+  await c.addInitScript("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}));localStorage.setItem('sf:novidades-vista','1.4.3.1');localStorage.setItem('sf:tema','escuro')");
   const p = await c.newPage(); const erros = []; p.on('pageerror', (e) => erros.push(String(e)));
   const api = (url, body, metodo) => p.evaluate(async ([u, b, m]) => { const r = await fetch(u, { method: m || (b ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' }, ...(b ? { body: JSON.stringify(b) } : {}) }); const j = await r.json(); if (!r.ok) throw Error(JSON.stringify(j)); return j; }, [url, body, metodo]);
   const tx = (conta, tipo, descricao, valor, extra = {}) => api('/api/transacoes', { contaId: conta.id, tipo, descricao, valor, data: DIA, ...extra });

@@ -9,7 +9,7 @@ const SDK = "window.google={accounts:{oauth2:{initTokenClient(o){return{requestA
 
 async function abrir(b, { falharEnvio = false, existentes = [] } = {}) {
   const c = await b.newContext({ viewport: { width: 390, height: 844 } });
-  await c.addInitScript("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}));localStorage.setItem('sf:novidades-vista','1.4.4')");
+  await c.addInitScript("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}));localStorage.setItem('sf:novidades-vista','1.4.3.1')");
   const enviados = [];
   await c.route('https://accounts.google.com/gsi/client', (r) => r.fulfill({ contentType: 'text/javascript', body: SDK }));
   await c.route('https://www.googleapis.com/**', async (r) => {

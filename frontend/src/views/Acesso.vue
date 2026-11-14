@@ -7,7 +7,7 @@ import Orbe from '../components/Orbe.vue';
 import MarcaDagda from '../components/MarcaDagda.vue';
 import { DatabaseBackup, Smartphone, Cloud, ChevronDown, X, ShieldCheck, WifiOff, LockKeyhole, Download, Fingerprint, Delete, KeyRound } from 'lucide-vue-next';
 import { configurada, criarSenha, verificarSenha, validarNovaSenha, validarApelido, apelidoSalvo, esperaAteTentar, biometriaMarcada, biometriaSuportada, desbloquearComBiometria, ativarBiometria,
-  adotarMestra, codigoValido, acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente } from '../services/acesso.js';
+  adotarMestra, codigoValido, acessoEhPin, gerarNovoCodigo, confirmarCodigoGuardado, entrarComCodigo, redefinirSenhaComCodigo, aplicarRecAdotado, codigoRecuperacaoPendente, apagarTudo } from '../services/acesso.js';
 import ChaveRecuperacao from '../components/ChaveRecuperacao.vue';
 import { jaInstalado, instalarApp, ehApple } from '../services/instalacao.js';
 import InstrucoesInstalacao from '../components/InstrucoesInstalacao.vue';
@@ -18,6 +18,7 @@ import AjudaSecao from '../components/AjudaSecao.vue';
 import ListaBackups from '../components/ListaBackups.vue';
 import RestaurarBackupModal from '../components/RestaurarBackupModal.vue';
 import OrigemBackup from '../components/OrigemBackup.vue';
+import ComecarDoZeroModal from '../components/ComecarDoZeroModal.vue';
 import { reavisar } from '../services/atualizacao.js';
 import { marcarPrimeiroCadastro } from '../services/primeiroCadastro.js';
 
@@ -107,13 +108,13 @@ const subtitulo = computed(() => ({
   codigo: 'Digite o código de recuperação que você guardou no cadastro.',
   'nova-senha': 'Código aceito. Crie a nova senha.',
   chave: 'Guarde este código. Sem ele e sem a senha, não há como recuperar os dados.',
-  criar: fluxoGoogle.value ? 'Sem backup nesta conta Google. Crie seu acesso: o primeiro backup vai para ela.' : '',
+  criar: recomecoGoogle.value ? 'Crie seu acesso novo: o primeiro backup vai para esta conta Google.' : fluxoGoogle.value ? 'Sem backup nesta conta Google. Crie seu acesso: o primeiro backup vai para ela.' : '',
   redefinir: 'Dados restaurados. Crie a senha deste aparelho.',
   restaurar: 'Escolha uma cópia para continuar.',
 }[modo.value]));
 // Tela enxuta (13/11): as explicações ficam no "?" ao lado do título, no padrão do sistema.
 const ajudaCadastro = computed(() => [
-  ...(fluxoGoogle.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
+  ...(recomecoGoogle.value ? ['Os backups antigos continuam na conta, fechados com a senha antiga. Eles saem sozinhos conforme os novos chegam.', 'Depois do cadastro, o primeiro backup novo é guardado na conta, criptografado.'] : fluxoGoogle.value ? ['Não encontramos backup do Dagda nesta conta Google. Depois do cadastro, o primeiro backup é guardado nela, criptografado.'] : []),
   fluxoGoogle.value
     ? 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app e também o backup: prefira um PIN de 6 números ou mais.'
     : 'A senha pode ser um PIN de 4 a 12 números ou uma senha com 6 ou mais caracteres. Ela protege o app neste aparelho. Um PIN de 6 números ou mais é mais seguro.',
@@ -209,6 +210,27 @@ const nuvensAbertas = ref(false);
 // "Entrar com Google / Microsoft / Dropbox": login OAuth, acha sozinho o backup mais recente e pede só a senha do backup.
 const googleSemBackup = ref(false); // anotação 107: falta enviar o primeiro backup
 const fluxoGoogle = ref(false);     // textos e botões do cadastro vindo do Google sem backup
+// Anotação 108: perdeu a senha e o código → apagar tudo e recomeçar (alerta grave + digitar APAGAR).
+const zerarAberto = ref(false);
+const zerarGoogle = ref(false);   // veio de "Não lembro a senha deste backup" na recuperação pelo Google
+const recomecoGoogle = ref(false); // cadastro novo numa conta Google que já tem backups antigos
+const zerando = ref(false);
+const erroZerar = ref('');
+function abrirZerar(google = false) { zerarGoogle.value = google; erroZerar.value = ''; zerarAberto.value = true; }
+async function confirmarZerar() {
+  erroZerar.value = '';
+  // Aparelho sem acesso criado (ex.: celular novo) vindo do Google: não há dado local para apagar.
+  // Segue direto para o cadastro novo; o primeiro backup vai para a conta já conectada (anotação 107).
+  if (zerarGoogle.value && !configurada()) {
+    zerarAberto.value = false;
+    backupsEncontrados.value = []; provedorEscolhido.value = null; nuvemRestauro.value = null; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; erro.value = '';
+    googleSemBackup.value = true; fluxoGoogle.value = true; recomecoGoogle.value = true; senha.value = ''; confirmacao.value = ''; modo.value = 'criar';
+    return;
+  }
+  zerando.value = true;
+  try { await apagarTudo(); } // recarrega o app na tela de boas-vindas
+  catch (e) { erroZerar.value = e.message || 'Não foi possível apagar.'; zerando.value = false; }
+}
 const enviandoPrimeiro = ref(false);
 // O primeiro backup vai para a conta Google já conectada. Se falhar, a entrada não trava: o destino fica marcado
 // e o lembrete de backup oferece de novo.
@@ -303,7 +325,7 @@ async function restaurarAgora() {
 }
 function abrirRestaurar() { erro.value = ''; modo.value = 'restaurar'; }
 function voltar() {
-  googleSemBackup.value = false; fluxoGoogle.value = false; // saiu do cadastro vindo do Google: nenhum backup é enviado
+  googleSemBackup.value = false; fluxoGoogle.value = false; recomecoGoogle.value = false; // saiu do cadastro vindo do Google: nenhum backup é enviado
   senha.value = ''; confirmacao.value = ''; nuvemRestauro.value = null; backupsEncontrados.value = []; provedorEscolhido.value = null; erro.value = ''; arquivo.value = null; dadosPrevia.value = null; origemRestauro.value = ''; modo.value = configurada() ? 'entrar' : 'escolher'; }
 const rotulosTabela = { contas: 'contas', cartoes: 'cartões', transacoes: 'transações', dividas: 'dívidas', lancamentos_cartao: 'compras no cartão', metas_reserva: 'metas', categorias_orcamento: 'categorias de saída', categorias_receita: 'categorias de entrada' };
 const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.value.contagens).filter(([, n]) => n).map(([t, n]) => `${n} ${rotulosTabela[t] || t.replace(/_/g, ' ')}`) : []);
@@ -398,12 +420,13 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
         <p v-if="espera > 0" class="mensagem-erro">Muitas tentativas. Aguarde {{ espera }}s.</p>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
         <button type="submit" :disabled="carregando || espera > 0 || !codigoDigitado">{{ carregando ? 'Conferindo…' : 'Continuar' }}</button>
-        <p class="texto-cadastro">Não tem o código? Restaure um backup: ele abre com a senha da época ou com o código.</p>
+        <p class="texto-cadastro">Não tem o código? Restaure um backup.<AjudaSecao titulo="Sem senha e sem código" :texto="['O backup abre com a senha da época ou com o código de recuperação.', 'Se você não tem nenhum dos dois, só resta começar do zero: os dados deste aparelho são apagados. O Dagda não guarda cópia em servidor.']" /></p>
         <div class="links-ajuda">
           <button type="button" class="link" @click="voltar">Voltar</button>
           <span aria-hidden="true">·</span>
           <button type="button" class="link" @click="folha = true"><DatabaseBackup :size="16" :stroke-width="2" /> Restaurar backup</button>
         </div>
+        <button type="button" class="link perigo" data-comecar-zero @click="abrirZerar(false)">Começar do zero</button>
       </form>
 
       <!-- Código de recuperação recém-gerado -->
@@ -433,10 +456,12 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
           <input type="file" @change="escolher" />
         </label>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
+        <button v-if="provedorEscolhido === 'google' && backupsEncontrados.length" type="button" class="link perigo" data-nao-lembro @click="abrirZerar(true)">Não lembro a senha deste backup</button>
         <button type="button" class="link" @click="voltar">Voltar</button>
       </div>
     </section>
 
+    <ComecarDoZeroModal v-model:aberto="zerarAberto" :google="zerarGoogle" :executando="zerando" :erro="erroZerar" @confirmar="confirmarZerar" />
     <RestaurarBackupModal :arquivo="arquivo" :executando="carregando" :erro-executar="erro" @fechar="arquivo = null; dadosPrevia = null; erro = ''" @restaurar="receberRestauro" />
     <Teleport to="body">
       <div v-if="folha" class="folha-fundo" @click.self="folha = false">
@@ -494,6 +519,7 @@ button.bio { display: flex; align-items: center; justify-content: center; gap: 1
   .beneficios li { font-size: 13.5px; }
   .beneficios { gap: 6px; }
 }
+.link.perigo { color: var(--cor-grave); }
 .titulo-ajuda { display: flex; align-items: center; gap: 6px; }
 .texto-cadastro { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cor-texto-suave); }
 .origem { margin: -6px 0 0; font-size: 13px; color: var(--cor-texto-suave); }

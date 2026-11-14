@@ -1,11 +1,13 @@
 [
   {
-    "versao": "1.4.4",
-    "data": "2026-11-13",
-    "resumo": "Primeiro acesso pelo Google sem backup: você cria o apelido e a senha, e o primeiro backup já fica guardado na sua conta.",
+    "versao": "1.4.3.1",
+    "data": "2026-11-14",
+    "resumo": "Primeiro acesso pelo Google mais direto, tela de cadastro mais limpa e a opção de começar do zero para quem perdeu a senha e o código.",
     "itens": [
-      "Ao entrar com Google numa conta que ainda não tem backup do Dagda, o app abre direto o cadastro de apelido e senha.",
-      "Depois do cadastro e do código de recuperação, o primeiro backup é enviado para essa conta Google. Os seguintes mantêm até 4 cópias recentes."
+      "Entrar com Google numa conta sem backup abre direto o cadastro. Depois dele, o primeiro backup já fica guardado na sua conta, criptografado.",
+      "Tela de novo acesso com menos texto: as explicações ficam no \"?\" ao lado do título.",
+      "Esqueci a senha › Começar do zero: para quem perdeu a senha e o código de recuperação. Apaga os dados deste aparelho, com alerta e confirmação. O Dagda não guarda cópia em servidor.",
+      "Na recuperação pelo Google, \"Não lembro a senha deste backup\" leva a um cadastro novo."
     ]
   },
   {
