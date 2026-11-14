@@ -218,6 +218,7 @@ const zerando = ref(false);
 const erroZerar = ref('');
 function abrirZerar(google = false) { zerarGoogle.value = google; erroZerar.value = ''; zerarAberto.value = true; }
 async function confirmarZerar() {
+  if (zerando.value) return; // toque duplo
   erroZerar.value = '';
   // Aparelho sem acesso criado (ex.: celular novo) vindo do Google: não há dado local para apagar.
   // Segue direto para o cadastro novo; o primeiro backup vai para a conta já conectada (anotação 107).
@@ -456,7 +457,7 @@ const resumo = computed(() => dadosPrevia.value ? Object.entries(dadosPrevia.val
           <input type="file" @change="escolher" />
         </label>
         <p v-if="erro" class="mensagem-erro" role="alert">{{ erro }}</p>
-        <button v-if="provedorEscolhido === 'google' && backupsEncontrados.length" type="button" class="link perigo" data-nao-lembro @click="abrirZerar(true)">Não lembro a senha deste backup</button>
+        <button v-if="provedorEscolhido === 'google' && backupsEncontrados.length" type="button" class="link perigo" data-nao-lembro :disabled="carregando" @click="abrirZerar(true)">Não lembro a senha deste backup</button>
         <button type="button" class="link" @click="voltar">Voltar</button>
       </div>
     </section>

@@ -17,7 +17,7 @@ function confirmar() { if (pode.value && !props.executando) emit('confirmar'); }
 </script>
 
 <template>
-  <Modal :aberto="aberto" titulo="Começar do zero" tema="saida" @fechar="aberto = false">
+  <Modal :aberto="aberto" titulo="Começar do zero" tema="saida" @fechar="!executando && (aberto = false)">
     <div class="zerar" data-comecar-do-zero>
       <div class="alerta" role="alert">
         <TriangleAlert :size="40" :stroke-width="2" aria-hidden="true" />
