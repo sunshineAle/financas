@@ -11,8 +11,8 @@ import Modal from '../components/Modal.vue';
 import OrigemBackup from '../components/OrigemBackup.vue';
 import AvisoSenha from '../components/AvisoSenha.vue';
 import {
-  configBackup, salvarConfig, INTERVALOS, suporte, ocupado, diasDesdeUltimo, backupDevido,
-  baixar, compartilhar, lerArquivo, restaurar, desfazerRestauracao, temCopiaDeSeguranca, recarregarApp,
+  configBackup, salvarConfig, INTERVALOS, ocupado, diasDesdeUltimo, backupDevido,
+  baixar, lerArquivo, restaurar, desfazerRestauracao, temCopiaDeSeguranca, recarregarApp,
   excluirBackupNuvem, PROVEDORES, estadoNuvem, enviarNuvem, listarBackupsNuvem, abrirBackupNuvem,
 } from '../services/backup.js';
 import { conectarNuvem, desconectarNuvem } from '../services/nuvem/index.js';
@@ -24,7 +24,6 @@ defineProps({ embutido: { type: Boolean, default: false } });
 const route = useRoute();
 const msg = ref(''); const erro = ref('');
 const destacar = computed(() => route.query.fazer === '1' || backupDevido());
-const podeCompartilhar = suporte.compartilhar();
 const janela = ref('');
 const provedorDaLista = ref('');
 const listaNuvem = ref([]);
@@ -71,9 +70,7 @@ async function executar(fn, ok) {
   }
 }
 async function salvarAparelho() {
-  await executar(podeCompartilhar ? compartilhar : baixar, (nome) => (
-    podeCompartilhar ? 'Backup pronto para salvar.' : `Arquivo ${nome} gerado.`
-  ));
+  await executar(baixar, (nome) => `Download de ${nome} iniciado. Confira os downloads do navegador.`);
   if (msg.value) fecharJanela();
 }
 async function salvarNuvem(id) {
@@ -227,7 +224,7 @@ onMounted(async () => { copiaEm.value = await temCopiaDeSeguranca(); });
       <div class="conteudo-janela">
         <p v-if="erro" class="faixa erro" role="alert"><TriangleAlert :size="18" />{{ erro }}</p>
         <p v-if="emOperacao" class="dica" role="status">Conferindo a operação… aguarde.</p>
-        <OrigemBackup v-if="janela === 'salvar'" modo="salvar" :ocupado="emOperacao" :sub-aparelho="podeCompartilhar ? 'salvar em uma pasta ou app de nuvem' : 'baixar o arquivo .sfin'" @aparelho="salvarAparelho" @nuvem="salvarNuvem" />
+        <OrigemBackup v-if="janela === 'salvar'" modo="salvar" :ocupado="emOperacao" sub-aparelho="baixar o arquivo .sfin" @aparelho="salvarAparelho" @nuvem="salvarNuvem" />
         <template v-else-if="janela === 'restaurar'">
           <OrigemBackup modo="restaurar" :ocupado="emOperacao" @arquivo="abrirArquivo" @nuvem="abrirCopias" />
           <button v-if="copiaEm" type="button" class="botao" :disabled="emOperacao" @click="desfazer"><Undo2 :size="16" /> Desfazer última restauração ({{ fmt(copiaEm) }})</button>

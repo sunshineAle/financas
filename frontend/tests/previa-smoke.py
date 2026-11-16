@@ -40,10 +40,20 @@ with tempfile.TemporaryDirectory(prefix='dagda-smoke-') as tmp, sync_playwright(
     bloco.locator('article').first.get_by_role('button',name='Vincular',exact=True).click()
     expect(p.locator('[data-revisar-transferencias]')).to_have_count(0)
     print('PASS par fictício vinculado sem duplicar as pendências')
+    # Simula um aparelho que anuncia compartilhamento de arquivos, mas bloqueia a abertura do painel.
+    p.evaluate("""() => {
+      window.tentativasCompartilharBackup = 0;
+      Object.defineProperty(navigator, 'canShare', { value: () => true });
+      Object.defineProperty(navigator, 'share', { value: async () => {
+        window.tentativasCompartilharBackup++;
+        throw new DOMException('Permission denied', 'NotAllowedError');
+      } });
+    }""")
     p.evaluate("location.hash='#/backup'")
     p.get_by_role('button',name='Fazer backup',exact=True).click()
     with p.expect_download() as download:
         p.locator('[data-deste-aparelho]').click()
+    assert p.evaluate('window.tentativasCompartilharBackup') == 0
     arquivo=Path(tmp)/'demo.sfin';download.value.save_as(arquivo)
     env=json.loads(arquivo.read_text());assert env['criptografia']['chave']=='mestra'
     assert 'Demonstração' not in json.dumps(env)
