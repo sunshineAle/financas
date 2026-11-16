@@ -52,6 +52,7 @@ with tempfile.TemporaryDirectory(prefix='dagda-release-qa-') as tmp,sync_playwri
  print('PASS atualizaçãoSW1.2.2→1.3 preservou PIN/registro, conta, transações; sem controles de prévia',flush=True)
  p.evaluate("location.hash='#/backup'")
  if p.get_by_role('button',name='Pular',exact=True).is_visible():p.get_by_role('button',name='Pular',exact=True).click()
+ p.get_by_role('button',name='Fazer backup',exact=True).click()
  with p.expect_download() as d:p.locator('[data-deste-aparelho]').click()
  arquivo=Path(tmp)/'ficticio-release.sfin';d.value.save_as(arquivo)
  env=json.loads(arquivo.read_text());assert env['criptografia'] and env['criptografia']['chave']=='mestra'
@@ -72,6 +73,7 @@ with tempfile.TemporaryDirectory(prefix='dagda-release-qa-') as tmp,sync_playwri
  assert normalizar(restaurado['tabelas']['transacoes'])==normalizar(depois['tabelas']['transacoes'])
  assert not q.get_by_role('heading',name='Código de recuperação',exact=True).count()
  q.evaluate("location.hash='#/backup'")
+ q.get_by_role('button',name='Fazer backup',exact=True).click()
  with q.expect_download() as d:q.locator('[data-deste-aparelho]').click()
  segunda=Path(tmp)/'restaurado-release.sfin';d.value.save_as(segunda)
  assert json.loads(segunda.read_text())['criptografia']['chaves']['recuperacao']==rec

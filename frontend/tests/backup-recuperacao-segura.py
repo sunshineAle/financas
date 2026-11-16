@@ -19,9 +19,11 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  p.evaluate("localStorage.setItem('sf:tours',JSON.stringify({ligado:false}))")
  if p.get_by_role('button',name='Pular',exact=True).is_visible():p.get_by_role('button',name='Pular',exact=True).click(force=True)
  p.evaluate("location.hash='#/backup'")
+ p.get_by_role('button',name='Fazer backup',exact=True).click()
  with p.expect_download() as d:p.locator('[data-deste-aparelho]').click()
  arq=Path(tmp)/'ficticio.sfin';d.value.save_as(arq);texto=arq.read_text()
  antes=api(p,'/api/backup/exportar')['tabelas']
+ p.get_by_role('button',name='Restaurar',exact=True).click()
  p.locator('[data-arquivo-backup]').set_input_files(arq)
  modal=p.get_by_role('dialog',name='Restaurar backup',exact=True);expect(modal).to_be_visible()
  modal.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao')
@@ -30,6 +32,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  assert 'demonstracao' not in texto and 'Demonstração' not in texto
  modal.get_by_role('button',name='Voltar',exact=True).click()
  ruim=Path(tmp)/'corrompido.sfin';env=json.loads(texto);env['dados']='AAAA';ruim.write_text(json.dumps(env))
+ p.get_by_role('button',name='Restaurar',exact=True).click()
  p.locator('[data-arquivo-backup]').set_input_files(ruim);expect(modal).to_be_visible()
  modal.get_by_placeholder('Senha da época do backup ou o código').fill('demonstracao');
  expect(modal.get_by_role('alert')).to_be_visible();assert not modal.locator('[data-resultado-validacao]').count()
@@ -37,6 +40,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  modal.get_by_role('button',name='Voltar',exact=True).click()
  # JSON que pode ser lido mas não restaurado deve falhar no SQLite descartável.
  ruim.write_text(json.dumps({'sfin':1,'dados':{'formato':'sfin-dados','versao_esquema':1,'tabelas':{'contas':[{'id':'sem-nome'}]}}}))
+ p.get_by_role('button',name='Restaurar',exact=True).click()
  p.locator('[data-arquivo-backup]').set_input_files(ruim);expect(modal).to_be_visible();
  expect(modal.get_by_role('alert')).to_be_visible(timeout=30000);assert not modal.locator('[data-resultado-validacao]').count()
  assert api(p,'/api/backup/exportar')['tabelas']==antes
@@ -56,6 +60,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
   if qs.get('spaces')==['drive']:route.fulfill(status=200,json={'files':[]});return
   route.fulfill(status=200,json={'files':[{k:v for k,v in x.items() if k!='texto'} for x in store.values()]})
  c.route('https://www.googleapis.com/**',google)
+ p.get_by_role('button',name='Fazer backup',exact=True).click()
  p.locator('[data-origem-backup]').first.locator('[data-conectar-nuvem]').click()
  p.locator('[data-origem-backup]').first.locator('[data-entrar="google"]').click()
  expect(p.get_by_role('status').filter(has_text='Backup enviado ao Google Drive')).to_be_visible(timeout=60000)
@@ -63,7 +68,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  assert api(p,'/api/backup/exportar')['tabelas']==antes
  print('PASS89 rotação6→4 só após download idêntico e recuperação isolada da nova cópia')
  # A lista de restauração permite gestão das cópias da prévia, protegendo a última válida.
- origem=p.locator('[data-origem-backup]').last;origem.locator('[data-conectar-nuvem]').click();origem.locator('[data-entrar="google"]').click()
+ p.get_by_role('button',name='Ver as cópias guardadas',exact=True).click()
  expect(p.locator('[data-lista-backups] [data-selecionar-backup]')).to_have_count(4)
  while len(store)>1:
   quantidade=len(store)
@@ -106,6 +111,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
  seguranca.get_by_role('button',name='Alterar senha',exact=True).click()
  expect(seguranca).not_to_be_visible(timeout=15000)
  p.evaluate("location.hash='#/backup'")
+ p.get_by_role('button',name='Fazer backup',exact=True).click()
  with p.expect_download() as d:p.locator('[data-deste-aparelho]').click()
  pin=Path(tmp)/'nome-e-pin.sfin';d.value.save_as(pin)
  envelope=json.loads(pin.read_text());assert not any(k in envelope for k in ['senha','pin','acesso','perfil'])

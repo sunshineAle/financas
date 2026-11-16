@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix='dagda-smoke-') as tmp, sync_playwright(
     expect(p.locator('[data-revisar-transferencias]')).to_have_count(0)
     print('PASS par fictício vinculado sem duplicar as pendências')
     p.evaluate("location.hash='#/backup'")
+    p.get_by_role('button',name='Fazer backup',exact=True).click()
     with p.expect_download() as download:
         p.locator('[data-deste-aparelho]').click()
     arquivo=Path(tmp)/'demo.sfin';download.value.save_as(arquivo)

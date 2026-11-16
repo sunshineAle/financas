@@ -31,9 +31,10 @@ with sync_playwright() as pw:
         if gestao:
             expect(page.locator('main')).to_be_visible(timeout=20000)
             page.evaluate("location.hash='#/backup'")
-            bloco=page.locator('#sec-restaurar')
-            bloco.locator('[data-conectar-nuvem]').click()
-            bloco.locator('[data-entrar="google"]').click()
+            google=page.locator('[data-prov="google"]')
+            google.get_by_role('button',name='Conectar',exact=True).click()
+            google.get_by_role('button',name='Ver as cópias guardadas',exact=True).click()
+            expect(page.get_by_role('dialog',name='Cópias guardadas')).to_be_visible()
         else:
             page.get_by_role('button',name='Entrar com Google',exact=True).click()
         lista=page.locator('[data-lista-backups]')
